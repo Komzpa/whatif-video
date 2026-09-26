@@ -119,6 +119,17 @@ The author's words: «надписи надо держать на экране �
      steps smear and break apart instead of the drone's panel.
    Not chosen, noted for the author: keep the drone as a dying toy (weak battery) that gives out on "No one stays".
 
+9. **"No one stays" needs someone alive who leaves** (author, 00:35: «на no one stays надо таки кого-то живого»).
+   It is the cat. In `cat` the child waits under the tree (the torch on the cat, `1. Do not climb. 2. Wait. Cats
+   come down.`), and the cat does come down, to the child: the only warm, living thing in the video so far. It walks
+   with the child along the route through `temp` and `storm` (small, at the edge of POV frame, sheltering under the
+   raincoat in the storm; callout `CAT · 1 · NOT YOURS`). In `tease` it is still there. On "No one stays" the cat
+   stops, looks back once, and leaves: onto a wall, through a fence gap into the dark, gone; the POV hands reach and
+   stay empty. Callout on the empty spot: `CAT · 0`. The `alone` paper-graph can stay as the second half of the
+   chapter (the nodes walking off the page after the cat), but the cat's exit comes first and carries the beat. The
+   cat is a real small animal, modelled with care (proportions, walk cycle, tail); no cartoon blob. Open for the
+   author, not decided: whether the cat is waiting at the door in `close`.
+
 ## The idea in one paragraph
 
 A small child walks through a huge, hazy future city at night with **an old paper handbook** and **a
