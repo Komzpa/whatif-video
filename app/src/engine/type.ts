@@ -22,6 +22,13 @@ for (const wt of [400, 600]) {
 for (const [n, f] of [['300', 'Light'], ['400', 'Regular'], ['500', 'Medium'], ['600', 'SemiBold'], ['700', 'Bold']] as const)
   DEFS.push({ family: `Plex-${n}`, file: `src/IBMPlexMono-${f}.ttf` });
 DEFS.push({ family: 'PlexItalic-400', file: 'src/IBMPlexMono-Italic.ttf' });
+// TREATMENT r7: Cyrillic faces with a Soviet signage feel (licences in public/fonts/ru/LICENSES.md)
+DEFS.push({ family: 'Metro-400', file: 'ru/NotoSansDisplay-SemiCondensed.ttf' });
+DEFS.push({ family: 'Metro-700', file: 'ru/NotoSansDisplay-SemiCondensedBold.ttf' });
+DEFS.push({ family: 'Metro-900', file: 'ru/NotoSansDisplay-SemiCondensedBlack.ttf' });
+DEFS.push({ family: 'Stencil-900', file: 'ru/NotoSansDisplay-CondensedBlack.ttf' });
+DEFS.push({ family: 'Typewriter-400', file: 'ru/FreeMono.ttf' });
+DEFS.push({ family: 'Typewriter-700', file: 'ru/FreeMonoBold.ttf' });
 
 /** Convenience family names. */
 export const F = {
@@ -37,6 +44,12 @@ export const F = {
   serif(weight = 400, italic = false): string {
     return `${italic ? 'CormorantItalic' : 'Cormorant'}-${weight < 500 ? 400 : 600}`;
   },
+  /** The metro-sign grotesque (Cyrillic): station names, the line diagram, headings, callouts. */
+  metro(weight = 700): string { return `Metro-${nearest([400, 700, 900], weight)}`; },
+  /** Condensed black for fence stencils (bridges are cut by stencilText). */
+  stencil(): string { return 'Stencil-900'; },
+  /** Typewriter for taped notices. */
+  typewriter(weight = 400): string { return `Typewriter-${weight < 550 ? 400 : 700}`; },
   mono(weight = 400, italic = false): string {
     if (italic) return 'PlexItalic-400';
     return `Plex-${nearest([300, 400, 500, 600, 700], weight)}`;

@@ -16,7 +16,9 @@ const scene = (name: string) => () => {
 };
 const hasScene = (name: string) => !!modules[`./scenes/${name}.ts`];
 
-const BOOK_CARD_MAX = 3.0;
+// TREATMENT r6: no book on screen and no title card; the film opens in the carriage (the `book` chapter of the
+// contents list plays for 0 s and is dropped from the edit).
+const NO_CARD = new Set(['book']);
 const RUNS_TO_NEXT_LINE = new Set(['lost']);
 
 export function makeTimeline(ly: Lyrics, au: AudioData): TimelineEntry[] {
@@ -31,8 +33,8 @@ export function makeTimeline(ly: Lyrics, au: AudioData): TimelineEntry[] {
   const beatBefore = (t: number, tol = 0.02) => { let b = 0; for (const x of au.beats) if (x <= t + tol) b = x; return b; };
   const lastEnd = ly.lines[ly.lines.length - 1]!.end;
   const starts = CHAPTERS.map((id, i) => {
-    // TREATMENT r5 item 3: the book is a title card of at most 3 s; the story starts on the last beat before 3 s
-    if (i === 1) return beatBefore(BOOK_CARD_MAX, 0);
+    if (NO_CARD.has(CHAPTERS[i]!)) return i === 0 ? 0 : null;
+    if (i > 0 && CHAPTERS.slice(0, i).every((id) => NO_CARD.has(id))) return 0;
     // r5 item 5: `lost` runs on until the next line is sung; the chapter after it starts on the beat at or
     // before its first word
     if (i > 0 && RUNS_TO_NEXT_LINE.has(CHAPTERS[i - 1]!)) { const first = entriesOf(id)[0]; if (first) return beatBefore(ly.get(first.line).words[0]!.start); }
@@ -45,10 +47,12 @@ export function makeTimeline(ly: Lyrics, au: AudioData): TimelineEntry[] {
     return au.downbeats.find((d) => d >= lastEnd) ?? lastEnd;
   });
 
-  return CHAPTERS.map((id, i) => {
-    const start = starts[i]!, end = i + 1 < CHAPTERS.length ? starts[i + 1]! : au.duration;
+  const next = (i: number) => { for (let j = i + 1; j < CHAPTERS.length; j++) if (!NO_CARD.has(CHAPTERS[j]!)) return starts[j] as number; return au.duration; };
+  return CHAPTERS.flatMap((id, i) => {
+    if (NO_CARD.has(id)) return [];
+    const start = starts[i] as number, end = next(i);
     // a chapter without its own module yet plays the placeholder: its contents entries, karaoke per word
     const file = hasScene(id) ? id : 'placeholder';
-    return { id, load: scene(file), start, end, params: { chapter: id, file } };
+    return [{ id, load: scene(file), start, end, params: { chapter: id, file } }];
   });
 }

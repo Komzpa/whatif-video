@@ -237,12 +237,16 @@ export interface EntryOpts {
  * position) so scenes can anchor things to it. Karaoke: a word appears dim at most 0.4 s before its
  * `start`, turns red at `start`, and stays paper (or ink) once sung. Held words stretch their tracking.
  */
+/** TREATMENT r6: the handbook never appears as a picture, and no page number is drawn anywhere. */
+export const PAGE_NUMBERS = false;
+
 export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData, line: Line | string, t: number, o: EntryOpts) {
   const L = typeof line === 'string' ? ly.get(line) : line;
   const size = o.size ?? 60, fam = F.archivo(62, 900);
   const theme = o.theme ?? 'dark';
   const base = o.base ?? (theme === 'paper' ? 'ink' : 'paper');
-  const page = o.page !== undefined ? o.page : CONTENTS.find((e) => ly.get(e.line) === L)?.page ?? null;
+  // TREATMENT r6: no page numbers anywhere (the sung line, its leader and the heading note carry none)
+  const page = PAGE_NUMBERS ? (o.page !== undefined ? o.page : CONTENTS.find((e) => ly.get(e.line) === L)?.page ?? null) : null;
   const words = L.words;
   const tokens = words.map((w) => entryToken(w.w));
   const space = measure(' ', fam, size) * 1.05;
@@ -305,7 +309,7 @@ export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData
   const numRight = o.x + o.width;
   const l0 = lastRight + size * 0.22, l1 = numRight - numW - size * 0.22;
   const gap = size * 0.24, r = Math.max(1.2, size * 0.042);
-  const nDots = Math.max(0, Math.floor((l1 - l0) / gap));
+  const nDots = page ? Math.max(0, Math.floor((l1 - l0) / gap)) : 0;
   let lp: number;
   if (o.leader !== undefined) lp = o.leader;
   else if (o.printed) lp = 1;
@@ -338,7 +342,7 @@ export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData
   const entry = CONTENTS.find((e) => ly.get(e.line) === L);
   const heading = o.heading === false ? null : o.heading ?? (o.printed ? null : entry?.heading ?? null);
   let noteY = lastY;
-  if (heading && page) {
+  if (heading) {
     const ns = Math.max(18, Math.round(size * 0.3)), nfam = F.mono(500);
     const t0 = words[0]!.start;
     const n = o.printed ? heading.length : Math.floor(Math.max(0, t - t0) * 70);
@@ -351,8 +355,8 @@ export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData
       c.fillText(txt, o.x, noteY);
       const hw = measure(heading, nfam, ns, ns * 0.06);
       c.letterSpacing = '0px';
-      const done = clamp((n - heading.length) / 12);
-      if (done > 0) {
+      const done = page ? clamp((n - heading.length) / 12) : n >= heading.length ? 1 : 0;
+      if (page && done > 0) {
         const nr = o.x + Math.min(o.width * 0.62, Math.max(hw + ns * 5, o.width * 0.42));
         const pw = measure(page.replace('·', '') + (page.includes('·') ? '0' : ''), F.archivo(62, 900), ns * 1.15);
         const d0 = o.x + hw + ns * 0.5, d1 = nr - pw - ns * 0.4;
@@ -1247,6 +1251,13 @@ function sleeve(c: CanvasRenderingContext2D, sx: number, sy: number, wx: number,
   c.lineTo(wx - nx * w1 * 0.53 - ux * w1 * 0.2, wy - ny * w1 * 0.53 - uy * w1 * 0.2);
   c.lineTo(wx - nx * w1 * 0.53 - ux * w1 * 0.34, wy - ny * w1 * 0.53 - uy * w1 * 0.34);
   c.closePath(); c.fill();
+  return [[sx + nx * w0 / 2, sy + ny * w0 / 2], [wx + nx * w1 / 2, wy + ny * w1 / 2], [wx - nx * w1 / 2, wy - ny * w1 / 2], [sx - nx * w0 / 2, sy - ny * w0 / 2]] as [number, number][];
+}
+
+function polyBox(p: [number, number][]) {
+  const xs = p.map((q) => q[0]), ys = p.map((q) => q[1]);
+  const x = Math.min(...xs), y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
 }
 
 /** A small hand gripping an edge: the palm behind, four fingertips over the front, the thumb along it. */
@@ -1307,19 +1318,25 @@ export function drawPOV(c: CanvasRenderingContext2D, t: number, o: POV) {
     c.restore();
     const P = (x: number, y: number) => { const p = new DOMPoint(x, y).matrixTransform(M!); return { x: p.x, y: p.y }; };
     corners = [P(0, 0), P(bw, 0), P(bw, bh), P(0, bh)];
+    const poly = corners.map((q) => [q.x, q.y] as [number, number]);
+    logText('book', 'handbook', true, polyBox(poly), { id: 'book:hand', poly });
     lh = P(-bw * 0.01, bh * 0.62);
     rhBook = P(bw * 1.01, bh * 0.62);
   }
   // left sleeve + hand on the book's left edge
   if (b) {
     const sx = Math.min(lh.x - 160, -40), sy = H + 140;
-    sleeve(c, sx, sy, lh.x - 10, lh.y + 34, 230, 118, col, dark, rim);
+    const q = sleeve(c, sx, sy, lh.x - 10, lh.y + 34, 230, 118, col, dark, rim);
     hand(c, lh.x, lh.y, 40, rot + Math.PI * 0.02, skin, skinD);
+    const poly: [number, number][] = [...q, [lh.x - 40, lh.y - 40], [lh.x + 40, lh.y - 40]];
+    logText('hand', 'left hand', true, polyBox(poly), { id: 'hand:left', poly });
   }
   const r = o.right === undefined ? (b ? { x: rhBook.x, y: rhBook.y, mode: 'book' as const } : null) : o.right;
   if (r) {
     const sx = Math.max(r.x + 170, W + 40), sy = H + 140;
-    sleeve(c, sx, sy, r.x + 10, r.y + 34, 230, 118, col, dark, rim);
+    const q = sleeve(c, sx, sy, r.x + 10, r.y + 34, 230, 118, col, dark, rim);
+    const poly: [number, number][] = [...q, [r.x - 50, r.y - (r.mode === 'torch' ? 170 : 50)], [r.x + 50, r.y - 50]];
+    logText('hand', 'right hand', true, polyBox(poly), { id: 'hand:right', poly });
     if (r.mode === 'book') {
       c.save(); c.translate(r.x, r.y); c.scale(-1, 1); hand(c, 0, 0, 40, -rot, skin, skinD); c.restore();
     } else if (r.mode === 'reach') {
@@ -1834,7 +1851,7 @@ export function ledBoard(lines: string[], header: string | undefined, col: Palet
   c.strokeStyle = '#2b343f'; c.lineWidth = 6; c.strokeRect(3, 3, cv.width - 6, cv.height - 6);
   if (header) {
     c.fillStyle = '#1a2129'; c.fillRect(6, 6, cv.width - 12, hdrH);
-    c.font = font(F.mono(600), 26); c.fillStyle = rgba('paper', 0.9); c.textBaseline = 'middle';
+    c.font = font(F.metro(700), 28); c.fillStyle = rgba('paper', 0.9); c.textBaseline = 'middle';
     c.fillText(header, pad, 6 + hdrH / 2);
   }
   const off = document.createElement('canvas'); off.width = cols; off.height = rowsPx;
@@ -1868,6 +1885,8 @@ export class NeonSign {
     groundY?: number; bright?: number; flicker?: number; seed?: number; vertical?: boolean; reflect?: number; wall?: 'left' | 'right';
     /** 'led': a dot-matrix board (r5 item 6): a clean `header` strip over dot-matrix body lines. */
     header?: string;
+    /** Typeface: the metro-sign grotesque (default) or the mono face. */
+    face?: 'metro' | 'mono';
     /** QA: the lines are broken-encoding glyph soup (exempt from reading time and the name check). */
     garbled?: boolean;
   }) {
@@ -1885,7 +1904,8 @@ export class NeonSign {
       this.mesh.rotation.y = o.rotY ?? 0;
       return;
     }
-    const fam = F.mono(600), fs = 120, tr = fs * 0.12;
+    // r7: Cyrillic signage in the metro-sign grotesque (the mono face only where asked)
+    const fam = o.face === 'mono' ? F.mono(600) : F.metro(700), fs = 120, tr = fs * (o.face === 'mono' ? 0.12 : 0.04);
     const lines = o.vertical ? o.lines[0]!.split('') : o.lines;
     // measure with the canvas itself (what it draws is what we size for)
     const mc = document.createElement('canvas').getContext('2d')!;
@@ -1931,7 +1951,18 @@ export class NeonSign {
    * QA: report the sign when it is on screen and big enough to see (≥ 14 px tall). `kind` defaults to
    * 'garble' for glyph soup and 'sign' otherwise; `text` overrides what is reported (e.g. the clean header).
    */
-  log(cam: THREE.Camera, o: { text?: string; kind?: TextKind; places?: string[]; min?: number } = {}) {
+  /** The sign's box on screen (px), or null when behind the camera. */
+  screenBox(cam: THREE.Camera, offset?: [number, number, number]) {
+    const c = Math.cos(this.mesh.rotation.y), s2 = Math.sin(this.mesh.rotation.y);
+    const wp = new THREE.Vector3(); this.mesh.getWorldPosition(wp);
+    if (offset) wp.add(new THREE.Vector3(...offset));
+    const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => project(cam, wp.x + a! * c * this.w / 2, wp.y + b! * this.h / 2, wp.z - a! * s2 * this.w / 2));
+    if (pts.some((p) => p.behind)) return null;
+    const x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x)), y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  /** Report the sign to the QA text log. `scenery`: a background sign glimpsed in passing (no reading-time duty). */
+  log(cam: THREE.Camera, o: { text?: string; kind?: TextKind; places?: string[]; min?: number; scenery?: boolean } = {}) {
     if (!textlog.on) return;
     const c = Math.cos(this.mesh.rotation.y), s2 = Math.sin(this.mesh.rotation.y);
     const wp = new THREE.Vector3(); this.mesh.getWorldPosition(wp);
@@ -1940,7 +1971,8 @@ export class NeonSign {
     const x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x)), y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
     const vis = x1 > 0 && x0 < W && y1 > 0 && y0 < H && y1 - y0 >= (o.min ?? 14) && this.mat.color.r > 0.05;
     const text = o.text ?? this.o.lines.join(' / ');
-    logText(o.kind ?? (this.o.garbled ? 'garble' : 'sign'), text, vis, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, { places: o.places });
+    const kind = o.kind ?? (this.o.garbled ? 'garble' : 'sign');
+    logText(kind, text, vis, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, { places: o.places, ...(o.scenery ? { id: `scenery:${kind}:${text}` } : {}) });
   }
   /** Per-frame brightness (flicker), `k` 0..1 master (e.g. a blackout). */
   update(t: number, k = 1) {

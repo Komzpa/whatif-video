@@ -7,6 +7,7 @@
 //            --samples N averages N sub-frames per frame over shutter×(1/fps): motion blur + temporal AA;
 //            --samples auto picks the count per frame (4, 12, 36, 108 or 324, see Engine.render)
 //   --aspect 9:16 (all modes): the native vertical cut at 1080x1920 (scenes frame their own shots for it).
+//   --param k=v (all modes): extra URL parameters for the app, e.g. --param proof=hand (gate-1 proof views)
 //   --scale N (all modes): render at N× the 1920x1080 layout (--scale 2 = true 3840x2160); stills are then saved
 //            full-res from the pixel buffer, videos are encoded at the physical size.
 // Starts a private Vite server without live reload (or uses the one at --url).
@@ -70,7 +71,7 @@ async function openPage(url: string) {
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
   const only = opt('only');
-  await page.goto(`${url}/?export=1${only ? `&only=${only}` : ''}${SCALE !== 1 ? `&scale=${SCALE}` : ''}${PORTRAIT ? '&aspect=9:16' : ''}`);
+  await page.goto(`${url}/?export=1${only ? `&only=${only}` : ''}${SCALE !== 1 ? `&scale=${SCALE}` : ''}${PORTRAIT ? '&aspect=9:16' : ''}${opt('param') ? `&${opt('param')}` : ''}`);
   await page.waitForFunction(() => (window as any).__video?.ready || (window as any).__video?.error, null, { timeout: 120000 });
   const err = await page.evaluate(() => (window as any).__video.error);
   if (err) throw new Error(`app failed to boot:\n${err}\n${logs.join('\n')}`);

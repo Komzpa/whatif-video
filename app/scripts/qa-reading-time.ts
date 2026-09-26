@@ -12,11 +12,22 @@
 //   vertical cut : with --aspect 9:16, karaoke, notes, callouts, WHAT TO DO steps, the counter, chips and
 //                  banners stay inside the TikTok safe area (not in the top 150 px, bottom 480 px, right
 //                  140 px), and the karaoke cap height is ≥ 70 px.
+//   frame checks (r4/r6, every frame):
+//     book         : the handbook as a picture (a book object, printed steps, the cover title, printed contents)
+//                    is on screen for ≤ --book-max seconds (default 0: TREATMENT r6, no book on screen);
+//                    the page counter never appears (r6: no page numbers).
+//     overlays     : at most 2 non-diegetic overlays at once, the sung line (karaoke + its note) counting as
+//                    one. Overlays: callouts, banners, chips, the map card (labels inside the card belong to it),
+//                    the counter, titles, system lines, printed steps.
+//     prop cover   : a frame is "covered" when one prop (book, hand with sleeve) covers ≥ 35% of the lower
+//                    40% of the frame; covered frames must be ≤ 20% of the window.
+//     lyric clear  : the sung line, its note and titles never overlap a sign, board or station name.
 // Usage: bun scripts/qa-reading-time.ts [--from 0] [--to 26.4] [--fps 20] [--aspect 9:16] [--url http://localhost:5391]
 // Exit code 1 when anything fails; the offenders are listed with their shortfall.
 import { chromium } from 'playwright-core';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { mojibake, type Codec } from '../src/mojibake';
 
 const argv = process.argv.slice(2);
 const opt = (k: string, d?: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : d; };
@@ -26,18 +37,23 @@ const LW = PORTRAIT ? 1080 : 1920, LH = PORTRAIT ? 1920 : 1080;
 const FPS = +opt('fps', '20')!, DT = 1 / FPS;
 const NV_EGL = '/usr/share/glvnd/egl_vendor.d/10_nvidia.json';
 
-type Kind = 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop';
-interface Item { id: string; text: string; kind: Kind; full: boolean; box?: { x: number; y: number; w: number; h: number }; cap?: number; places?: string[] }
+type Kind = 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop' | 'book' | 'hand' | 'map';
+type Box = { x: number; y: number; w: number; h: number };
+interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string }
+const OBJECTS: Kind[] = ['book', 'hand', 'map'];
 
 // ------------------------------------------------------------------ city names
 const cityFile = [path.join(ROOT, 'data/city.json'), path.join(APP, 'src/data-fallback/city.json')].find(existsSync);
 if (!cityFile) { console.error('FAIL: no data/city.json (nor the app fallback)'); process.exit(1); }
 const C = JSON.parse(readFileSync(cityFile, 'utf-8'));
+const nm = (a: any[] | undefined) => (a ?? []).map((x: any) => x.name);
 const NAMES = new Set<string>([
-  ...C.districts.map((d: any) => d.name), ...C.water.map((w: any) => w.name), ...C.metro.stations.map((s: any) => s.name),
-  ...C.places.map((p: any) => p.name), C.restricted.name, C.restricted.sign, C.home.name, C.metro.line,
-]);
-const PLACEY = /\b(ST|RD|ROW|SQ|AVE|LANE|BRIDGE|YARDS?|MARKET|DEPOT|DISTRICT \d+|QUARTER|HILL|DOCKS?)\b/;
+  ...nm(C.districts), ...nm(C.streets), ...nm(C.water), ...nm(C.metro.stations), ...nm(C.places),
+  ...(C.metro.lines ?? []).flatMap((l: any) => [l.name, ...nm(l.stations)]),
+  C.restricted.name, C.restricted.sign, ...(C.restricted.signs ?? []), C.home.name, C.metro.line, C.metro.lineName,
+].filter(Boolean));
+// words that make a string look like an invented place name (Russian; «станция» alone is a word in «СТАНЦИЯ ЗАКРЫТА»)
+const PLACEY = /(?<!\p{L})(УЛИЦА|УЛ\.|ПРОСПЕКТ|ШОССЕ|ПЛОЩАДЬ|ПЕРЕУЛОК|БУЛЬВАР|РАЙОН|ПОС[ЕЁ]ЛОК|МИКРОРАЙОН|ПРОМЗОНА)(?!\p{L})/iu;
 
 // ------------------------------------------------------------------ browser
 async function reachable(url: string) { try { return (await fetch(url, { signal: AbortSignal.timeout(1500) })).ok; } catch { return false; } }
@@ -99,12 +115,13 @@ try {
     }
   });
   void seenAt;
-  const need = (text: string) => Math.max(1.5, 0.4 + text.replace(/ \/ /g, ' ').length / 14);
+  const need = (text: string) => { const t = text.replace(/ \/ /g, ' '); return Math.max(1.5, 0.4 + t.length / 14, 0.3 * t.split(/\s+/).filter(Boolean).length); };
   const offenders: string[] = [];
   const UI: Kind[] = ['note', 'callout', 'step', 'system', 'banner', 'chip', 'title'];
   for (const [id, { item, runs: rs }] of runs) {
     const k = item.kind;
-    if (k === 'karaoke' || k === 'counter' || k === 'prop') continue;
+    if (k === 'karaoke' || k === 'counter' || k === 'prop' || OBJECTS.includes(k)) continue;
+    if (id.startsWith('scenery:')) continue; // a background sign glimpsed in a pan: A4/A13 still apply, reading time does not
     if (UI.includes(k)) {
       for (const r of rs) {
         if (r.openA || r.openB) continue;
@@ -128,7 +145,7 @@ try {
   // ---------------------------------------------------------------- city names
   const nameBad = new Map<string, string>();
   for (const fr of frames) for (const it of fr) {
-    if (it.kind === 'garble' || it.kind === 'prop' || it.kind === 'karaoke' || it.kind === 'counter') continue;
+    if (it.kind === 'garble' || it.kind === 'prop' || it.kind === 'karaoke' || it.kind === 'counter' || OBJECTS.includes(it.kind)) continue;
     if (it.kind === 'place' && !NAMES.has(it.text)) nameBad.set(it.text, `place not in city.json: ${JSON.stringify(it.text)}`);
     for (const p of it.places ?? []) if (!NAMES.has(p)) nameBad.set(p, `declared place not in city.json: ${JSON.stringify(p)} (in ${JSON.stringify(it.text)})`);
     if (PLACEY.test(it.text) && ![...NAMES].some((n) => it.text.includes(n))) nameBad.set(it.text, `looks like a place name but no city.json name in it: ${JSON.stringify(it.text)}`);
@@ -155,10 +172,134 @@ try {
     offenders.push(...worst.values());
   }
 
+
+  // ---------------------------------------------------------------- frame checks (r4 / r6)
+  const bookMax = +opt('book-max', '0')!;
+  const isBook = (it: Item) => it.kind === 'book' || it.kind === 'step' || it.kind === 'title' || it.kind === 'prop';
+  const bookFrames = frames.filter((fr) => fr.some(isBook)).length;
+  const bookSec = bookFrames * DT;
+  if (bookSec > bookMax + 1e-6) {
+    const first = times[frames.findIndex((fr) => fr.some(isBook))]!;
+    offenders.push(`book     the handbook is on screen ${bookSec.toFixed(2)}s > ${bookMax.toFixed(2)}s (first at ${first.toFixed(2)}s)`);
+  }
+  const counterFrames = frames.filter((fr) => fr.some((it) => it.kind === 'counter')).length;
+  if (counterFrames) offenders.push(`book     the page counter is on screen ${(counterFrames * DT).toFixed(2)}s (r6: no page numbers)`);
+  // overlays
+  const OVERLAY: Kind[] = ['callout', 'banner', 'chip', 'counter', 'map', 'title', 'system', 'step'];
+  const inside = (b: Box, m: Box) => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; return cx >= m.x && cx <= m.x + m.w && cy >= m.y && cy <= m.y + m.h; };
+  let maxOv = 0, maxAt = 0, overFrames = 0;
+  const overAt: string[] = [];
+  frames.forEach((fr, i) => {
+    const maps = fr.filter((it) => it.kind === 'map' && it.box).map((it) => it.box!);
+    const ov = fr.filter((it) => OVERLAY.includes(it.kind) && !(it.kind !== 'map' && it.box && maps.some((m) => inside(it.box!, m))));
+    const ids = new Set(ov.map((it) => it.id));
+    const n = ids.size + (fr.some((it) => it.kind === 'karaoke' || it.kind === 'note') ? 1 : 0);
+    if (n > maxOv) { maxOv = n; maxAt = times[i]!; }
+    if (n > 2) { overFrames++; if (overAt.length < 4) overAt.push(`${times[i]!.toFixed(2)}s [${[...ids].join(' | ')}]`); }
+  });
+  if (maxOv > 2) offenders.push(`overlay  up to ${maxOv} overlays at once incl. the sung line (max 2) for ${(overFrames * DT).toFixed(2)}s, e.g. ${overAt.join('; ')}`);
+  // prop coverage of the lower 40% of the frame
+  const bandY = LH * 0.6, bandA = LW * (LH - bandY);
+  const hull = (pts: [number, number][]) => {
+    const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    if (p.length < 3) return p;
+    const cr = (o: number[], a: number[], b: number[]) => (a[0]! - o[0]!) * (b[1]! - o[1]!) - (a[1]! - o[1]!) * (b[0]! - o[0]!);
+    const lo: [number, number][] = [], up: [number, number][] = [];
+    for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2]!, lo[lo.length - 1]!, q) <= 0) lo.pop(); lo.push(q); }
+    for (const q of [...p].reverse()) { while (up.length >= 2 && cr(up[up.length - 2]!, up[up.length - 1]!, q) <= 0) up.pop(); up.push(q); }
+    return [...lo.slice(0, -1), ...up.slice(0, -1)];
+  };
+  const clipTo = (poly: [number, number][], inside: (q: [number, number]) => boolean, cut: (a: [number, number], b: [number, number]) => [number, number]) => {
+    const out: [number, number][] = [];
+    poly.forEach((cur, i) => {
+      const prev = poly[(i + poly.length - 1) % poly.length]!;
+      if (inside(cur)) { if (!inside(prev)) out.push(cut(prev, cur)); out.push(cur); }
+      else if (inside(prev)) out.push(cut(prev, cur));
+    });
+    return out;
+  };
+  const cutX = (x: number) => (a: [number, number], b: [number, number]): [number, number] => [x, a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0])];
+  const cutY = (y: number) => (a: [number, number], b: [number, number]): [number, number] => [a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]), y];
+  const bandCover = (it: Item) => {
+    const b = it.box;
+    let p: [number, number][] = it.poly ?? (b ? [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]] : []);
+    if (p.length < 3) return 0;
+    p = hull(p);
+    p = clipTo(p, (q) => q[1] >= bandY, cutY(bandY));
+    p = clipTo(p, (q) => q[1] <= LH, cutY(LH));
+    p = clipTo(p, (q) => q[0] >= 0, cutX(0));
+    p = clipTo(p, (q) => q[0] <= LW, cutX(LW));
+    let a = 0;
+    p.forEach((q, i) => { const r = p[(i + 1) % p.length]!; a += q[0] * r[1] - r[0] * q[1]; });
+    return Math.abs(a) / 2 / bandA;
+  };
+  let covered = 0, worstCover = 0;
+  for (const fr of frames) {
+    const c = Math.max(0, ...fr.filter((it) => it.kind === 'book' || it.kind === 'hand').map(bandCover));
+    worstCover = Math.max(worstCover, c);
+    if (c >= 0.35) covered++;
+  }
+  const coverFrac = frames.length ? covered / frames.length : 0;
+  if (coverFrac > 0.2) offenders.push(`cover    one prop covers ≥35% of the lower 40% of the frame in ${(coverFrac * 100).toFixed(0)}% of frames (max 20%)`);
+  // the sung line and titles vs signs and boards
+  const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  const clash = new Map<string, string>();
+  frames.forEach((fr, i) => {
+    const lyr = fr.filter((it) => (it.kind === 'karaoke' || it.kind === 'note' || it.kind === 'title') && it.box);
+    const sg = fr.filter((it) => (it.kind === 'sign' || it.kind === 'garble' || it.kind === 'place') && it.box);
+    for (const a of lyr) for (const b of sg) if (overlap(a.box!, b.box!) > 4 && !clash.has(a.id + b.id)) clash.set(a.id + b.id, `${times[i]!.toFixed(2)}s ${JSON.stringify(a.text)} over ${b.kind} ${JSON.stringify(b.text)}`);
+  });
+  offenders.push(...[...clash.values()].slice(0, 12).map((s) => `clear    the sung line overlaps a sign: ${s}`));
+  if (clash.size > 12) offenders.push(`clear    … and ${clash.size - 12} more`);
+  // A4: text boxes (callouts, banners, chips, notes, the sung line, titles, the map card) never intersect a sign,
+  // a board or each other. Labels inside the map card belong to the card.
+  const TEXTBOX: Kind[] = ['callout', 'banner', 'chip', 'note', 'karaoke', 'title', 'system', 'step', 'map'];
+  const a4 = new Map<string, string>();
+  frames.forEach((fr, i) => {
+    const maps = fr.filter((it) => it.kind === 'map' && it.box).map((it) => it.box!);
+    const inMap = (it: Item) => it.kind !== 'map' && !!it.box && maps.some((m) => inside(it.box!, m));
+    const tb = fr.filter((it) => TEXTBOX.includes(it.kind) && it.box && it.full);
+    const sg = fr.filter((it) => (it.kind === 'sign' || it.kind === 'garble' || it.kind === 'place') && it.box && it.full);
+    for (const a of tb) {
+      if (!inMap(a)) for (const b of sg) if (overlap(a.box!, b.box!) > 4) { const k = `${a.id}|${b.id}`; if (!a4.has(k)) a4.set(k, `${times[i]!.toFixed(2)}s ${a.kind} ${JSON.stringify(a.text)} × ${b.kind} ${JSON.stringify(b.text)}`); }
+      for (const b of tb) {
+        if (b === a || a.id >= b.id) continue;
+        if (a.kind === 'map' && inMap(b) || b.kind === 'map' && inMap(a) || inMap(a) && inMap(b)) continue;
+        if (overlap(a.box!, b.box!) > 4) { const k = `${a.id}|${b.id}`; if (!a4.has(k)) a4.set(k, `${times[i]!.toFixed(2)}s ${a.kind} ${JSON.stringify(a.text)} × ${b.kind} ${JSON.stringify(b.text)}`); }
+      }
+    }
+  });
+  offenders.push(...[...a4.values()].slice(0, 12).map((s) => `A4       text boxes intersect: ${s}`));
+  if (a4.size > 12) offenders.push(`A4       … and ${a4.size - 12} more`);
+  // A5: HOME · x km only decreases along the timeline
+  let lastKm = Infinity, kmBad = '';
+  frames.forEach((fr, i) => { for (const it of fr) { const m = /ДОМ · (\d+(?:,\d+)?) км/.exec(it.text); if (!m) continue; const km = +m[1]!.replace(',', '.'); if (km > lastKm + 1e-9 && !kmBad) kmBad = `${times[i]!.toFixed(2)}s ДОМ ${km} км after ${lastKm} км`; lastKm = Math.min(lastKm, km); } });
+  if (kmBad) offenders.push(`A5       HOME distance increases: ${kmBad}`);
+  // A12: the line diagram's own layout check (labels vs dots, the line, the header and the edge)
+  const a12 = new Map<string, string>();
+  frames.forEach((fr, i) => { for (const it of fr) if (it.bad && !a12.has(it.id)) a12.set(it.id, `${times[i]!.toFixed(2)}s ${JSON.stringify(it.text)}: ${it.bad}`); });
+  offenders.push(...[...a12.values()].map((s) => `A12      ${s}`));
+  // A13: no Latin letters on screen, except mojibake that re-derives from a Russian name by the logged codec
+  const a13 = new Map<string, string>();
+  const LATIN = /[A-Za-z\u00C0-\u024F]/;
+  for (const fr of frames) for (const it of fr) {
+    if (OBJECTS.includes(it.kind) || it.kind === 'prop' || !LATIN.test(it.text) || a13.has(it.text)) continue;
+    if (it.kind === 'garble') {
+      const parts = it.text.split(' / ');
+      const ok = parts.every((p, k) => !LATIN.test(p) || (() => { const m = it.moji?.[k]; return !!m && /[А-яЁё]/.test(m.src) && !LATIN.test(m.src) && mojibake(m.src, m.codec, m.level) === p; })());
+      if (ok) continue;
+      a13.set(it.text, `garble ${JSON.stringify(it.text)} is not a codec transform of a logged Russian source`);
+    } else a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Latin letters`);
+  }
+  offenders.push(...[...a13.values()].slice(0, 12).map((s) => `A13      ${s}`));
+  if (a13.size > 12) offenders.push(`A13      … and ${a13.size - 12} more`);
+  const frameLine = `frame checks: A4 intersections ${a4.size} · A12 board faults ${a12.size} · A13 Latin ${a13.size} · A5 ${kmBad ? 'FAIL' : 'ok'} · `
+    + `book ${bookSec.toFixed(2)}s · counter ${(counterFrames * DT).toFixed(2)}s · max overlays ${maxOv} (at ${maxAt.toFixed(2)}s) · lower-40% covered in ${(coverFrac * 100).toFixed(1)}% of frames (worst ${(worstCover * 100).toFixed(0)}%) · sung-line/sign overlaps ${clash.size}`;
   const kinds = new Map<string, number>();
   for (const { item } of runs.values()) kinds.set(item.kind, (kinds.get(item.kind) ?? 0) + 1);
   console.log(`qa-reading-time ${PORTRAIT ? '9:16' : '16:9'}  ${from.toFixed(2)}–${to.toFixed(2)}s  ${frames.length} frames @ ${FPS} fps  city: ${path.relative(ROOT, cityFile)}`);
   console.log(`text items: ${[...kinds].map(([k, n]) => `${k} ${n}`).join(', ')}`);
+  console.log(frameLine);
   if (offenders.length) { failed = true; console.log(`FAIL (${offenders.length})`); for (const o of offenders) console.log('  ' + o); }
   else console.log('PASS');
 } finally {
