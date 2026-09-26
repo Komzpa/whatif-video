@@ -27,10 +27,14 @@ remote). Commit your own work with `git commit -m ... -- <paths>`; no Co-Authore
    per-word karaoke; red page counter with page-flip; WHAT TO DO panel (numbered steps typed on
    beats, supports a blank step and a glitching step); annotation callout (dotted leader from a 3D
    point to a mono label); flashlight cone (warm light that reveals line geometry, with flicker and
-   die). Every later chapter uses these.
+   die); the child figure (raincoat silhouette, no face) and the lantern-drone, both original
+   designs per TREATMENT; haze/fog planes, rain lines and wet-ground reflections for the city;
+   the city system line (small screen text). Every later chapter uses these.
 3. **Chapters `book` and `lost`**, fully, as TREATMENT describes.
 
 ## Acceptance (check before you report)
+- Every chapter still must pass TREATMENT's two tests (child test, adult test); say in the report how
+  `book` and `lost` pass each.
 - `cd app && bunx vite` serves, and a headless render of stills works:
   `bun scripts/render.ts stills` (or `sheet --cuts`) produces frames for every chapter boundary.
   Look at the stills yourself (read the PNGs) and fix what's wrong before reporting.
