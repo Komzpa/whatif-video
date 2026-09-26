@@ -282,10 +282,11 @@ try {
   // A13: no Latin letters on screen at all (mojibake too must be Cyrillic-to-Cyrillic, TREATMENT r7), and every
   // mojibake string must re-derive from a Russian source by its logged codec
   const a13 = new Map<string, string>();
-  const LATIN = /[A-Za-z\u00C0-\u024F]/;
+  const LATIN = /[A-Za-z\u00C0-\u024F]/, BOXDRAW = /[\u2500-\u259F]/;
   for (const fr of frames) for (const it of fr) {
     if (OBJECTS.includes(it.kind) || it.kind === 'prop' || a13.has(it.text)) continue;
     if (LATIN.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Latin letters`); continue; }
+    if (BOXDRAW.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has box-drawing glyphs (not Cyrillic garbage)`); continue; }
     if (it.kind === 'garble') {
       const parts = it.text.split(' / ');
       const ok = parts.every((p, k) => { const m = it.moji?.[k]; return !!m && /[А-яЁё]/.test(m.src) && mojibake(m.src, m.codec, m.level) === p; });

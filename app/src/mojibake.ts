@@ -38,6 +38,9 @@ const CONTROL = /[\u0000-\u001F\u007F-\u009F]/g;
 /** The whole string through one wrong-codec round trip. */
 export function transcode(s: string, codec: Codec): string {
   const [from, to] = codec.split('>') as [string, string];
+  // a KOI-8 display has no Ё where CP1251 keeps it (0xA8 reads as a box-drawing corner «╗»): the sign
+  // controller's typeset source, like a Soviet typewriter, writes Е for Ё, so the garble stays Cyrillic
+  if (codec === 'cp1251>koi8') s = s.replace(/ё/g, 'е').replace(/Ё/g, 'Е');
   return decoder(to).decode(encode(s, from)).replace(CONTROL, '');
 }
 

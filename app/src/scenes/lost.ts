@@ -45,7 +45,7 @@ const SEAT: V3 = [DOOR_X, 0.95, 1.05]; // the bench opposite the door: the door 
 const EYE = 1.12;
 const PLATFORM_HALF = 21;
 // Заводская: the city map on the back wall straight across from the door, the exit arch to its right
-const ARCH_X = DOOR_X + 3.4;
+const ARCH_X = DOOR_X + 2.4;
 const MAP_W = 1.4, MAP_H = 1.0, MAP_Y = 1.6, MAP_Z = -5.66, MCW = 1400, MCH = 1000;
 const MAP_S = 95, MAP_OX = 700, MAP_OY = 575; // km -> map canvas px (north up)
 const S2 = 110; // metres from Садовая to Заводская (the film's compression)
@@ -90,7 +90,6 @@ export default class Lost extends CityScene {
   lightsA: V3[] = []; lightsB: V3[] = [];
   tunnelLights: number[] = [];
   platesA: NeonSign[] = []; platesB: NeonSign[] = [];
-  exitSign!: NeonSign;
   wallMap!: THREE.Mesh; wallMapBase!: HTMLCanvasElement; wallMapCv!: HTMLCanvasElement; wallMapTex!: THREE.CanvasTexture;
   poleM = solid(scaleRGB(LIN.concrete, 1.25), { fog: false });
   panes: [number, number][] = []; // side window panes (car x), y WIN_Y0..WIN_Y1
@@ -181,7 +180,7 @@ export default class Lost extends CityScene {
     } else {
       const onB = this.trainS(t) > S2 / 2;
       for (const sg of onB ? this.platesB : this.platesA) add(sg.screenBox(cam));
-      if (onB) { add(this.exitSign.screenBox(cam)); for (const r of this.wallMapTexts) add(this.mapRectBox(r)); }
+      if (onB) for (const r of this.wallMapTexts) add(this.mapRectBox(r));
       add(this.boardBox());
     }
     return out;
@@ -329,8 +328,8 @@ export default class Lost extends CityScene {
       }
       for (let s = 0; s < 6; s++) for (const ex of [-0.55, 0.55]) this.lightsB.push([ARCH_X + ex, 1.6 + s * 0.6, -6.4 - s * 1.05]);
       O.box(ARCH_X, 0, -5.72, ax1 - ax0, AH, 0.02, scaleRGB(LIN.concrete, 1.0), 1.4);
-      this.exitSign = new NeonSign({ kind: 'led', header: '↑', lines: [garble('ВЫХОД В ГОРОД')], pos: [ARCH_X, AH + 0.45, -5.66], height: 0.5, color: 'sodium', garbled: true });
-      g.add(this.exitSign.mesh);
+      // no exit sign on this platform: a lit sign over the arch would be cut by the carriage windows at the stop
+      // and by the frame's top edge as the child steps out (TESTPLAN C1); the escalators going up read as the way out
       // the city map on the wall (paper behind glass), unlit: only the torch shows it
       this.wallMapBase = this.drawWallMapBase();
       this.wallMapCv = document.createElement('canvas'); this.wallMapCv.width = MCW; this.wallMapCv.height = MCH;
@@ -390,13 +389,22 @@ export default class Lost extends CityScene {
   logThrough(sg: NeonSign, aps: Box[], kind: 'place' | 'garble', scenery: boolean) {
     const b = sg.screenBox(this.cam);
     if (!b) return;
+    const text = sg.o.lines.join(' / ');
+    this.logBoxThrough(b, aps, kind, text, scenery ? `scenery:${kind}:${text}` : `${kind}:${text}`);
+  }
+  /** Log any text box seen through the carriage wall's openings (aps null: the camera is outside the car). */
+  logBoxThrough(b: Box, aps: Box[] | null, kind: 'place' | 'garble' | 'sign', text: string, id: string) {
+    if (!aps) {
+      if (b.x + b.w < 0 || b.x > W || b.y + b.h < 0 || b.y > H) return;
+      logText(kind, text, b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H && b.h >= 12, b, { id });
+      return;
+    }
     const ov = (a: Box) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
     const hits = aps.filter(ov);
     if (!hits.length || b.x + b.w < 0 || b.x > W || b.y + b.h < 0 || b.y > H) return;
     const whole = hits.some((a) => b.x >= a.x - 2 && b.y >= a.y - 2 && b.x + b.w <= a.x + a.w + 2 && b.y + b.h <= a.y + a.h + 2);
     const inFrame = b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H;
-    const text = sg.o.lines.join(' / ');
-    logText(kind, text, whole && inFrame && b.h >= 12, b, { id: scenery ? `scenery:${kind}:${text}` : `${kind}:${text}`, ...(whole ? {} : { clip: true }) });
+    logText(kind, text, whole && inFrame && b.h >= 12, b, { id, ...(whole ? {} : { clip: true }) });
   }
   /** km (city.json) -> the wall map's canvas px. */
   mapCv(p: XY | [number, number]) { return { x: MAP_OX + p[0] * MAP_S, y: MAP_OY - p[1] * MAP_S }; }
@@ -883,7 +891,6 @@ export default class Lost extends CityScene {
     this.platA.visible = !onB; this.platB.visible = onB;
     this.platA.position.x = -sLocal; this.platB.position.x = -sLocal;
     for (const sg of onB ? this.platesB : this.platesA) sg.update(t);
-    if (onB) this.exitSign.update(t);
     if (onB) {
       // the torch's spot on the wall map (the beam axis meets the wall plane)
       let hit: { x: number; y: number; rad: number } | null = null;
@@ -894,7 +901,7 @@ export default class Lost extends CityScene {
           hit = { x: ((hx - this.platB.position.x - DOOR_X) / MAP_W + 0.5) * MCW, y: (0.5 - (hy - MAP_Y) / MAP_H) * MCH, rad: k * 0.2 / MAP_W * MCW };
         }
       }
-      this.lightMap(hit, torchOn, 0.2);
+      this.lightMap(hit, torchOn, 0.2 * prog(t, T.open, T.exit1));
     }
     renderer.render(this.outside, cam);
     (onB ? this.linesB : this.linesA).emit(this.lines3D, cam, { base: onB ? 0.4 : 0.6, fog: 0.02, offset: [-sLocal, 0, 0] });
@@ -938,9 +945,10 @@ export default class Lost extends CityScene {
       const lamp = makeLamp(torch[0]!, torch[1]!, 11, 12, 1.25 * torchOn);
       this.cone.render(renderer, out, cam, lamp, t, { density: 0.03, floorY: 0, maxDist: 6 });
     }
-    if (onB) for (const r of this.wallMapTexts) { const b = this.mapRectBox(r); if (b && b.x + b.w > 0 && b.x < W && b.y + b.h > 0 && b.y < H) logText('sign', r.text, b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H, b, { id: `wallmap:${r.text}` }); }
-    { const aps = this.apertures(openK); for (const sg of onB ? this.platesB : this.platesA) this.logThrough(sg, aps, onB ? 'garble' : 'place', onB); }
-    if (onB) this.exitSign.log(this.cam, { min: 14, scenery: true });
+    const aps = this.apertures(openK), inside = t < T.exit1 ? aps : null;
+    // the wall map is black until the doors open and the torch comes up (nothing to read through the windows)
+    if (onB && t >= T.open) for (const r of this.wallMapTexts) { const b = this.mapRectBox(r); if (b) this.logBoxThrough(b, inside, 'sign', r.text, `wallmap:${r.text}`); }
+    for (const sg of onB ? this.platesB : this.platesA) this.logThrough(sg, aps, onB ? 'garble' : 'place', onB);
     this.drawBoard(this.world.ctx, t);
   }
 
@@ -1094,7 +1102,7 @@ export default class Lost extends CityScene {
     }
     const touch = prog(t, T.touch0 - 0.2, T.touch0 + 0.05, ease.outCubic) * (1 - prog(t, T.touch1, T.touch1 + 0.25, ease.inCubic));
     if (touch > 0.001 && t >= T.cut) {
-      const pt = new THREE.Vector3(0.25, 0.9, CURT_Z - 0.02);
+      const pt = PORTRAIT ? new THREE.Vector3(0.25, 0.9, CURT_Z - 0.02) : new THREE.Vector3(0.42, 1.15, CURT_Z - 0.02);
       const e = project(cam, pt.x, pt.y, pt.z);
       const depth = Math.max(0.3, cam.position.distanceTo(pt));
       const s = 0.055 * pxAt(cam, depth);
@@ -1131,7 +1139,7 @@ export default class Lost extends CityScene {
     // (c) your stop on the wall map, where the torch runs back to
     call('ТВОЯ ОСТАНОВКА', T.stopCall, T.turnArch + 0.3, () => { const w = this.mapWorld(this.mapCv(yourStop().at)); return onScreen(project(this.cam, w.x, w.y, w.z)); });
     // (d) the station closed, on the shutter
-    call('СТАНЦИЯ ЗАКРЫТА', T.shutterGo, T.land + 1.0, (tt) => onScreen(PORTRAIT ? project(this.cam, 0, this.shutterY(tt) + 1.56, CURT_Z - 0.02) : project(this.cam, -0.55, Math.min(OPEN_H - 0.15, this.shutterY(tt) + 0.95), CURT_Z - 0.02)));
+    call('СТАНЦИЯ ЗАКРЫТА', T.shutterGo, T.land + 1.0, (tt) => onScreen(PORTRAIT ? project(this.cam, 0, this.shutterY(tt) + 1.56, CURT_Z - 0.02) : project(this.cam, -0.14, Math.min(OPEN_H - 0.15, this.shutterY(tt) + 1.45), CURT_Z - 0.02)));
     // (e) the only way home is through the promzona's gate
     const zt = [city().restricted.sign, homeLabel('lost')];
     call(zt, T.turnZone + 0.4, f.end + 1, () => onScreen(project(this.cam, GATE_X - 0.45, 1.67, FENCE_Z + 0.04)), { color: 'neon', places: [city().restricted.sign, city().home.name] });
