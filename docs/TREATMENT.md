@@ -79,6 +79,19 @@ The author's words: «надписи надо держать на экране �
    Every later chapter happens along that route through the forbidden zone, and `close` is arriving home. The map
    callout `HOME · x km` counts down chapter by chapter.
 
+6. **The unfamiliar part of the city is unreadable** (author, 00:15: «в незнакомой части города можно брать
+   непонятный алфавит битой кодировки чтобы был вайб "смотрю но как прочесть не ебу»). Reference:
+   `reference/garbled-bus-board-sakhalin.png`, a real dot-matrix stop board showing broken-encoding glyph soup under
+   a readable header. Rules: in known districts signs are clean; as the train leaves the known part, station names
+   on the route display degrade into garbled glyphs step by step; in the unmapped district and the restricted zone
+   every sign, board and screen is broken-encoding glyph soup (our own generated glyphs: mis-decoded Latin/Cyrillic
+   fragments, box and block characters, dot-matrix rendering), with only the frame/header readable. Each garbled
+   string is generated deterministically from the real city.json name (so it is the same sign every time it
+   appears). The drone may try and fail: callout `TRANSLATION UNAVAILABLE`. Garbled strings are exempt from the
+   reading-time rule and from the city.json name check, but stay on screen long enough (≥1.5 s) to register as
+   "I'm looking and can't read it". Child layer: I can't read anything here. Adult layer: a city that stops
+   speaking your language.
+
 ## The idea in one paragraph
 
 A small child walks through a huge, hazy future city at night with **an old paper handbook** and **a
