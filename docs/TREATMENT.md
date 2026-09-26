@@ -1,4 +1,32 @@
-# What if — treatment and style bible (r6)
+# What if — treatment and style bible (r7)
+
+## r7: Russian clip, Soviet city (author, 2026-09-27 01:15; overrides every English-text and grid-city item below)
+«надо клип делать весь на русском как книжка исходная. и город "советский" брать, не квадратно-гнездовой.»
+**Language.** Every word on screen is Russian, as in the source handbook «Что делать, если…»:
+- signs, station names, boards, callouts, notices, HOME · x km (→ «ДОМ · x км»), RESTRICTED (→ «ПОСТОРОННИМ ВХОД
+  ВОСПРЕЩЁН», «ДЕТЯМ ВХОД ЗАПРЕЩЁН»), METRO CLOSED (→ «ВХОД ЗАКРЫТ», «СТАНЦИЯ ЗАКРЫТА»).
+- The on-screen line for each chapter is the handbook's own Russian heading (e.g. «НЕ УСПЕЛ ВЫЙТИ ИЗ ВАГОНА
+  МЕТРО», «ТЫ ПОТЕРЯЛСЯ»), timed to the chapter's sung line. There is no English karaoke. The song itself stays as recorded.
+- The unfamiliar district's garbled signs become Cyrillic mojibake, the way broken encodings really look
+  (КОИ-8/CP1251/UTF-8 mixups: «РџР РћР•Р—Р”», «ëÔÁÎÃÉÑ», «Ð¡Ð¢ÐÐÐ¦ÐÐ¯»). Generate them deterministically from the real
+  Russian name with a real wrong-codec transform. Don't invent glyph soup. A callout gives the plain Russian where the story needs it.
+- Fonts: Cyrillic faces with a Soviet signage feel (a metro-sign grotesque in the manner of the Moscow metro
+  lettering, a stencil for fences, a typewriter for taped notices). The font licences are recorded in the repo.
+**City.** A Soviet city, not a grid:
+- **Layout:** radial-ring plan. An old centre, prospekts radiating out, a ring road, curved microdistrict streets.
+  Панельные пятиэтажки and девятиэтажки set at angles around yards (дворы), with playgrounds, garages and heating
+  mains above ground. There is an industrial zone (промзона) with a concrete fence and barbed wire: that is the
+  forbidden zone.
+- **Metro:** radial lines plus a ring line. Stations have Soviet-style names we invent («Проспект Строителей»,
+  «Заводская», «Кольцевая»), the red «М» sign, a vestibule with turnstiles and escalators, and the line diagram above
+  the carriage door in the Soviet style.
+- **Data:** `city.json` is rebuilt in this shape: a radial-ring street graph, districts as microdistricts, the metro
+  as radial and ring lines, with Russian names. The tile grid is removed. Every map, board, sign and distance reads it.
+- **Mood:** the "dystopian future, not cyberpunk" register stays, applied to this city: late-Soviet panel
+  districts aged into a quiet future (dim sodium lights, a few neon letters missing, wet concrete).
+Everything else from r5/r6 stands: no book on screen, proper child hands, the real roller shutter, the line-map rules
+(now in Russian), TESTPLAN gates.
+
 
 ## r6: NO BOOK ON SCREEN (author, 2026-09-27 01:05, overrides every book/page/handbook visual below)
 «ты эту книжку не тяни, я просил убрать, ты наоборот всё на ней построил». The handbook stays only as the

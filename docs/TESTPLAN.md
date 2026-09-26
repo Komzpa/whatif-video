@@ -23,6 +23,7 @@ each once, with sound. After one viewing:
 | R8 | Tube arms with glove claws ("cannons with crooked cannonballs") | 27.09 | B1 |
 | R9 | The roller shutter is a floating slab with a gap | 27.09 | B3 |
 | R10 | Overlays pile up: counters, map, callouts, signs, lyric, title | 27.09 | A3, A4 |
+| R12 | English text on screen; a grid ("квадратно-гнездовой") city | 27.09 | A13, A5 |
 | R11 | In-car line map: staircase stations, labels on dots, clipped names, floating marker | 27.09 | A12, B6 |
 
 ## Gate 1: proof stills before any full render (builder)
@@ -48,6 +49,7 @@ Each check must fail on the rejected draft named in its row (baseline proof) and
 | A9 | WCAG contrast of readable text against its local background | ≥ 4.5:1 (≥ 3:1 for text ≥ 48 px) | — |
 | A10 | Loudness and sync: integrated LUFS −14 ± 1; each lyric line starts within ±60 ms of its aligned word | all | — |
 | A12 | Line-map labels intersecting a station dot, the line or the board edge; stations not evenly spaced on one straight line | 0 | lost r3 (≈9 s) |
+| A13 | Latin letters in any on-screen text except mojibake produced by a real codec transform of a Russian name | 0 | lost r3 |
 | A11 | Draft identity: file name carries rN, and a `…-rN.json` next to it holds the content sha of the render inputs (code, data, audio) | present, sha differs from r(N−1) | — |
 
 ## Gate 3: visual self-check (builder)
