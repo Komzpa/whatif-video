@@ -215,7 +215,10 @@ export default class Lost extends CityScene {
       stop: B(5) + 0.2, look1: 2.2, look2: 4.3,
       stand: B(6) - 0.2, walk0: B(6) + 0.35, shut0: B(7) + 0.9, shut1: B(7) + 1.15, go: B(8) + 0.35,
       boardEnd: B(12) + 0.3, arrive: B(12) + 0.75,
-      open: wYou.start, lost: wLost.start, cut: B(19),
+      open: wYou.start, lost: wLost.start,
+      // the hard cut sits halfway between two 60 fps frames: a frame's motion-blur shutter (±¼ frame) never
+      // straddles it, so no frame averages the platform with the street (gate 3: no double exposure); ≤ 8 ms off the beat
+      cut: (Math.round(B(19) * 60 - 0.5) + 0.5) / 60,
       turnBack: wMetro.start - 0.25, shutterGo: wMetro.start, land,
     };
     T.exit0 = T.open + 0.2; T.exit1 = T.open + 1.0;
