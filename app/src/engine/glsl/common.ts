@@ -15,15 +15,7 @@ export const GLSL_COMMON = /* glsl */ `
 // meant to be N logical px: grain/dither cells, hatch spacing, pixel-snapped patterns).
 const float PX_SCALE = ${SCALE.toFixed(1)};
 #define FRAG_PX (gl_FragCoord.xy / PX_SCALE)
-const vec3 C_INK = ${v3(LIN.ink)};
-const vec3 C_INK2 = ${v3(LIN.ink2)};
-const vec3 C_GRAPHITE = ${v3(LIN.graphite)};
-const vec3 C_ASH = ${v3(LIN.ash)};
-const vec3 C_BONE = ${v3(LIN.bone)};
-const vec3 C_SIGNAL = ${v3(LIN.signal)};
-const vec3 C_EMBER = ${v3(LIN.ember)};
-const vec3 C_BLOOD = ${v3(LIN.blood)};
-const vec3 C_ACID = ${v3(LIN.acid)};
+${(Object.keys(LIN) as (keyof typeof LIN)[]).map((k) => `const vec3 C_${k.toUpperCase()} = ${v3(LIN[k])};`).join('\n')}
 
 /** Rotated-grid supersample offset k (0..3) within one pixel, in pixels. See SS_TAP (gl.ts). */
 vec2 rgss(int k) { return k == 0 ? vec2(0.125, -0.375) : k == 1 ? vec2(0.375, 0.125) : k == 2 ? vec2(-0.125, 0.375) : vec2(-0.375, -0.125); }
@@ -153,12 +145,11 @@ float engrave(vec2 uv, float darkness, float freq, float angle) {
 // ---- colour ----
 vec3 toSRGB(vec3 c) { return mix(12.92 * c, 1.055 * pow(max(c, 0.0), vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 vec3 toLinear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
-/** Signal-orange heat ramp: 0 = ink, 0.5 = signal, 1 = white-hot. */
+/** Smog heat ramp: 0 = shadow, 0.5 = smog, 1 = white-hot haze. */
 vec3 heat(float x) {
   x = sat(x);
-  vec3 c = mix(C_INK, C_BLOOD, smoothstep(0.0, 0.3, x));
-  c = mix(c, C_SIGNAL, smoothstep(0.25, 0.55, x));
-  c = mix(c, C_EMBER, smoothstep(0.55, 0.8, x));
+  vec3 c = mix(C_SHADOW, C_SMOG, smoothstep(0.0, 0.45, x));
+  c = mix(c, C_SMOG2, smoothstep(0.4, 0.75, x));
   return mix(c, vec3(1.0, 0.93, 0.85), smoothstep(0.8, 1.0, x));
 }
 `;

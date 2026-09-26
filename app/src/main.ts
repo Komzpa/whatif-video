@@ -13,15 +13,23 @@ const canvas = document.getElementById('c') as HTMLCanvasElement;
 canvas.width = PW;
 canvas.height = PH;
 
-const engine = new Engine(canvas, makeTimeline);
+let engine!: Engine;
 
 declare global {
-  interface Window { __pdoom: any }
+  interface Window { __video: any }
 }
 
 let TIMELINE: typeof engine.timeline = [];
 
+/** The WebGL renderer string (headless Chrome may fall back to software rendering). */
+function gpuName() {
+  const gl = engine.renderer.getContext();
+  const ext = gl.getExtension('WEBGL_debug_renderer_info');
+  return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+}
+
 async function boot() {
+  engine = new Engine(canvas, makeTimeline);
   const onlySet = ONLY ? new Set(ONLY.split(',')) : null;
   await engine.init(onlySet ? (e) => onlySet.has(e.id) : undefined);
   TIMELINE = engine.timeline;
@@ -32,8 +40,9 @@ async function boot() {
 // ------------------------------------------------------------------ export API
 function setupExport() {
   document.body.classList.add('export');
-  window.__pdoom = {
+  window.__video = {
     engine,
+    gpu: gpuName(),
     duration: engine.duration,
     errors: engine.errors,
     /** Output size in px (1920x1080 times scale); stream() sends frames of width*height*4 bytes. */
@@ -90,12 +99,12 @@ function setupExport() {
       return used;
     },
   };
-  window.__pdoom.ready = true;
+  window.__video.ready = true;
 }
 
 // ------------------------------------------------------------------ preview player
 function setupPlayer() {
-  const audio = new Audio('audio/pdoom.mp3');
+  const audio = new Audio('audio/whatif.mp3');
   audio.preload = 'auto';
   const ui = document.getElementById('ui')!;
   const scrub = document.getElementById('scrub') as HTMLInputElement;
@@ -169,7 +178,7 @@ function setupPlayer() {
     import.meta.hot.on('vite:afterUpdate', (payload: any) => {
       for (const u of payload.updates ?? []) {
         const m = /scenes\/([\w-]+)\.ts/.exec(u.path ?? '');
-        if (m) for (const e of TIMELINE) if (e.id === m[1] || (e as any).file === m[1]) engine.reload(e.id);
+        if (m) for (const e of TIMELINE) if (e.id === m[1] || e.params?.file === m[1] || m[1]!.startsWith('_')) engine.reload(e.id);
       }
     });
   }
@@ -178,5 +187,5 @@ function setupPlayer() {
 boot().catch((e) => {
   console.error(e);
   document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f55;position:fixed;top:0;left:0">${String(e?.stack ?? e)}</pre>`);
-  window.__pdoom = { error: String(e?.stack ?? e) };
+  window.__video = { error: String(e?.stack ?? e) };
 });
