@@ -156,13 +156,24 @@ red numbers). A footnote in mono: `* they say if you remove the page numbers, it
 On a downbeat the red numbers lift off the page and fly to the drone's page counter. System line on
 a distant public screen: `CURFEW FOR MINORS 22:00 · FOR YOUR SAFETY`. Camera dives into the first entry.
 
-### `lost` — p. 22 → 26
-The metro as a vast station hall (brutalist, fogged), then the network map as a 3D floating diagram.
-The child is a yellow dot, `YOU ARE HERE`. A train of lit windows slides past; the station the child
-needed slides away with it, labelled `YOUR STOP`. Gates roll down; station lights go off one by one
-along the map. Child layer: missed the train, the station closed. System line: `SERVICE ENDED ·
-NEXT SERVICE 05:40 · THANK YOU FOR YOUR PATIENCE`. WHAT TO DO: `1. Stay where you are. 2. Find someone
-in uniform. 3. Say your address.` A patrol drone passes, scans the child, `MINOR · LOGGED`, and leaves.
+### `lost` — p. 22 → 26 (r3, author's correction: the perspective must follow the three phrases)
+Three beats, one per phrase; the viewer must always know where the child is.
+1. **"You are lost."** Street level in an unfamiliar district, then the drone's map from above. The map
+   works like a game's unexplored area: the child's yellow dot stands at the edge of the known part; beyond
+   it the tiles are grey, hatched and unlabelled, with a banner `AREA NOT MAPPED · THIS PART OF THE CITY IS
+   NOT OPEN YET` (our own design, not any specific game's UI). Callouts `YOU` and `HOME · 6.4 km ·
+   UNKNOWN ROUTE`. Child layer: I don't know where I am. Adult layer: a city that has parts you are not
+   let into.
+2. **"You missed the stop."** Inside a train car at night: seats, a window with the city streaking past,
+   the route display above the door with stations lighting up in sequence. The child sits with the book,
+   the drone dozes (lamp dim). The route display passes the station marked `YOUR STOP` on the beat; the
+   doors open at the next one, the child steps out, and the station sign gets a callout `WRONG STATION`.
+3. **"The metro closed."** Outside, at street level, looking back at the station entrance: the child has
+   just come up the stairs, and the shutters roll down behind them on the beat; the entrance sign flips to
+   `SERVICE ENDED · NEXT SERVICE 05:40 · THANK YOU FOR YOUR PATIENCE`. The child is alone on the street and
+   cannot go back in. A patrol drone passes, scans, `MINOR · LOGGED`, leaves.
+WHAT TO DO across the chapter: `1. Stay where you are. 2. Find someone in uniform. 3. Say your address.`
+The page counter flips 22 → 26 on "You missed".
 
 ### `door` — p. 32
 A tiny apartment in a huge block (the camera starts outside: thousands of identical windows; one lit).
