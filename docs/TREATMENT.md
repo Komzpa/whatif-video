@@ -1,4 +1,4 @@
-# What if — treatment and style bible (r2)
+# What if — treatment and style bible (r5)
 
 Song: `audio/whatif.mp3`, "What if" by komzpa, 2:56. Lyrics: `lyrics/lyrics.txt` (the author's own text).
 Engine: forked from mexicat/pdoom-video (MIT, commit in `reference/pdoom-video-commit.txt`); see `docs/ENGINE.pdoom.md`.
@@ -47,6 +47,37 @@ what the scene is; the lyric decides when things happen. No scene may contradict
 | 10· | ТЕБЯ СИЛЬНО ОБИЖАЮТ | you are badly hurt, badly wronged |
 | 11· | ПРИСТАЁТ НЕЗНАКОМЫЙ ЧЕЛОВЕК | a stranger won't leave you alone |
 | 13· | ТЫ БОИШЬСЯ ТЕМНОТЫ И МОНСТРОВ | afraid of the dark **and monsters**: the child's imagination turns the unknown shapes into monsters |
+
+## r5: author's review of r2 (2026-09-27 00:05 +04) — overrides older text where they differ
+
+The author's words: «надписи надо держать на экране столько времени чтобы они читались нормально, там у тебя они
+появляются и тут же прячутся · главный герой слишком Кенни из сауспарка какой-то. надо лучше выбирать ракурсы и
+моделировать, или от первого лица уж · на книжку время не трать · карта города неконсистентна · you missed the stop
+надо лучше вшить в "you are lost" - типа ты сначала двери закрылись, потом ты едешь не туда, потом не в той части
+города, потом метро закрыто - и это открывает путь к дальше приключениям потому что короткого пути типа метро нету и
+надо переться через "запрещённый" и там остальное происходит».
+
+1. **Reading time is a hard rule.** Every on-screen text (callout, system line, WHAT TO DO step, sign that carries
+   meaning) stays fully visible for at least `max(1.5 s, 0.4 s + characters / 14 per s)`, measured from the end of
+   its reveal animation to the start of its exit. Karaoke words are exempt (the song sets them). If a scene cannot
+   fit the text for that long, cut the text, not the time. The timeline exposes every text item's visible
+   interval, and `scripts/qa-reading-time.ts` fails the build listing each offender with its shortfall.
+2. **The child: first person by default.** Most shots are the child's POV: yellow raincoat sleeves and small hands
+   at the bottom of frame, holding the handbook or a phone-less ticket, the drone floating at the edge of view.
+   Third person only as a small, readable silhouette in wide shots (child proportions: about 4.5 heads tall, legs,
+   arms, a backpack, the hood up; never a blob; a real three-quarter-back or profile angle, low camera at child
+   height). No close third-person shot of the child's back as the main image of a beat (r2's Kenny problem).
+3. **The book is a title card, not a scene.** At most 3 s: the cover and the contents page as a quick flash, then
+   straight into the story. The page counter and the headings stay as the chapter device.
+4. **One city.** A single `data/city.json` holds the districts, the metro line and its stations in order
+   (including `YOUR STOP`), home, the unmapped area and the restricted zone, and the route. Every map, route
+   display, station sign, callout distance and later chapter location reads it. No scene invents a station name or
+   distance. The QA script checks that every station/district string on screen exists in city.json.
+5. **`lost` is one continuous story, and it opens the whole video's journey** (see the rewritten `lost` below):
+   doors close at your stop → the train carries you the wrong way → you get out in the wrong part of the city →
+   the metro closes behind you → there is no short way home, the only route runs through the forbidden zone.
+   Every later chapter happens along that route through the forbidden zone, and `close` is arriving home. The map
+   callout `HOME · x km` counts down chapter by chapter.
 
 ## The idea in one paragraph
 
@@ -180,22 +211,27 @@ red numbers). A footnote in mono: `* they say if you remove the page numbers, it
 On a downbeat the red numbers lift off the page and fly to the drone's page counter. System line on
 a distant public screen: `CURFEW FOR MINORS 22:00 · FOR YOUR SAFETY`. Camera dives into the first entry.
 
-### `lost` — p. 22 → 26 (r3, author's correction: the perspective must follow the three phrases)
-Three beats, one per phrase; the viewer must always know where the child is.
-1. **"You are lost."** Street level in an unfamiliar district, then the drone's map from above. The map
-   works like a game's unexplored area: the child's yellow dot stands at the edge of the known part; beyond
-   it the tiles are grey, hatched and unlabelled, with a banner `AREA NOT MAPPED · THIS PART OF THE CITY IS
-   NOT OPEN YET` (our own design, not any specific game's UI). Callouts `YOU` and `HOME · 6.4 km ·
-   UNKNOWN ROUTE`. Child layer: I don't know where I am. Adult layer: a city that has parts you are not
-   let into.
-2. **"You missed the stop, the metro closed"** (heading p. 26: didn't get off the car in time). Inside a
-   train car at night: the window, the route display above the door. The train stops at the station marked
-   `YOUR STOP`; the child gets up with the book, walks to the door, and on "closed" the doors slide shut in
-   front of them. Callouts `DOORS CLOSING` and `YOUR STOP` on the sign as the platform slides away and the
-   train carries the child into the dark tunnel. The route display moves on past the stop.
-   (r3's "outside the closed station" beat is dropped: the heading says the doors closed with you inside.)
-WHAT TO DO: beat 1 `1. Stay where you are. 2. Find someone in uniform. 3. Say your address.`; beat 2 `1. Get off at the next station. 2. Stay on the platform. 3. Wait for your grown-up to come.`
-The page counter flips 22 → 26 on "You missed".
+### `lost` — p. 22 → 26 (r5: one continuous sequence; roughly aligned to the song)
+The viewer always knows where the child is; the city is city.json.
+- **Instrumental before the first word (after the ≤3 s book card, to 13.4 s): the missed stop.** POV inside a
+  night train car: the route display above the door lights the next station `YOUR STOP`; the platform slides in,
+  the POV stands up, hands with the book, walks to the door; the doors close in front of the hands
+  (`DOORS CLOSING`). The platform with `YOUR STOP` slides away. The train goes on: the route display passes
+  stations whose names get less familiar, the tunnel, the line crosses onto the part of the map the child has
+  never been to.
+- **13.4 "You are lost."** The doors open on a strange platform; POV steps out into an unfamiliar district. The
+  drone's map from above: the yellow dot at the edge of the known area, beyond it grey hatched tiles,
+  `AREA NOT MAPPED · THIS PART OF THE CITY IS NOT OPEN YET`. Callout `HOME · 6.4 km`.
+- **15.7 "You missed the stop"**: on the map the route line draws back to `YOUR STOP`, far behind.
+  **"the metro closed"**: POV turns back to the station; the shutter comes down on "closed", sign `CLOSED ·
+  LAST TRAIN LEFT`. 
+- **Until the next line (26.4): no short way.** The drone recalculates: the metro route greys out, the only
+  remaining route runs through a zone marked `RESTRICTED · NO ENTRY FOR MINORS`. POV looks at the fence gate, the
+  drone's lamp points through it; the child goes in. This is the journey the rest of the video follows.
+WHAT TO DO (each held for its reading time): `1. Stay where you are. 2. Find someone in uniform. 3. Say your
+address.` then, after "closed", `1. Get off at the next station. 2. Don't go on alone. 3. Wait for your grown-up.`
+The last step glitches as the child walks into the restricted zone (adult layer: the manual has no page for
+this). The page counter flips 22 → 26 on "You missed".
 
 ### `door` — p. 32
 A tiny apartment in a huge block (the camera starts outside: thousands of identical windows; one lit).
