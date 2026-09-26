@@ -1095,7 +1095,7 @@ export default class Lost extends CityScene {
     if (grab > 0.001 && t < T.cut) {
       const e = project(cam, DOOR_X - 0.02, 1.32, WALL_Z - 0.03);
       const depth = Math.max(0.3, e.depth ?? cam.position.distanceTo(new THREE.Vector3(DOOR_X, 1.32, WALL_Z)));
-      const s = 0.055 * pxAt(cam, depth);
+      const s = 0.055 * pxAt(cam, Math.min(depth, 0.5)); // the hand is drawn at arm's length, the same scale as the torch hand
       const from = { x: W * (PORTRAIT ? 0.12 : 0.28), y: H + s * 3 };
       const tip = { x: lerp(from.x + s, e.x, grab), y: lerp(H + s, e.y, grab) };
       drawOpenHand(c, tip, from, s, light, 'grab', { curl: 0.8 });
@@ -1105,7 +1105,7 @@ export default class Lost extends CityScene {
       const pt = PORTRAIT ? new THREE.Vector3(0.25, 0.9, CURT_Z - 0.02) : new THREE.Vector3(0.42, 1.15, CURT_Z - 0.02);
       const e = project(cam, pt.x, pt.y, pt.z);
       const depth = Math.max(0.3, cam.position.distanceTo(pt));
-      const s = 0.055 * pxAt(cam, depth);
+      const s = 0.055 * pxAt(cam, Math.min(depth, 0.5)); // the hand is drawn at arm's length, the same scale as the torch hand
       const from = { x: W * (PORTRAIT ? 0.1 : 0.25), y: H + s * 3 };
       const tip = { x: lerp(from.x + s, e.x, touch), y: lerp(H + s, e.y, touch) };
       drawOpenHand(c, tip, from, s, light, 'flat');
