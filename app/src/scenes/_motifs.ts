@@ -136,7 +136,8 @@ export function pageAt(ly: Lyrics, t: number, chapter?: string, chapterStart?: n
  * Clipped pages ('7·') slide right so their last digit is cut by the frame edge (TREATMENT device 2).
  */
 export function drawPageCounter(c: CanvasRenderingContext2D, ly: Lyrics, t: number,
-  o: { alpha?: number; size?: number; top?: number; right?: number; page?: string | null; prev?: string | null; since?: number; chapter?: string; chapterStart?: number } = {}) {
+  o: { alpha?: number; size?: number; top?: number; right?: number; page?: string | null; prev?: string | null; since?: number; chapter?: string; chapterStart?: number;
+    /** A small dark backing card behind the numerals (busy backgrounds). */ plate?: number } = {}) {
   const st = pageAt(ly, t, o.chapter, o.chapterStart);
   const page = o.page !== undefined ? o.page : st.page;
   const prev = o.prev !== undefined ? o.prev : st.prev;
@@ -153,6 +154,12 @@ export function drawPageCounter(c: CanvasRenderingContext2D, ly: Lyrics, t: numb
   const k = clamp((t - since) / 0.42);
   c.save();
   c.globalAlpha *= o.alpha ?? 1;
+  if (o.plate) {
+    const pw = measure(page.replace('·', '') + '0', fam, size) + 60;
+    const r0 = Math.min(rightFor(page), W - SAFE);
+    c.fillStyle = rgba('shadow', o.plate);
+    c.fillRect(r0 - pw + 12, top - 16, W - (r0 - pw + 12), size * 0.95 + 24);
+  }
   // a tiny mono caption: this is the handbook's page
   c.font = font(F.mono(500), 13);
   c.letterSpacing = '3px';
@@ -215,6 +222,8 @@ export interface EntryOpts {
    * with its own leader and page (TREATMENT r4). Default: shown for sung (not printed) entries.
    */
   heading?: string | false;
+  /** A dark translucent band behind the entry (busy backgrounds). */
+  plate?: number;
 }
 
 /**
@@ -255,6 +264,10 @@ export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData
   const alpha = o.alpha ?? 1;
   c.save();
   c.globalAlpha *= alpha;
+  if (o.plate) {
+    c.fillStyle = rgba('shadow', o.plate);
+    c.fillRect(o.x - size * 0.4, o.y - size * 1.0, o.width + size * 0.8, lead * (rows.length - 1) + size * 1.9);
+  }
   c.font = font(fam, size);
   c.textBaseline = 'alphabetic';
   const wordX: number[] = [];

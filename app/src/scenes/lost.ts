@@ -255,6 +255,7 @@ export default class Lost extends CityScene {
     const tg = new THREE.Vector3().lerpVectors(streetT, highT, Math.pow(u, 0.7));
     cam.lookAt(tg);
     cam.fov = lerp(50, 44, u);
+    this.fog.density = lerp(0.012, 0.002, Math.pow(u, 0.6));
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
 
@@ -297,8 +298,8 @@ export default class Lost extends CityScene {
       drawDrone(w, pd.x, pd.y, drPx, { t, lamp: 1, look });
     }
     // under the map: the city dims so the hologram reads
-    const mapK = prog(t, tUp1 - 0.4, tUp1 + 0.3);
-    if (mapK > 0) { w.fillStyle = rgba('shadow', 0.55 * mapK); w.fillRect(0, 0, W, H); }
+    const mapK = prog(t, tUp0 + 0.45, tUp1 - 0.1);
+    if (mapK > 0) { w.fillStyle = rgba('shadow', 0.45 * mapK); w.fillRect(0, 0, W, H); }
     this.composite2D(this.world, out);
     if (u < 0.85) { droneGlow(this.glow2D, pd.x, pd.y, drPx, 1, look); this.glow2D.render(renderer, out); }
     rain(this.lines2D, t, { count: 700, alpha: 0.1 * (1 - u), speed: 1500, angle: 0.08, seed: 9 });
@@ -308,7 +309,7 @@ export default class Lost extends CityScene {
     const u2 = this.ui.ctx;
     if (mapK > 0) {
       this.mapMat.uniforms.alpha!.value = mapK;
-      this.mapMat.uniforms.reveal!.value = lerp(0, 420, prog(t, tUp1 - 0.3, wLost.start - 0.05, ease.inOutQuad));
+      this.mapMat.uniforms.reveal!.value = lerp(45, 420, prog(t, tUp0 + 0.45, wLost.start - 0.05, ease.inOutQuad));
       renderer.setRenderTarget(out); renderer.render(this.mapScene, cam);
       const dot = project(cam, C.x, 0.3, C.z);
       // the child: the yellow dot, pulsing, on the edge of the known part
@@ -488,13 +489,22 @@ export default class Lost extends CityScene {
     const wk = prog(t, tWalk0, tWalk1, (x) => x);
     const childX = lerp(BENCH[0] + 0.25, DOOR_X - 1.05, wk);
     const childZ = lerp(-0.75, -0.95, wk);
-    // ---- camera: across the aisle; follows the child to the door, a slow push after the doors shut
-    const k1 = prog(t, f.start, tWalk0, ease.inOutQuad), k2 = prog(t, tWalk0, tWalk1, ease.inOutQuad), k3 = prog(t, tShut1, f.end, ease.inOutQuad);
-    const sway = Math.sin(t * 7.3) * 0.004 * Math.min(1, Math.abs(speed) / 10) + Math.sin(t * 1.3) * 0.006;
-    const cx = lerp(lerp(-0.9, 0.3, k1), 1.9, k2) + k3 * 0.5;
-    cam.position.set(cx, 1.28 + sway - k3 * 0.08, 1.3 - k3 * 0.35);
-    cam.lookAt(cx + 0.55 + k2 * 0.45, 1.3 - k3 * 0.02, WALL_Z);
-    cam.fov = 60 - k3 * 6;
+    // ---- camera: across the aisle. A slow push towards the doors through "you missed the stop", following
+    // the child; after the doors shut it settles with the door and the window beside it in view, so the
+    // platform and YOUR STOP visibly slide away. The car sways: more while the train moves.
+    const E = ease.inOutQuad;
+    const px = keys(t, [[f.start, -1.3], [tStop, -0.55, E], [tWalk1, 1.0, E], [f.end, 1.35, E]]);
+    const pz = keys(t, [[f.start, 1.35], [tStop, 1.25, E], [tWalk1, 1.05, E], [f.end, 0.9, E]]);
+    const lx = keys(t, [[f.start, 0.9], [tStop, 1.3, E], [tWalk1, 2.3, E], [f.end, 2.35, E]]);
+    const move = Math.min(1, Math.abs(speed) / 12);
+    const swayY = Math.sin(t * 1.3) * 0.006 + Math.sin(t * 7.3) * 0.006 * move + Math.sin(t * 17.1) * 0.002 * move;
+    const roll = Math.sin(t * 1.1) * 0.003 + Math.sin(t * 5.3) * 0.004 * move;
+    cam.position.set(px + Math.sin(t * 2.1) * 0.004 * move, 1.28 + swayY, pz);
+    cam.up.set(Math.sin(roll), Math.cos(roll), 0);
+    cam.lookAt(lx, 1.32, WALL_Z);
+    cam.up.set(0, 1, 0);
+    cam.fov = keys(t, [[f.start, 60], [tWalk1, 57, E], [f.end, 55, E]]);
+    const cx = px;
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
     // ---- outside
@@ -570,7 +580,8 @@ export default class Lost extends CityScene {
     const u = this.ui.ctx;
     const stopSign = (sg: NeonSign) => project(cam, sg.pos.x - s - sg.w * 0.3, sg.pos.y + sg.h * 0.2, sg.pos.z);
     const sp = stopSign(this.nameSigns[2]!);
-    drawCallout(u, t, { ax: sp.x, ay: sp.y, lx: sp.x + 60, ly: sp.y - 150, side: 1, text: 'YOUR STOP', at: tStop, out: tGo + 0.1, size: 26, plate: 0.65 });
+    const inView = sp.x > 150 && sp.x < W - 60 && !sp.behind;
+    drawCallout(u, t, { ax: sp.x, ay: sp.y, lx: sp.x + 70, ly: sp.y + 150, side: 1, text: 'YOUR STOP', at: tStop, out: inView ? f.end : Math.min(f.end, t - 0.36), size: 26, plate: 0.65 });
     const sp2 = stopSign(this.nameSigns[3]!);
     const away = sp2.x > 140 && sp2.x < W - 60 ? 1 : 0;
     drawCallout(u, t, { ax: sp2.x, ay: sp2.y, lx: sp2.x + 60, ly: sp2.y + 190, side: 1, text: ['YOUR STOP', 'LEAVING WITHOUT YOU'], at: tGo + 0.35, out: away ? tGo + 3 : t - 0.36, size: 24, plate: 0.65 });
@@ -622,10 +633,10 @@ export default class Lost extends CityScene {
     const u2 = this.ui.ctx;
     const ex = SAFE, ew = W - 2 * SAFE - 330;
     drawEntry(u2, this.ly, this.au, L1, t, { x: ex, y: 200, width: ew, size: 62, alpha: entryAlpha(L1, t, 30, tCut - 0.1) });
-    drawEntry(u2, this.ly, this.au, L2, t, { x: W - SAFE - 900, y: H - SAFE - 150, width: 900, size: 58, alpha: entryAlpha(L2, t, 30) });
+    drawEntry(u2, this.ly, this.au, L2, t, { x: ex, y: 150, width: 1000, size: 46, alpha: entryAlpha(L2, t, 30), plate: 0.55 });
     if (t < tCut) drawPanel(u2, t, { x: SAFE, y: H - SAFE - 230, w: 600, steps: this.steps1, at: this.steps1[0]!.at - 0.3, size: 24, alpha: 1 - smoothstep(tCut - 0.3, tCut - 0.05, t) });
-    else drawPanel(u2, t, { x: SAFE, y: SAFE - 30, w: 640, steps: this.steps2, at: this.steps2[0]!.at - 0.3, size: 24 });
-    drawPageCounter(u2, this.ly, t, { chapter: 'lost', chapterStart: f.start });
+    else drawPanel(u2, t, { x: W - SAFE - 640, y: H - SAFE - 200, w: 640, steps: this.steps2, at: this.steps2[0]!.at - 0.3, size: 24 });
+    drawPageCounter(u2, this.ly, t, { chapter: 'lost', chapterStart: f.start, plate: t >= tCut ? 0.7 : 0 });
     this.composite2D(this.ui, out);
     const fadeIn = 1 - smoothstep(f.start, f.start + 0.9, t);
     return { ...POST_BASE, fade: fadeIn * 0.9 };
