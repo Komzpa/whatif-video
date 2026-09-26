@@ -9,3 +9,15 @@ function readScale() {
 
 /** Physical pixels per logical pixel of the output (integer 1..4, default 1). */
 export const SCALE = readScale();
+
+/**
+ * Output aspect, read once from the page URL: `?aspect=9:16` renders the native vertical cut
+ * (1080x1920 logical, TREATMENT r5 item 7) from the same timeline; scenes read PORTRAIT to frame
+ * their own shots and lay out inside the vertical safe area.
+ */
+function readAspect(): '16:9' | '9:16' {
+  if (typeof location === 'undefined') return '16:9';
+  return new URLSearchParams(location.search).get('aspect') === '9:16' ? '9:16' : '16:9';
+}
+export const ASPECT = readAspect();
+export const PORTRAIT = ASPECT === '9:16';

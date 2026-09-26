@@ -1,7 +1,9 @@
 // Entry: preview player (default) or export mode (?export=1, driven by scripts/render.ts).
 import { Engine, type AdaptiveSampling } from './engine/engine';
-import { PW, PH, SCALE } from './engine/gl';
+import { PW, PH, SCALE, PORTRAIT } from './engine/gl';
 import { makeTimeline } from './timeline';
+import { textlog } from './textlog';
+import { loadCity } from './city';
 
 const params = new URLSearchParams(location.search);
 const EXPORT = params.has('export');
@@ -10,6 +12,7 @@ const FROM = params.get('t') ? parseFloat(params.get('t')!) : null;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 // physical size: 1920x1080 times ?scale= (the page CSS keeps showing it at 1920x1080)
+if (PORTRAIT) document.body.classList.add('portrait');
 canvas.width = PW;
 canvas.height = PH;
 
@@ -29,6 +32,7 @@ function gpuName() {
 }
 
 async function boot() {
+  await loadCity();
   engine = new Engine(canvas, makeTimeline);
   const onlySet = ONLY ? new Set(ONLY.split(',')) : null;
   await engine.init(onlySet ? (e) => onlySet.has(e.id) : undefined);
@@ -52,6 +56,8 @@ function setupExport() {
     timeline: TIMELINE.map(({ id, start, end }) => ({ id, start, end })),
     /** Render a single frame at t (seeks as needed). */
     still(t: number, samples: number | AdaptiveSampling = 1, shutter = 0.5) { return engine.render(t, 1 / 60, true, samples, shutter); },
+    /** Render one frame at t (one sample) and return every text item it drew (scripts/qa-reading-time.ts). */
+    texts(t: number) { textlog.begin(); try { engine.render(t, 1 / 60, false, 1, 0); } catch (e) { textlog.end(); throw e; } return textlog.end(); },
     /** The last rendered frame as a full-resolution (PW x PH) PNG, base64 (for stills at scale > 1). */
     async png() {
       const px = await engine.readPixelsAsync(), row = PW * 4;

@@ -17,6 +17,8 @@ import { Lyrics, type Line, type Word } from '../engine/lyrics';
 import type { AudioData } from '../engine/audio';
 import { clamp, ease, frameIdx, hash, lerp, mulberry32, noise1, prog, smoothstep } from '../engine/util';
 import { CONTENTS, INTRO } from '../contents';
+import { logText, textlog, type TextKind } from '../textlog';
+export { logText, textlog };
 
 export { HEX, LIN, rgba, mixRgba };
 type RGB = [number, number, number];
@@ -152,6 +154,10 @@ export function drawPageCounter(c: CanvasRenderingContext2D, ly: Lyrics, t: numb
     return W - measure(ghostDigit(p), fam, size) * 0.45;
   };
   const k = clamp((t - since) / 0.42);
+  if (textlog.on) {
+    const r0 = Math.min(rightFor(page), W - SAFE), pw = measure(page.replace('·', '') + '0', fam, size);
+    logText('counter', page, (o.alpha ?? 1) >= 0.97, { x: r0 - pw, y: top - 16, w: rightFor(page) - (r0 - pw), h: size * 0.95 + 24 }, { id: 'counter' });
+  }
   c.save();
   c.globalAlpha *= o.alpha ?? 1;
   if (o.plate) {
@@ -292,6 +298,10 @@ export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData
   c.letterSpacing = '0px';
   // leader
   const lastY = o.y + (rows.length - 1) * lead;
+  if (textlog.on && alpha > 0.001 && words.some((w) => o.printed || t >= w.start - 0.4)) {
+    const cap = c.measureText('H').actualBoundingBoxAscent;
+    logText(o.printed ? 'prop' : 'karaoke', L.text, alpha >= 0.97, { x: o.x, y: o.y - cap, w: o.width, h: lastY - o.y + cap + size * 0.25 }, { cap, id: `${o.printed ? 'prop' : 'karaoke'}:${L.text}` });
+  }
   const numRight = o.x + o.width;
   const l0 = lastRight + size * 0.22, l1 = numRight - numW - size * 0.22;
   const gap = size * 0.24, r = Math.max(1.2, size * 0.042);
@@ -330,8 +340,8 @@ export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData
   let noteY = lastY;
   if (heading && page) {
     const ns = Math.max(18, Math.round(size * 0.3)), nfam = F.mono(500);
-    const t0 = words[0]!.start + 0.15;
-    const n = o.printed ? heading.length : Math.floor(Math.max(0, t - t0) * 45);
+    const t0 = words[0]!.start;
+    const n = o.printed ? heading.length : Math.floor(Math.max(0, t - t0) * 70);
     if (n > 0) {
       noteY = lastY + size * 0.36 + ns * 1.25;
       c.font = font(nfam, ns);
@@ -351,6 +361,7 @@ export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData
         for (let i = 0; i < Math.floor(nd * done); i++) c.fillRect(d0 + i * ns * 0.42, noteY - 2, 2, 2);
         if (done >= 1) drawPageNumber(c, page, nr, noteY, ns * 1.15, { clip: 'tear', alpha: 0.9 });
       }
+      logText('note', heading, done >= 1 && alpha >= 0.97, { x: o.x, y: noteY - ns, w: Math.max(hw, Math.min(o.width * 0.62, Math.max(hw + ns * 5, o.width * 0.42))), h: ns * 1.3 });
     }
   }
   c.restore();
@@ -470,6 +481,7 @@ export function drawPanel(c: CanvasRenderingContext2D, t: number, o: {
       if (n > 0 || li === 0) cursorAt = { x: x0 + measure(str, fam, size) + 2, y };
       if (li < lines.length - 1 && n >= ln.length) y += lh;
     });
+    if (textlog.on) logText('step', s.text, !s.blank && typed >= total && !s.glitch && a >= 0.97, { x: o.x, y: o.y, w: o.w, h });
     const typing = typed < total;
     const isLast = si === o.steps.filter((q) => t >= q.at - 0.05).length - 1;
     if ((typing || s.blank || isLast) && cursorAt && (typing || blinkOn)) {
@@ -515,6 +527,8 @@ export function drawCallout(c: CanvasRenderingContext2D, t: number, o: {
   color?: PaletteKey | string; size?: number; alpha?: number; ring?: boolean; side?: 1 | -1; cps?: number; dim?: number;
   /** A dark backing card behind the label (for bright, hazy backgrounds). */
   plate?: number;
+  /** QA: the text kind (default 'callout') and place names inside the label (checked against city.json). */
+  kind?: TextKind; places?: string[];
 }) {
   const a0 = (o.alpha ?? 1) * smoothstep(o.at - 0.01, o.at + 0.08, t) * (o.out !== undefined ? 1 - smoothstep(o.out, o.out + 0.35, t) : 1);
   if (a0 <= 0.001) return;
@@ -551,6 +565,13 @@ export function drawCallout(c: CanvasRenderingContext2D, t: number, o: {
   c.font = font(F.mono(500), size);
   c.letterSpacing = `${size * 0.06}px`;
   c.textBaseline = 'alphabetic';
+  if (textlog.on) {
+    const all = lines.join(' / '), wMax = Math.max(...lines.map((ln) => measure(ln, F.mono(500), size, size * 0.06)));
+    const bx = side > 0 ? o.lx : o.lx - wMax;
+    const onScreen = o.lx > -wMax && o.lx < W + wMax && o.ly > 0 && o.ly < H + size;
+    logText(o.kind ?? 'callout', all, n >= lines.join('').length && a0 * (o.dim ?? 1) >= 0.97 && onScreen,
+      { x: bx, y: o.ly - size, w: wMax, h: size * (1 + 1.35 * (lines.length - 1)) + size * 0.3 }, { places: o.places });
+  }
   if (o.plate && n > 0) {
     const wMax = Math.max(...lines.map((ln) => measure(ln, F.mono(500), size, size * 0.06)));
     const px = side > 0 ? o.lx - size * 0.5 : o.lx - wMax - size * 0.5;
@@ -1179,6 +1200,232 @@ export function drawChildBack(c: CanvasRenderingContext2D, cx: number, cy: numbe
   c.restore();
 }
 
+// =====================================================================================================
+// First person (TREATMENT r5 item 2, item 8): the child's yellow sleeves and small hands at the bottom of
+// the frame, holding the handbook open (its page carries WHAT TO DO) and, in the dark, a small torch.
+// =====================================================================================================
+
+export interface POV {
+  /** The open book: centre px, spread width px, rotation (rad), tilt 0..1 (1 = facing the eye, less = tipped away). */
+  book?: { x: number; y: number; w: number; rot?: number; tilt?: number } | null;
+  /** Draw the spread's print in book-local px: (0,0) top-left, (w, h) bottom-right (h = w / 1.45). */
+  page?: (c: CanvasRenderingContext2D, w: number, h: number) => void;
+  /** Right hand: on the book's right edge (default), or holding the torch, or reaching (screen px). */
+  right?: { x: number; y: number; mode: 'book' | 'torch' | 'reach'; dir?: number } | null;
+  /** Torch on 0..1 (lamp head glows). */
+  torch?: number;
+  /** Warm light on the sleeves (torch/lamp) and the ambient level (0 = night, 1 = lit car). */
+  warm?: number; amb?: number;
+  alpha?: number;
+}
+
+const SKIN = '#C9C2B6';
+
+/** A tapered sleeve from an off-screen shoulder to the wrist, with a darker cuff. */
+function sleeve(c: CanvasRenderingContext2D, sx: number, sy: number, wx: number, wy: number, w0: number, w1: number, col: string, dark: string, rim: string) {
+  const dx = wx - sx, dy = wy - sy, L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L;
+  // a slight bend at the elbow: the control point bows outward
+  const bx = sx + dx * 0.5 + nx * L * 0.08 * Math.sign(dx || 1), by = sy + dy * 0.5 + ny * L * 0.08 * Math.sign(dx || 1);
+  c.fillStyle = col;
+  c.beginPath();
+  c.moveTo(sx + nx * w0 / 2, sy + ny * w0 / 2);
+  c.quadraticCurveTo(bx + nx * (w0 + w1) / 4, by + ny * (w0 + w1) / 4, wx + nx * w1 / 2, wy + ny * w1 / 2);
+  c.lineTo(wx - nx * w1 / 2, wy - ny * w1 / 2);
+  c.quadraticCurveTo(bx - nx * (w0 + w1) / 4, by - ny * (w0 + w1) / 4, sx - nx * w0 / 2, sy - ny * w0 / 2);
+  c.closePath(); c.fill();
+  // rim light along one edge, a crease
+  c.strokeStyle = rim; c.lineWidth = w1 * 0.08; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(sx + nx * w0 * 0.42, sy + ny * w0 * 0.42); c.quadraticCurveTo(bx + nx * (w0 + w1) * 0.2, by + ny * (w0 + w1) * 0.2, wx + nx * w1 * 0.42, wy + ny * w1 * 0.42); c.stroke();
+  c.strokeStyle = dark; c.lineWidth = w1 * 0.05;
+  c.beginPath(); c.moveTo(bx - nx * w1 * 0.1 - dx * 0.08, by - ny * w1 * 0.1 - dy * 0.08); c.quadraticCurveTo(bx, by, bx + nx * w1 * 0.25 + dx * 0.05, by + ny * w1 * 0.25 + dy * 0.05); c.stroke();
+  // cuff: a band just before the wrist, too long (the coat is too big)
+  const ux = dx / L, uy = dy / L;
+  c.fillStyle = dark;
+  c.beginPath();
+  c.moveTo(wx + nx * w1 * 0.53 - ux * w1 * 0.34, wy + ny * w1 * 0.53 - uy * w1 * 0.34);
+  c.lineTo(wx + nx * w1 * 0.53 - ux * w1 * 0.2, wy + ny * w1 * 0.53 - uy * w1 * 0.2);
+  c.lineTo(wx - nx * w1 * 0.53 - ux * w1 * 0.2, wy - ny * w1 * 0.53 - uy * w1 * 0.2);
+  c.lineTo(wx - nx * w1 * 0.53 - ux * w1 * 0.34, wy - ny * w1 * 0.53 - uy * w1 * 0.34);
+  c.closePath(); c.fill();
+}
+
+/** A small hand gripping an edge: the palm behind, four fingertips over the front, the thumb along it. */
+function hand(c: CanvasRenderingContext2D, x: number, y: number, r: number, ang: number, skin: string, shade: string, grip = true) {
+  c.save();
+  c.translate(x, y); c.rotate(ang);
+  c.fillStyle = skin;
+  c.beginPath(); c.ellipse(0, r * 0.15, r * 0.62, r * 0.78, 0, 0, Math.PI * 2); c.fill(); // palm/back of the hand
+  if (grip) {
+    // fingertips curled over the edge (to the right of the wrist line)
+    for (let i = 0; i < 4; i++) { c.beginPath(); c.ellipse(r * 0.52, -r * 0.42 + i * r * 0.3, r * 0.26, r * 0.15, 0.1, 0, Math.PI * 2); c.fill(); }
+  } else {
+    for (let i = 0; i < 4; i++) { c.beginPath(); c.ellipse(r * 0.2 + i * r * 0.08, -r * 0.85 - (i === 1 || i === 2 ? r * 0.12 : 0), r * 0.13, r * 0.36, 0.1 * (i - 1.5), 0, Math.PI * 2); c.fill(); }
+  }
+  c.beginPath(); c.ellipse(-r * 0.5, -r * 0.35, r * 0.18, r * 0.42, -0.5, 0, Math.PI * 2); c.fill(); // thumb
+  c.strokeStyle = shade; c.lineWidth = Math.max(1, r * 0.05);
+  c.beginPath(); c.arc(0, r * 0.15, r * 0.6, 0.3, 1.6); c.stroke();
+  c.restore();
+}
+
+/**
+ * The child's own view: sleeves and hands at the bottom of the frame, the handbook held open, the torch.
+ * Returns the spread's corners on screen (for anchoring callouts) and its local→screen transform.
+ */
+export function drawPOV(c: CanvasRenderingContext2D, t: number, o: POV) {
+  const warm = o.warm ?? 0, amb = o.amb ?? 0.5;
+  const coatK = 0.35 + 0.45 * amb + 0.35 * warm;
+  const col = mixRgba('shadow', 'coat', Math.min(1, coatK)), dark = mixRgba('shadow', 'coat', Math.min(1, coatK) * 0.55);
+  const rim = mixRgba('coat', 'lamp', 0.6, 0.35 + 0.5 * warm);
+  const skin = mixRgba('shadow', SKIN, Math.min(1, 0.4 + 0.45 * amb + 0.4 * warm)), skinD = mixRgba('shadow', SKIN, 0.35);
+  c.save();
+  c.globalAlpha *= o.alpha ?? 1;
+  let corners: { x: number; y: number }[] = [];
+  let M: DOMMatrix | null = null;
+  const b = o.book;
+  let lh = { x: 0, y: 0 }, rhBook = { x: 0, y: 0 }, bw = 0, bh = 0, rot = 0, tilt = 1;
+  if (b) {
+    bw = b.w; bh = b.w / 1.45; rot = b.rot ?? 0; tilt = b.tilt ?? 1;
+    c.save();
+    c.translate(b.x, b.y); c.rotate(rot); c.scale(1, tilt); c.translate(-bw / 2, -bh / 2);
+    M = c.getTransform();
+    // cover edge and page block
+    c.fillStyle = mixRgba('shadow', 'red', 0.55);
+    c.beginPath(); c.roundRect(-bw * 0.015, -bh * 0.02, bw * 1.03, bh * 1.05, bw * 0.012); c.fill();
+    const pl = amb * 0.75 + warm * 0.6 + 0.12;
+    const paperC = mixRgba('shadow', 'paper', Math.min(1, pl));
+    c.fillStyle = paperC;
+    c.beginPath();
+    c.moveTo(0, bh * 0.02); c.quadraticCurveTo(bw * 0.25, -bh * 0.02, bw * 0.5, bh * 0.03);
+    c.quadraticCurveTo(bw * 0.75, -bh * 0.02, bw, bh * 0.02);
+    c.lineTo(bw, bh); c.quadraticCurveTo(bw * 0.75, bh * 0.97, bw * 0.5, bh * 1.01); c.quadraticCurveTo(bw * 0.25, bh * 0.97, 0, bh);
+    c.closePath(); c.fill();
+    // the gutter shadow
+    const g = c.createLinearGradient(bw * 0.44, 0, bw * 0.56, 0);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, `rgba(0,0,0,${0.28})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(bw * 0.44, 0, bw * 0.12, bh);
+    if (o.page) { c.save(); o.page(c, bw, bh); c.restore(); }
+    c.restore();
+    const P = (x: number, y: number) => { const p = new DOMPoint(x, y).matrixTransform(M!); return { x: p.x, y: p.y }; };
+    corners = [P(0, 0), P(bw, 0), P(bw, bh), P(0, bh)];
+    lh = P(-bw * 0.01, bh * 0.62);
+    rhBook = P(bw * 1.01, bh * 0.62);
+  }
+  // left sleeve + hand on the book's left edge
+  if (b) {
+    const sx = Math.min(lh.x - 160, -40), sy = H + 140;
+    sleeve(c, sx, sy, lh.x - 10, lh.y + 34, 230, 118, col, dark, rim);
+    hand(c, lh.x, lh.y, 40, rot + Math.PI * 0.02, skin, skinD);
+  }
+  const r = o.right === undefined ? (b ? { x: rhBook.x, y: rhBook.y, mode: 'book' as const } : null) : o.right;
+  if (r) {
+    const sx = Math.max(r.x + 170, W + 40), sy = H + 140;
+    sleeve(c, sx, sy, r.x + 10, r.y + 34, 230, 118, col, dark, rim);
+    if (r.mode === 'book') {
+      c.save(); c.translate(r.x, r.y); c.scale(-1, 1); hand(c, 0, 0, 40, -rot, skin, skinD); c.restore();
+    } else if (r.mode === 'reach') {
+      hand(c, r.x, r.y - 20, 46, (r.dir ?? 0), skin, skinD, false);
+    } else {
+      // the torch: a short cylinder in the fist, head towards `dir` (screen angle)
+      const a = r.dir ?? -Math.PI / 2;
+      c.save(); c.translate(r.x, r.y - 10); c.rotate(a + Math.PI / 2);
+      c.fillStyle = mixRgba('shadow', 'concrete', 0.35 + 0.4 * amb);
+      c.beginPath(); c.roundRect(-18, -120, 36, 130, 8); c.fill();
+      c.fillStyle = mixRgba('shadow', 'concrete', 0.6 + 0.3 * amb);
+      c.beginPath(); c.roundRect(-24, -150, 48, 40, 8); c.fill();
+      c.fillStyle = rgba('lamp', 0.25 + 0.75 * (o.torch ?? 0));
+      c.beginPath(); c.ellipse(0, -151, 20, 6, 0, 0, Math.PI * 2); c.fill();
+      c.restore();
+      c.save(); c.translate(r.x, r.y); c.scale(-1, 1); hand(c, 0, 0, 44, -(a + Math.PI / 2) * 0.3, skin, skinD); c.restore();
+    }
+  }
+  c.restore();
+  return { corners, M };
+}
+
+/**
+ * The handbook's spread as the child reads it (r5 item 8: WHAT TO DO lives on the paper). Left page: the
+ * red page number and the chapter heading; right page: WHAT TO DO, the steps typed in as the eye reads
+ * them (`at` on beats). A step with `glitch` smudges and tears (the manual has no page for this).
+ * `legible`: the page faces the eye and is large enough to read (QA: only then does a step count as visible).
+ */
+export function drawHandbookSpread(c: CanvasRenderingContext2D, w: number, h: number, t: number, o: {
+  page: string; heading: string; steps: Step[]; legible?: boolean; intro?: string[]; cps?: number;
+}) {
+  const ink = (a: number) => rgba('ink', a);
+  const m = w * 0.045;
+  // left page
+  drawPageNumber(c, o.page, m + w * 0.07, m + w * 0.055, w * 0.06);
+  c.font = font(F.archivo(62, 900), w * 0.052); c.fillStyle = ink(0.92); c.textBaseline = 'alphabetic';
+  const words = o.heading.split(' ');
+  let y = m + w * 0.14, line = '';
+  const maxW = w * 0.5 - 2 * m;
+  const rows: string[] = [];
+  for (const wd of words) { const nx = line ? line + ' ' + wd : wd; if (measure(nx, F.archivo(62, 900), w * 0.052) > maxW && line) { rows.push(line); line = wd; } else line = nx; }
+  rows.push(line);
+  for (const r of rows) { c.fillText(r, m, y); y += w * 0.052; }
+  if (o.intro) {
+    c.font = font(F.archivo(62, 500), w * 0.03); c.fillStyle = ink(0.8);
+    y += w * 0.02;
+    for (const r of o.intro) { c.fillText(r, m, y); y += w * 0.038; }
+  }
+  // a small printed pictogram of our own: a house and a dotted path
+  c.strokeStyle = ink(0.55); c.lineWidth = Math.max(1, w * 0.003);
+  const px = m + w * 0.05, py = h - m - w * 0.06;
+  c.beginPath(); c.moveTo(px, py); c.lineTo(px, py - w * 0.03); c.lineTo(px + w * 0.025, py - w * 0.05); c.lineTo(px + w * 0.05, py - w * 0.03); c.lineTo(px + w * 0.05, py); c.closePath(); c.stroke();
+  for (let i = 0; i < 9; i++) c.fillRect(px + w * 0.07 + i * w * 0.022, py - w * 0.012 - Math.sin(i * 0.8) * w * 0.008, 2, 2);
+  // right page: WHAT TO DO
+  const rx = w * 0.5 + m;
+  c.font = font(F.mono(600), w * 0.026); c.letterSpacing = `${w * 0.004}px`; c.fillStyle = ink(0.8);
+  c.fillText('WHAT TO DO', rx, m + w * 0.05);
+  c.letterSpacing = '0px';
+  const ss = w * 0.036, fam = F.archivo(62, 700), cps = o.cps ?? 24;
+  y = m + w * 0.11;
+  const mw = w * 0.5 - 2 * m - ss * 1.2;
+  o.steps.forEach((st, i) => {
+    if (t < st.at - 0.02) return;
+    const total = st.blank ? 0 : st.text.length;
+    const typed = Math.min(total, Math.floor(Math.max(0, t - st.at) * cps));
+    c.font = font(fam, ss); c.fillStyle = ink(0.75);
+    c.fillText(`${i + 1}.`, rx, y);
+    // wrap
+    const out: string[] = []; let cur = '';
+    for (const wd of st.text.split(' ')) { const nx = cur ? cur + ' ' + wd : wd; if (measure(nx, fam, ss) > mw && cur) { out.push(cur); cur = wd; } else cur = nx; }
+    out.push(cur);
+    const y0 = y;
+    let left = typed;
+    out.forEach((ln, li) => {
+      const n = Math.max(0, Math.min(ln.length, left)); left -= ln.length + 1;
+      c.fillStyle = ink(0.95);
+      c.fillText(ln.slice(0, n), rx + ss * 1.2, y + li * ss * 1.18);
+    });
+    const hh = out.length * ss * 1.18;
+    if (st.glitch) {
+      // smudged and torn: the ink smears sideways, a strip of the page is missing
+      const g = clamp(st.glitch);
+      for (let k = 1; k <= 5; k++) { c.fillStyle = ink(0.1 * g); c.save(); c.translate(k * ss * 0.12 * g, k * ss * 0.03); out.forEach((ln, li) => c.fillText(ln, rx + ss * 1.2, y0 + li * ss * 1.18)); c.restore(); }
+      c.fillStyle = mixRgba('shadow', 'paper', 0.25);
+      c.beginPath();
+      const tx0 = rx + ss * 1.2 + mw * (1 - g * 0.9), ty0 = y0 - ss * 0.95, ty1 = y0 + hh - ss * 0.7;
+      c.moveTo(tx0, ty0);
+      for (let q = 0; q <= 10; q++) c.lineTo(tx0 + (hash(q, i) - 0.5) * ss * 0.6, ty0 + (ty1 - ty0) * q / 10);
+      c.lineTo(w, ty1); c.lineTo(w, ty0); c.closePath(); c.fill();
+    }
+    if (textlog.on) {
+      const M = c.getTransform();
+      const a = new DOMPoint(rx, y0 - ss).matrixTransform(M), b = new DOMPoint(rx + ss * 1.2 + mw, y0 + hh - ss * 0.8).matrixTransform(M);
+      logText('step', st.text, !!o.legible && !st.blank && typed >= total && !st.glitch,
+        { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) });
+    }
+    y += hh + ss * 0.45;
+  });
+}
+
+/** Screen position of the torch head for a POV right hand in torch mode (for its glow and beam). */
+export function torchHead(r: { x: number; y: number; dir?: number }) {
+  const a = r.dir ?? -Math.PI / 2;
+  return { x: r.x + Math.cos(a) * 151, y: r.y - 10 + Math.sin(a) * 151 };
+}
+
 /** A soft wedge of lamp light from (x, y) towards (tx, ty) in 2D (haze in the beam; the lamp's cone). */
 export function drawBeam2D(c: CanvasRenderingContext2D, x: number, y: number, tx: number, ty: number, spread: number, alpha: number) {
   if (alpha <= 0.001) return;
@@ -1308,6 +1555,7 @@ export function drawSystemLine(c: CanvasRenderingContext2D, t: number, text: str
   const w = measure(text, fam, size, tr);
   const x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
   const fl = o.flicker ? flicker(t, o.flicker, 11) : 1;
+  if ((o.alpha ?? 1) > 0.001 && t >= at) logText('system', text, n >= text.length && (o.alpha ?? 1) >= 0.97, { x: x0, y: y - size, w, h: size * 1.3 });
   c.save();
   c.globalAlpha *= (o.alpha ?? 1) * fl * smoothstep(at, at + 0.1, t);
   if (o.frame !== false) {
@@ -1568,6 +1816,45 @@ export class LightShafts {
 type V3 = [number, number, number];
 
 /**
+ * A dot-matrix board texture (r5 item 6, reference/garbled-bus-board-sakhalin.png, our own design): an
+ * optional clean header strip in print, then each line rendered as round LEDs on a dark grid.
+ */
+export function ledBoard(lines: string[], header: string | undefined, col: PaletteKey | string) {
+  const cell = 9, rowsPx = 13; // LED pitch (px) and LED rows per text line
+  // rasterise each line small, then sample it into LEDs
+  const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!;
+  const fs = 12;
+  probe.font = font(F.mono(600), fs);
+  const cols = Math.max(12, ...lines.map((l) => Math.ceil(probe.measureText(l).width) + 2));
+  const hdrH = header ? 46 : 0, pad = 18;
+  const cv = document.createElement('canvas');
+  cv.width = cols * cell + pad * 2; cv.height = hdrH + lines.length * (rowsPx + 3) * cell + pad * 2;
+  const c = cv.getContext('2d')!;
+  c.fillStyle = '#07090b'; c.fillRect(0, 0, cv.width, cv.height);
+  c.strokeStyle = '#2b343f'; c.lineWidth = 6; c.strokeRect(3, 3, cv.width - 6, cv.height - 6);
+  if (header) {
+    c.fillStyle = '#1a2129'; c.fillRect(6, 6, cv.width - 12, hdrH);
+    c.font = font(F.mono(600), 26); c.fillStyle = rgba('paper', 0.9); c.textBaseline = 'middle';
+    c.fillText(header, pad, 6 + hdrH / 2);
+  }
+  const off = document.createElement('canvas'); off.width = cols; off.height = rowsPx;
+  const oc = off.getContext('2d', { willReadFrequently: true })!;
+  lines.forEach((l, li) => {
+    oc.clearRect(0, 0, cols, rowsPx);
+    oc.font = font(F.mono(700), fs); oc.fillStyle = '#fff'; oc.textBaseline = 'middle';
+    oc.fillText(l, 1, rowsPx / 2 + 0.5);
+    const d = oc.getImageData(0, 0, cols, rowsPx).data;
+    const y0 = pad + hdrH + li * (rowsPx + 3) * cell + cell * 1.5;
+    for (let y = 0; y < rowsPx; y++) for (let x = 0; x < cols; x++) {
+      const on = d[(y * cols + x) * 4 + 3]! > 90;
+      c.fillStyle = on ? rgba(col, 0.95) : 'rgba(60,70,80,0.18)';
+      c.beginPath(); c.arc(pad + x * cell + cell / 2, y0 + y * cell, cell * (on ? 0.42 : 0.3), 0, Math.PI * 2); c.fill();
+    }
+  });
+  return { cv, aspect: cv.width / cv.height };
+}
+
+/**
  * A city sign in 3D: neon letters (bare tubes, additive) or a screen (dark panel, lit text), with a
  * slight flicker and its reflection on the wet ground below (a mirrored, dimmed copy seen through the
  * translucent ground). Every sign speaks in the city's system-line voice.
@@ -1577,10 +1864,27 @@ export class NeonSign {
   mat: THREE.MeshBasicMaterial; rmat: THREE.MeshBasicMaterial | null = null;
   w: number; h: number; pos: THREE.Vector3;
   constructor(public o: {
-    lines: string[]; pos: V3; height: number; rotY?: number; color?: PaletteKey; kind?: 'neon' | 'screen';
+    lines: string[]; pos: V3; height: number; rotY?: number; color?: PaletteKey; kind?: 'neon' | 'screen' | 'led';
     groundY?: number; bright?: number; flicker?: number; seed?: number; vertical?: boolean; reflect?: number; wall?: 'left' | 'right';
+    /** 'led': a dot-matrix board (r5 item 6): a clean `header` strip over dot-matrix body lines. */
+    header?: string;
+    /** QA: the lines are broken-encoding glyph soup (exempt from reading time and the name check). */
+    garbled?: boolean;
   }) {
     const kind = o.kind ?? 'neon', col = o.color ?? 'neon';
+    if (kind === 'led') {
+      const { cv, aspect } = ledBoard(o.lines, o.header, col);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      this.h = o.height; this.w = o.height * aspect;
+      this.mat = new THREE.MeshBasicMaterial({ map: tex, fog: true });
+      this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(this.w, this.h), this.mat);
+      this.pos = new THREE.Vector3(...o.pos);
+      if (o.wall) this.pos.x += (o.wall === 'left' ? 1 : -1) * (Math.abs(Math.cos(o.rotY ?? 0)) * this.w / 2 + 0.4);
+      this.mesh.position.copy(this.pos);
+      this.mesh.rotation.y = o.rotY ?? 0;
+      return;
+    }
     const fam = F.mono(600), fs = 120, tr = fs * 0.12;
     const lines = o.vertical ? o.lines[0]!.split('') : o.lines;
     // measure with the canvas itself (what it draws is what we size for)
@@ -1622,6 +1926,21 @@ export class NeonSign {
       this.refl.rotation.y = o.rotY ?? 0;
       this.refl.scale.y = -1.25; // stretched by the wet ground
     }
+  }
+  /**
+   * QA: report the sign when it is on screen and big enough to see (≥ 14 px tall). `kind` defaults to
+   * 'garble' for glyph soup and 'sign' otherwise; `text` overrides what is reported (e.g. the clean header).
+   */
+  log(cam: THREE.Camera, o: { text?: string; kind?: TextKind; places?: string[]; min?: number } = {}) {
+    if (!textlog.on) return;
+    const c = Math.cos(this.mesh.rotation.y), s2 = Math.sin(this.mesh.rotation.y);
+    const wp = new THREE.Vector3(); this.mesh.getWorldPosition(wp);
+    const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => project(cam, wp.x + a! * c * this.w / 2, wp.y + b! * this.h / 2, wp.z - a! * s2 * this.w / 2));
+    if (pts.some((p) => p.behind)) return;
+    const x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x)), y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
+    const vis = x1 > 0 && x0 < W && y1 > 0 && y0 < H && y1 - y0 >= (o.min ?? 14) && this.mat.color.r > 0.05;
+    const text = o.text ?? this.o.lines.join(' / ');
+    logText(o.kind ?? (this.o.garbled ? 'garble' : 'sign'), text, vis, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, { places: o.places });
   }
   /** Per-frame brightness (flicker), `k` 0..1 master (e.g. a blackout). */
   update(t: number, k = 1) {

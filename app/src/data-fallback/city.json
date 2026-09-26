@@ -1,0 +1,335 @@
+{
+  "about": "The one city of What if (docs/TREATMENT.md r5 item 4). Every map, route display, station sign, callout distance and chapter location reads this file. Plane coordinates in km: x east, y north. Tiles are 0.5 km (one street block on the drone's map). Stand-in written by the app lane until data/city.json exists; the served /data/city.json prefers the root data/ copy.",
+  "units": "km",
+  "tile": 0.5,
+  "bounds": [
+    0,
+    0,
+    7,
+    5
+  ],
+  "districts": [
+    {
+      "id": "old-market",
+      "name": "OLD MARKET",
+      "known": true,
+      "rects": [
+        [
+          0,
+          0,
+          1.5,
+          5
+        ]
+      ]
+    },
+    {
+      "id": "orchard",
+      "name": "ORCHARD",
+      "known": true,
+      "rects": [
+        [
+          1.5,
+          0,
+          3.55,
+          2.5
+        ],
+        [
+          1.5,
+          2.5,
+          2.5,
+          2.8
+        ]
+      ]
+    },
+    {
+      "id": "north-hill",
+      "name": "NORTH HILL",
+      "known": true,
+      "rects": [
+        [
+          1.5,
+          2.8,
+          2.5,
+          5
+        ]
+      ]
+    },
+    {
+      "id": "kiln-yards",
+      "name": "KILN YARDS",
+      "known": false,
+      "rects": [
+        [
+          3.85,
+          0,
+          7,
+          2.52
+        ]
+      ]
+    },
+    {
+      "id": "far-north",
+      "name": "FAR NORTH",
+      "known": false,
+      "rects": [
+        [
+          2.5,
+          4.5,
+          7,
+          5
+        ],
+        [
+          6,
+          2.52,
+          7,
+          4.5
+        ]
+      ]
+    }
+  ],
+  "water": [
+    {
+      "id": "canal",
+      "name": "THE CANAL",
+      "rects": [
+        [
+          3.55,
+          0,
+          3.85,
+          5
+        ]
+      ]
+    }
+  ],
+  "unmapped": [
+    "kiln-yards",
+    "far-north",
+    "restricted"
+  ],
+  "restricted": {
+    "id": "restricted",
+    "name": "RESTRICTED ZONE",
+    "sign": "RESTRICTED · NO ENTRY FOR MINORS",
+    "rects": [
+      [
+        2.5,
+        2.52,
+        6,
+        4.5
+      ]
+    ],
+    "gate": [
+      5.5,
+      2.52
+    ]
+  },
+  "metro": {
+    "line": "LINE 3",
+    "stations": [
+      {
+        "id": "old-market",
+        "name": "OLD MARKET",
+        "at": [
+          0.6,
+          1.5
+        ],
+        "district": "old-market"
+      },
+      {
+        "id": "lantern-st",
+        "name": "LANTERN ST",
+        "at": [
+          1.3,
+          1.8
+        ],
+        "district": "old-market"
+      },
+      {
+        "id": "orchard-row",
+        "name": "ORCHARD ROW",
+        "at": [
+          2.3,
+          1.5
+        ],
+        "district": "orchard",
+        "yourStop": true
+      },
+      {
+        "id": "mill-bridge",
+        "name": "MILL BRIDGE",
+        "at": [
+          3.2,
+          1.4
+        ],
+        "district": "orchard"
+      },
+      {
+        "id": "depot",
+        "name": "DEPOT",
+        "at": [
+          4.5,
+          1.5
+        ],
+        "district": "kiln-yards"
+      },
+      {
+        "id": "kiln-yard",
+        "name": "KILN YARD",
+        "at": [
+          5.5,
+          2.5
+        ],
+        "district": "kiln-yards"
+      }
+    ],
+    "tunnel": [
+      [
+        3.3,
+        5.0
+      ]
+    ],
+    "closes": "after the last train, the station shutters come down"
+  },
+  "home": {
+    "name": "HOME",
+    "at": [
+      2.6,
+      1.0
+    ],
+    "district": "orchard"
+  },
+  "route": {
+    "planned": {
+      "from": "old-market",
+      "to": "orchard-row",
+      "walk": [
+        [
+          2.3,
+          1.5
+        ],
+        [
+          2.6,
+          1.0
+        ]
+      ]
+    },
+    "actual": {
+      "boarded": "old-market",
+      "alighted": "kiln-yard"
+    },
+    "walk": [
+      [
+        5.5,
+        2.5
+      ],
+      [
+        5.5,
+        2.52
+      ],
+      [
+        5.6,
+        3.7
+      ],
+      [
+        4.7,
+        4.1
+      ],
+      [
+        3.8,
+        3.9
+      ],
+      [
+        2.9,
+        2.9
+      ],
+      [
+        2.6,
+        1.0
+      ]
+    ],
+    "stops": [
+      {
+        "chapter": "lost",
+        "along": 0,
+        "place": "KILN YARD"
+      },
+      {
+        "chapter": "door",
+        "along": 0.5,
+        "place": "GATEHOUSE",
+        "note": "the empty guard post just inside the gate"
+      },
+      {
+        "chapter": "dogs",
+        "along": 1.2,
+        "place": "FREIGHT SHEDS"
+      },
+      {
+        "chapter": "cat",
+        "along": 1.8,
+        "place": "PUMP SQUARE"
+      },
+      {
+        "chapter": "temp",
+        "along": 2.4
+      },
+      {
+        "chapter": "storm",
+        "along": 3.1,
+        "place": "OLD FREIGHT BRIDGE",
+        "note": "the only open crossing of the canal"
+      },
+      {
+        "chapter": "tease",
+        "along": 3.8
+      },
+      {
+        "chapter": "alone",
+        "along": 4.3
+      },
+      {
+        "chapter": "words",
+        "along": 4.8
+      },
+      {
+        "chapter": "stranger",
+        "along": 5.3
+      },
+      {
+        "chapter": "dark",
+        "along": 5.9
+      },
+      {
+        "chapter": "close",
+        "along": "end",
+        "place": "HOME"
+      }
+    ]
+  },
+  "places": [
+    {
+      "name": "GATEHOUSE",
+      "at": [
+        5.5,
+        2.56
+      ],
+      "in": "restricted"
+    },
+    {
+      "name": "FREIGHT SHEDS",
+      "in": "restricted"
+    },
+    {
+      "name": "PUMP SQUARE",
+      "in": "restricted"
+    },
+    {
+      "name": "OLD FREIGHT BRIDGE",
+      "at": [
+        3.7,
+        3.92
+      ],
+      "in": "restricted"
+    }
+  ]
+}

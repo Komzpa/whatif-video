@@ -3,11 +3,12 @@
 // whole song watchable end to end.
 import * as THREE from 'three';
 import type { Frame } from '../engine/scene';
-import { W, H } from '../engine/gl';
+import { W, H, PORTRAIT } from '../engine/gl';
+import { counterPortrait } from './book';
 import { F, font } from '../engine/type';
 import { smoothstep } from '../engine/util';
 import { entriesOf } from '../contents';
-import { CityScene, LIN, POST_BASE, SAFE, drawEntry, drawPageCounter, entryAlpha, rgba, scaleRGB, drawChild, drawDrone, droneGlow, droneBob } from './_motifs';
+import { CityScene, LIN, POST_BASE, SAFE, drawEntry, drawPageCounter, entryAlpha, rgba, scaleRGB } from './_motifs';
 
 export default class Placeholder extends CityScene {
   render(f: Frame, out: THREE.WebGLRenderTarget) {
@@ -20,20 +21,11 @@ export default class Placeholder extends CityScene {
     const c = this.ui.ctx;
     const chapter = this.ctx.params.chapter as string;
     const entries = entriesOf(chapter).map((e) => this.ly.get(e.line));
-    // the child and the drone, small, bottom right: the pair is always present
-    const gx = W * 0.78, gy = H * 0.86;
-    drawChild(this.world.ctx, gx, gy, 90, { t, shade: 0.35, lit: 0.4, litSide: -1 });
-    const [bx, by] = droneBob(t, 9);
-    drawDrone(this.world.ctx, gx - 34 + bx, gy - 104 + by, 9, { t, lamp: 1, look: [-0.5, 0.3] });
-    droneGlow(this.glow2D, gx - 34 + bx, gy - 104 + by, 9, 1, [-0.5, 0.3]);
-    this.composite2D(this.world, out);
-    this.glow2D.render(renderer, out);
-
     entries.forEach((L, i) => {
       const next = entries[i + 1]?.words[0]!.start ?? f.end;
       const a = entryAlpha(L, t, 30, next);
       if (a <= 0.001) return;
-      drawEntry(c, this.ly, this.au, L, t, { x: SAFE + 60, y: H * 0.46, width: W - 2 * SAFE - 120, size: 64, alpha: a });
+      drawEntry(c, this.ly, this.au, L, t, PORTRAIT ? { x: 60, y: 480, width: W - 210, size: 102, alpha: a } : { x: SAFE + 60, y: H * 0.46, width: W - 2 * SAFE - 120, size: 64, alpha: a });
     });
     if (!entries.length) {
       c.font = font(F.serif(400, true), 44);
@@ -47,7 +39,7 @@ export default class Placeholder extends CityScene {
     c.fillStyle = rgba('concrete', 0.7);
     c.fillText(`[${chapter}] PLACEHOLDER`, SAFE, H - SAFE + 40);
     c.letterSpacing = '0px';
-    drawPageCounter(c, this.ly, t, { chapter, chapterStart: this.ctx.start });
+    drawPageCounter(c, this.ly, t, { chapter, chapterStart: this.ctx.start, ...(PORTRAIT ? counterPortrait() : {}) });
     this.composite2D(this.ui, out);
     return { ...POST_BASE };
   }
