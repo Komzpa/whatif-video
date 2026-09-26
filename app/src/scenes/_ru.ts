@@ -16,7 +16,9 @@ export function drawHeading(c: CanvasRenderingContext2D, L: Line, heading: strin
   x: number; y: number; width: number; size: number; until?: number; alpha?: number; plate?: number;
 }) {
   const w0 = L.words[0]!, w1 = L.words[L.words.length - 1]!;
-  const a = (o.alpha ?? 1) * smoothstep(w0.start - 0.2, w0.start - 0.02, t) * (o.until !== undefined ? 1 - smoothstep(o.until - 0.25, o.until - 0.05, t) : 1);
+  // staggered out/in (TESTPLAN gate 3: no double exposure): the previous line is gone 0.14 s before the next
+  // line's first word, the next one fades in over the last 0.12 s before it
+  const a = (o.alpha ?? 1) * smoothstep(w0.start - 0.12, w0.start - 0.01, t) * (o.until !== undefined ? 1 - smoothstep(o.until - 0.3, o.until - 0.14, t) : 1);
   if (a <= 0.001) return null;
   const size = o.size, fam = F.metro(900);
   c.save();

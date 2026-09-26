@@ -88,6 +88,9 @@ async function stills(page: Page, times: number[], outDir: string) {
   mkdirSync(outDir, { recursive: true });
   const files: string[] = [];
   for (const t of times) {
+    // twice: the first render after a jump seeks (stateful scenes fast-forward) and the frame shown can be a
+    // preroll frame; the second render at the same t is an ordinary frame, exactly as in a video
+    await page.evaluate(([t, s, sh]) => (window as any).__video.still(t, s, sh), [t, 1, +opt('shutter', '0.5')!] as const);
     const k: number = await page.evaluate(([t, s, sh]) => (window as any).__video.still(t, s, sh), [t, SAMPLES, +opt('shutter', '0.5')!] as const);
     const f = path.join(outDir, `f_${t.toFixed(2).padStart(7, '0')}.png`);
     if (typeof SAMPLES !== 'number') console.log(`t=${t}: ${k} sub-frames`);
