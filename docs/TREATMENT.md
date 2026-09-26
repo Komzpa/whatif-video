@@ -1,4 +1,17 @@
-# What if — treatment and style bible (r5)
+# What if — treatment and style bible (r6)
+
+## r6: NO BOOK ON SCREEN (author, 2026-09-27 01:05, overrides every book/page/handbook visual below)
+«ты эту книжку не тяни, я просил убрать, ты наоборот всё на ней построил». The handbook stays only as the
+*source* of the chapter list (what each scene is about). It never appears as a picture:
+- no book, cover, page, page turn or printed-steps insert, in hand or full screen;
+- no page counter and no page numbers anywhere (callouts, notes, the Russian heading line);
+- no "WHAT TO DO" lists. Whatever a scene has to say is shown by what happens in it, or by a diegetic sign
+  in the world (garbled where the district is unfamiliar), never by a book;
+- the opening does not start on a book title card; it starts in the world (the carriage).
+Where a section below mentions the book, the handbook page, the counter or printed steps, that element is cut,
+not replaced by another book-like device. The small Russian chapter heading under the sung line may stay,
+without a page number.
+
 
 Song: `audio/whatif.mp3`, "What if" by komzpa, 2:56. Lyrics: `lyrics/lyrics.txt` (the author's own text).
 Engine: forked from mexicat/pdoom-video (MIT, commit in `reference/pdoom-video-commit.txt`); see `docs/ENGINE.pdoom.md`.
