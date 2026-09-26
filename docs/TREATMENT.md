@@ -103,6 +103,22 @@ The author's words: «надписи надо держать на экране �
    scaled up for a phone (karaoke cap height ≥ 70 px at 1080 wide). The reading-time and safe-area checks run on the
    vertical render too. File names: `whatif-video-<kind>-<subject>-YYYY-MM-DD-rN.mp4` and `...-rN-tiktok.mp4`.
 
+8. **No drone** (author, 00:30: «пересмотри нужен ли нам дрон вообще»; lead's decision). A companion that knows the
+   city, lights the way and reads every sign undoes the song: "You are lost", "home alone", "No one stays, no one's
+   your friend" only land if the child is really alone with a paper book. Its jobs move to things that already
+   exist, and every older line in this file that says "drone" is read through this table:
+   - **light** → the child's own small torch from the backpack (warm `lamp` colour, the same beats: it flickers on
+     "unsafe", it dies on "dark"; in `close` a real window light at home replaces it);
+   - **WHAT TO DO** → printed on the handbook page in the child's hands (POV), typed on beats as if the eye reads it;
+     the blank/glitching step becomes a smudged, torn or empty line on paper;
+   - **callouts, sign meanings, the map, the page counter, `HOME · x km`** → the film's own explanatory layer, drawn
+     for the viewer (non-diegetic, like the reference video's annotations), never an object in the world. The child
+     cannot read the garbled signs; the viewer's callout can. That keeps item 6's point without a know-it-all
+     companion: the signs are written for someone else, and it is not the child.
+   - **`cat`**: the torch beam finds the cat instead of the drone flying up; **`words`**: the handbook's printed
+     steps smear and break apart instead of the drone's panel.
+   Not chosen, noted for the author: keep the drone as a dying toy (weak battery) that gives out on "No one stays".
+
 ## The idea in one paragraph
 
 A small child walks through a huge, hazy future city at night with **an old paper handbook** and **a
