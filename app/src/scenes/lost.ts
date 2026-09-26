@@ -30,10 +30,11 @@ import {
 import { drawHeading, stencilText, noticeCanvas, metroSignCanvas } from './_ru';
 import { torchPose, drawTorchHand, drawOpenHand, pxAt, type Light } from './_hands';
 import { city, stations, yourStop, exitStation, stationIndex, isKnown, garble, drawCityMap, mapPx, homeLabel, type MapView, type XY } from '../city';
-import { MOJI } from '../mojibake';
+import { MOJI, CODEC_RU, moji } from '../mojibake';
 import { entriesOf } from '../contents';
 
 type V3 = [number, number, number];
+type Box = { x: number; y: number; w: number; h: number };
 type RGB = [number, number, number];
 interface Pov { space: 'car' | 'world'; p: V3; yaw: number; pitch: number; walk: number }
 
@@ -43,6 +44,10 @@ const WALL_Z = -1.45, WIN_Y0 = 0.88, WIN_Y1 = 1.95, CEIL = 2.35;
 const SEAT: V3 = [DOOR_X, 0.95, 1.05]; // the bench opposite the door: the door and the diagram straight ahead
 const EYE = 1.12;
 const PLATFORM_HALF = 21;
+// Заводская: the city map on the back wall straight across from the door, the exit arch to its right
+const ARCH_X = DOOR_X + 3.4;
+const MAP_W = 1.4, MAP_H = 1.0, MAP_Y = 1.6, MAP_Z = -5.66, MCW = 1400, MCH = 1000;
+const MAP_S = 95, MAP_OX = 700, MAP_OY = 575; // km -> map canvas px (north up)
 const S2 = 110; // metres from Садовая to Заводская (the film's compression)
 // the line diagram above the door: 1.2 m x 0.36 m, drawn at 1000 x 300
 const BX0 = DOOR_X - 0.6, BX1 = DOOR_X + 0.6, BY0 = CEIL - 0.03, BY1 = DOOR_H + 0.07, BZ = WALL_Z + 0.07;
@@ -69,7 +74,6 @@ export default class Lost extends CityScene {
   slats: THREE.Mesh[] = [];
   notice!: THREE.Mesh; noticeText: string[] = [];
   gateSign!: THREE.Mesh; gateSignText = '';
-  stencil!: THREE.Mesh; stencilTextStr = '';
   fog = new THREE.FogExp2(0, 0.022);
   fogCards = new FogCards();
   lamps: V3[] = [];
@@ -87,78 +91,116 @@ export default class Lost extends CityScene {
   tunnelLights: number[] = [];
   platesA: NeonSign[] = []; platesB: NeonSign[] = [];
   exitSign!: NeonSign;
+  wallMap!: THREE.Mesh; wallMapBase!: HTMLCanvasElement; wallMapCv!: HTMLCanvasElement; wallMapTex!: THREE.CanvasTexture;
+  poleM = solid(scaleRGB(LIN.concrete, 1.25), { fog: false });
+  panes: [number, number][] = []; // side window panes (car x), y WIN_Y0..WIN_Y1
+  wallMapTexts: { text: string; x: number; y: number; w: number; h: number }[] = [];
   tubes = new LineBatch(2000, { screen2D: false, worldWidth: true, blend: 'add', depthTest: true });
   T: Record<string, number> = {};
   base = 0;
 
   B = (k: number) => this.au.timeOfBeat(this.base + k);
-  /** Signs and boards on screen this frame (px): callout labels are placed clear of them (TESTPLAN A4). */
-  obst: { x: number; y: number; w: number; h: number }[] = [];
-  addObst(b: { x: number; y: number; w: number; h: number } | null) { if (b && b.x + b.w > 0 && b.x < W && b.y + b.h > 0 && b.y < H) this.obst.push(b); }
-  labelCache = new Map<string, { lx: number; ly: number; side: 1 | -1 }>();
+  labelCache = new Map<string, { dx: number; dy: number; side: 1 | -1 }>();
   /**
-   * A callout's label position, fixed for its whole life (no jumping): the first candidate whose label box stays
-   * clear of every sign, board and the sung line over [at, out] (sampled), else the least covered. Pure function of
-   * its inputs (cached), so any frame order gives the same answer.
+   * A callout's label placement as an offset from its anchor (the label rides with its object, the leader stays
+   * short): the first of a few nearby offsets whose label box stays clear of every sign, board and the sung line,
+   * and inside the frame's safe area, over the callout's whole life (sampled). A pure function of its inputs
+   * (cached), so any frame order gives the same answer.
    */
-  pickLabel(text: string | string[], size: number, cands: [number, number, 1 | -1][], at: number, out: number) {
+  pickLabel(text: string | string[], size: number, at: number, out: number, anchor: (t: number) => { x: number; y: number } | null) {
     const key = `${JSON.stringify(text)}@${at.toFixed(3)}`;
     const hit = this.labelCache.get(key);
     if (hit) return hit;
-    const lines = Array.isArray(text) ? text : [text];
-    const w = Math.max(...lines.map((ln) => measure(ln, F.mono(500), size, size * 0.06))) + size;
-    const h = size * (1 + 1.35 * (lines.length - 1)) + size * 0.9;
-    const obst: { x: number; y: number; w: number; h: number }[] = [this.lyricBox()];
-    const t1 = Math.min(out + 0.35, at + 5);
-    for (let k = 0; k <= 30; k++) obst.push(...this.obstAt(lerp(at, t1, k / 30)));
+    const cands: [number, number, 1 | -1][] = [[50, -90, 1], [-50, -90, -1], [50, 120, 1], [-50, 120, -1], [110, -20, 1], [-110, -20, -1], [50, -180, 1], [-50, -180, -1], [60, 210, 1], [-60, 210, -1], [50, -280, 1], [-50, -280, -1]];
+    const samples: { a: { x: number; y: number }; obst: Box[] }[] = [];
+    const t1 = Math.min(out, at + 5);
+    for (let k = 0; k <= 24; k++) {
+      const t = lerp(at + 0.1, t1, k / 24);
+      const r = this.withCamAt(t, () => ({ a: anchor(t), obst: this.obstNow(t) }));
+      if (r.a) samples.push({ a: r.a, obst: [this.lyricBox(), ...r.obst] });
+    }
     let best = cands[0]!, bestA = Infinity;
     for (const cd of cands) {
-      const [lx, ly, side] = cd;
-      const b = { x: (side > 0 ? lx : lx - w + size) - size * 0.5, y: ly - size * 1.15, w, h };
       let a = 0;
-      for (const o of obst) a += Math.max(0, Math.min(b.x + b.w, o.x + o.w) - Math.max(b.x, o.x) + 6) * Math.max(0, Math.min(b.y + b.h, o.y + o.h) - Math.max(b.y, o.y) + 6);
+      for (const sm of samples) {
+        const b = this.labelBox(text, size, sm.a.x + cd[0], sm.a.y + cd[1], cd[2]);
+        const c = this.clampLabel(b);
+        a += 40 * (Math.abs(c.x - b.x) + Math.abs(c.y - b.y)); // pushed off the safe area: the leader would stretch
+        for (const o of sm.obst) a += Math.max(0, Math.min(c.x + c.w, o.x + o.w) - Math.max(c.x, o.x) + 6) * Math.max(0, Math.min(c.y + c.h, o.y + o.h) - Math.max(c.y, o.y) + 6);
+      }
       if (a < bestA) { bestA = a; best = cd; }
       if (a === 0) break;
     }
-    const r = { lx: best[0], ly: best[1], side: best[2] };
+    const r = { dx: best[0], dy: best[1], side: best[2] };
     this.labelCache.set(key, r);
     return r;
   }
-  lyricBox() { return PORTRAIT ? { x: 30, y: 1416 - 100 * 3 - 90, w: W - 60, h: 440 } : { x: SAFE - 30, y: H - 96 - 64 * 2 - 70, w: 1080, h: 290 }; }
-  /** Screen boxes of the signs and boards at time t, from that moment's camera (no rendering). */
-  obstAt(t: number) {
+  /** The label's backing box as drawCallout draws it (px). */
+  labelBox(text: string | string[], size: number, lx: number, ly: number, side: 1 | -1): Box {
+    const lines = Array.isArray(text) ? text : [text];
+    const w = Math.max(...lines.map((ln) => measure(ln, F.mono(500), size, size * 0.06)));
+    return { x: (side > 0 ? lx : lx - w) - size * 0.5, y: ly - size * 1.15, w: w + size, h: size * (0.75 + 1.35 * lines.length) };
+  }
+  /** Keep a label box inside the frame (and the TikTok safe area in 9:16). */
+  clampLabel(b: Box): Box {
+    const x0 = 40, x1 = W - (PORTRAIT ? 145 : 40), y0 = PORTRAIT ? 155 : 40, y1 = H - (PORTRAIT ? 485 : 40);
+    return { ...b, x: clamp(b.x, x0, x1 - b.w), y: clamp(b.y, y0, y1 - b.h) };
+  }
+  /** Where a callout's label goes this frame: its anchor plus the fixed offset, clamped into the safe area. */
+  placeLabel(text: string | string[], size: number, a: { x: number; y: number }, o: { dx: number; dy: number; side: 1 | -1 }) {
+    const lx = a.x + o.dx, ly = a.y + o.dy;
+    const b = this.labelBox(text, size, lx, ly, o.side), c = this.clampLabel(b);
+    return { lx: lx + c.x - b.x, ly: ly + c.y - b.y, side: o.side };
+  }
+  lyricBox(): Box { return PORTRAIT ? { x: 30, y: 1416 - 100 * 3 - 90, w: W - 60, h: 440 } : { x: SAFE - 30, y: H - 96 - 64 * 2 - 70, w: 1080, h: 290 }; }
+  /** Run `fn` with the camera and the moving parts set as they are at time t (no rendering), then restore. */
+  withCamAt<R>(t: number, fn: () => R): R {
     const cam = this.cam;
     const saved = { p: cam.position.clone(), q: cam.quaternion.clone(), fov: cam.fov, ax: this.platA.position.x, bx: this.platB.position.x, cy: this.curtain.position.y };
     const P = this.proofPov() ?? this.pov(t);
     this.setCam({ ...P, walk: 0 }, t, 0);
-    const out: { x: number; y: number; w: number; h: number }[] = [];
-    const add = (b: { x: number; y: number; w: number; h: number } | null) => { if (b && b.x + b.w > 0 && b.x < W && b.y + b.h > 0 && b.y < H) out.push(b); };
-    const plane = (m: THREE.Mesh) => {
-      const { width: w, height: h } = (m.geometry as THREE.PlaneGeometry).parameters;
-      m.updateMatrixWorld(true);
-      const pts = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].map(([x, y]) => { const v = new THREE.Vector3(x, y, 0).applyMatrix4(m.matrixWorld); return project(cam, v.x, v.y, v.z); });
-      if (pts.some((q) => q.behind)) return;
-      const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
-      add({ x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
-    };
-    if (P.space === 'world') {
-      for (const sg of this.signs) add(sg.screenBox(cam));
-      add(this.vestBoard.screenBox(cam));
-      this.curtain.position.y = this.shutterY(t); this.curtain.updateMatrixWorld(true);
-      plane(this.gateSign); plane(this.stencil); plane(this.notice);
-    } else {
-      const s = this.trainS(t), onB = s > S2 / 2, sl = onB ? s - S2 : s;
-      const g = onB ? this.platB : this.platA;
-      g.position.x = -sl; g.updateMatrixWorld(true);
-      for (const sg of onB ? this.platesB : this.platesA) add(sg.screenBox(cam));
-      if (onB) add(this.exitSign.screenBox(cam));
-      const a = project(cam, BX0, BY0, BZ), b = project(cam, BX1, BY0, BZ), d = project(cam, BX0, BY1, BZ), e = project(cam, BX1, BY1, BZ);
-      if (!a.behind && !b.behind && !d.behind && !e.behind) { const xs = [a.x, b.x, d.x, e.x], ys = [a.y, b.y, d.y, e.y]; add({ x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }); }
-    }
+    const s = this.trainS(t), onB = s > S2 / 2, sl = onB ? s - S2 : s;
+    (onB ? this.platB : this.platA).position.x = -sl;
+    this.curtain.position.y = this.shutterY(t);
+    this.platA.updateMatrixWorld(true); this.platB.updateMatrixWorld(true); this.curtain.updateMatrixWorld(true);
+    const r = fn();
     cam.position.copy(saved.p); cam.quaternion.copy(saved.q); cam.fov = saved.fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
     this.platA.position.x = saved.ax; this.platB.position.x = saved.bx; this.curtain.position.y = saved.cy;
     this.platA.updateMatrixWorld(true); this.platB.updateMatrixWorld(true); this.curtain.updateMatrixWorld(true);
+    return r;
+  }
+  /** Screen boxes of the signs and boards for the current camera (the obstacles for callout labels, A4). */
+  obstNow(t: number): Box[] {
+    const cam = this.cam, P = this.proofPov() ?? this.pov(t);
+    const out: Box[] = [];
+    const add = (b: Box | null) => { if (b && b.x + b.w > 0 && b.x < W && b.y + b.h > 0 && b.y < H) out.push(b); };
+    if (P.space === 'world') {
+      for (const sg of this.signs) add(sg.screenBox(cam));
+      add(this.vestBoard.screenBox(cam));
+      add(this.planeBox(this.gateSign)); add(this.planeBox(this.notice));
+    } else {
+      const onB = this.trainS(t) > S2 / 2;
+      for (const sg of onB ? this.platesB : this.platesA) add(sg.screenBox(cam));
+      if (onB) { add(this.exitSign.screenBox(cam)); for (const r of this.wallMapTexts) add(this.mapRectBox(r)); }
+      add(this.boardBox());
+    }
     return out;
+  }
+  /** A textured plane's box on screen (px), or null when any corner is behind the camera. */
+  planeBox(m: THREE.Mesh): Box | null {
+    const { width: w, height: h } = (m.geometry as THREE.PlaneGeometry).parameters;
+    m.updateMatrixWorld(true);
+    const pts = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].map(([x, y]) => { const v = new THREE.Vector3(x, y, 0).applyMatrix4(m.matrixWorld); return project(this.cam, v.x, v.y, v.z); });
+    if (pts.some((q) => q.behind)) return null;
+    const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  }
+  boardBox(): Box | null {
+    const cam = this.cam;
+    const a = project(cam, BX0, BY0, BZ), b = project(cam, BX1, BY0, BZ), d = project(cam, BX0, BY1, BZ), e = project(cam, BX1, BY1, BZ);
+    if (a.behind || b.behind || d.behind || e.behind) return null;
+    const xs = [a.x, b.x, d.x, e.x], ys = [a.y, b.y, d.y, e.y];
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
   }
 
   override init() {
@@ -174,15 +216,17 @@ export default class Lost extends CityScene {
       stop: B(5) + 0.2, look1: 2.2, look2: 4.3,
       stand: B(6) - 0.2, walk0: B(6) + 0.35, shut0: B(7) + 0.9, shut1: B(7) + 1.15, go: B(8) + 0.35,
       boardEnd: B(12) + 0.3, arrive: B(12) + 0.75,
-      open: wYou.start, lost: wLost.start, cut: B(17),
+      open: wYou.start, lost: wLost.start, cut: B(19),
       turnBack: wMetro.start - 0.25, shutterGo: wMetro.start, land,
     };
-    T.exit0 = T.open + 0.2; T.exit1 = T.open + 0.8;
-    T.walkP0 = T.lost + 0.8;
+    T.exit0 = T.open + 0.2; T.exit1 = T.open + 1.0;
+    // the torch on the wall map: on "lost" it finds ВЫ ЗДЕСЬ; on "you missed the stop" it runs back along the line
+    const wStop = L2.words.find((w) => /stop/i.test(w.w))!;
+    T.trace0 = L2.words[0]!.start; T.trace1 = wStop.start;
+    T.stopCall = T.trace0 + 0.07; T.turnArch = T.cut - 0.67;
     T.run0 = T.shutterGo + 0.53; T.run1 = T.land + 0.1;
     T.touch0 = T.land - 0.05; T.touch1 = T.land + 0.7;
-    T.turnZone = T.land + 1.35; T.run2a = T.turnZone + 0.9; T.run2b = T.run2a + 2.4; T.walkIn = T.run2b + 0.1;
-    T.mapOut = T.cut - 0.02;
+    T.turnZone = T.land + 1.0; T.run2a = T.turnZone + 0.7; T.run2b = T.run2a + 2.6; T.walkIn = T.run2b + 0.05;
     this.T = T;
     this.initTrain();
     this.initDistrict();
@@ -208,7 +252,9 @@ export default class Lost extends CityScene {
     for (const [a, b] of spans) {
       box(car, b - a, WIN_Y0, 0.08, (a + b) / 2, WIN_Y0 / 2, WALL_Z, wallM);
       box(car, b - a, CEIL - WIN_Y1, 0.08, (a + b) / 2, (WIN_Y1 + CEIL) / 2, WALL_Z, wallM);
-      for (let x = a; x <= b + 1e-3; x += (b - a) / Math.max(1, Math.round((b - a) / 1.7))) box(car, 0.14, WIN_Y1 - WIN_Y0, 0.1, x, (WIN_Y0 + WIN_Y1) / 2, WALL_Z, darkM);
+      const np = Math.max(1, Math.round((b - a) / 1.7)), pw0 = (b - a) / np;
+      for (let k = 0; k <= np; k++) box(car, 0.14, WIN_Y1 - WIN_Y0, 0.1, a + k * pw0, (WIN_Y0 + WIN_Y1) / 2, WALL_Z, darkM);
+      for (let k = 0; k < np; k++) this.panes.push([a + k * pw0 + 0.07, a + (k + 1) * pw0 - 0.07]);
       L.seg(a, WIN_Y0, WALL_Z + 0.05, b, WIN_Y0, WALL_Z + 0.05, cc, 1.2);
       L.seg(a, WIN_Y1, WALL_Z + 0.05, b, WIN_Y1, WALL_Z + 0.05, cc, 1.2);
       box(car, b - a - 0.2, 0.12, 0.5, (a + b) / 2, 0.4, WALL_Z + 0.3, seatM);
@@ -237,8 +283,15 @@ export default class Lost extends CityScene {
       this.leaves.push(leaf);
     }
     // grab poles and the handrail
-    for (const x of [DOOR_X - 1.1, DOOR_X + 1.1, -2.2, -6.4, 8.6]) L.seg(x, 0, -0.6, x, CEIL, -0.6, scaleRGB(LIN.concrete, 1.4), 3.2);
-    L.seg(X0, 1.95, 0.35, X1, 1.95, 0.35, scaleRGB(LIN.concrete, 1.2), 2.4);
+    const tube = (a: V3, b: V3, rad: number) => {
+      const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b);
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, va.distanceTo(vb), 14), this.poleM);
+      cyl.position.copy(va.clone().add(vb).multiplyScalar(0.5));
+      cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize());
+      car.add(cyl);
+    };
+    for (const x of [DOOR_X - 1.35, DOOR_X + 1.35, -2.2, -6.4, 8.6]) tube([x, 0, -0.75], [x, CEIL, -0.75], 0.019);
+    tube([X0, 1.98, 0.2], [X1, 1.98, 0.2], 0.016);
     // the tunnel (both directions) and the two platforms
     this.outside.add(this.platA, this.platB);
     for (let x = -400; x < 400; x += 12) this.tunnelLights.push(x);
@@ -258,31 +311,40 @@ export default class Lost extends CityScene {
     box(PLATFORM_HALF * 2, 0.2, 4.4, 0, 4.4, -3.7, tm);
     // the tunnel wall beyond each end of the platform (the train runs through it between the stations)
     for (const sx of [-1, 1]) box(300, 4.4, 0.2, sx * (PLATFORM_HALF + 150), 2.2, -2.4, tm);
-    const ax0 = DOOR_X - 1.2, ax1 = DOOR_X + 1.2, AH = 3.0;
+    const ax0 = ARCH_X - 1.2, ax1 = ARCH_X + 1.2, AH = 3.0;
     if (unfamiliar) {
       // the back wall with the exit arch; behind it the escalator hall rising away
       box(ax0 + PLATFORM_HALF, 4.5, 0.2, (ax0 - PLATFORM_HALF) / 2, 2.25, -5.8, pw);
       box(PLATFORM_HALF - ax1, 4.5, 0.2, (ax1 + PLATFORM_HALF) / 2, 2.25, -5.8, pw);
-      box(ax1 - ax0, 4.5 - AH, 0.2, DOOR_X, (AH + 4.5) / 2, -5.8, pw);
+      box(ax1 - ax0, 4.5 - AH, 0.2, ARCH_X, (AH + 4.5) / 2, -5.8, pw);
       const hall = m(scaleRGB(LIN.shadow, 1.8));
-      for (const sx of [-1, 1]) box(0.2, 8, 9, DOOR_X + sx * 1.9, 3, -10.3, hall);
-      box(4, 0.2, 9, DOOR_X, 7.2, -10.3, hall);
+      for (const sx of [-1, 1]) box(0.2, 8, 9, ARCH_X + sx * 1.9, 3, -10.3, hall);
+      box(4, 0.2, 9, ARCH_X, 7.2, -10.3, hall);
       // three escalators up (30°) with balustrades; the lamps on the balustrades (the torchère posts)
       const e = scaleRGB(LIN.concrete, 0.8);
       for (const ex of [-1.1, 0, 1.1]) {
-        const x = DOOR_X + ex;
+        const x = ARCH_X + ex;
         for (const dx of [-0.45, 0.45]) O.seg(x + dx, 0.9, -6.0, x + dx, 0.9 + 6 * 0.577, -12, e, 1.2);
         for (let s = 0; s < 22; s++) { const z = -6.2 - s * 0.27; const y = Math.max(0, (-6.2 - z) * 0.577); O.seg(x - 0.4, y, z, x + 0.4, y, z, scaleRGB(LIN.concrete, 0.5), 0.7); }
       }
-      for (let s = 0; s < 6; s++) for (const ex of [-0.55, 0.55]) this.lightsB.push([DOOR_X + ex, 1.6 + s * 0.6, -6.4 - s * 1.05]);
-      O.box(DOOR_X, 0, -5.72, ax1 - ax0, AH, 0.02, scaleRGB(LIN.concrete, 1.0), 1.4);
-      this.exitSign = new NeonSign({ kind: 'led', header: '↑', lines: [garble('ВЫХОД В ГОРОД')], pos: [DOOR_X, AH + 0.45, -5.66], height: 0.5, color: 'sodium', garbled: true });
+      for (let s = 0; s < 6; s++) for (const ex of [-0.55, 0.55]) this.lightsB.push([ARCH_X + ex, 1.6 + s * 0.6, -6.4 - s * 1.05]);
+      O.box(ARCH_X, 0, -5.72, ax1 - ax0, AH, 0.02, scaleRGB(LIN.concrete, 1.0), 1.4);
+      this.exitSign = new NeonSign({ kind: 'led', header: '↑', lines: [garble('ВЫХОД В ГОРОД')], pos: [ARCH_X, AH + 0.45, -5.66], height: 0.5, color: 'sodium', garbled: true });
       g.add(this.exitSign.mesh);
+      // the city map on the wall (paper behind glass), unlit: only the torch shows it
+      this.wallMapBase = this.drawWallMapBase();
+      this.wallMapCv = document.createElement('canvas'); this.wallMapCv.width = MCW; this.wallMapCv.height = MCH;
+      this.wallMapTex = new THREE.CanvasTexture(this.wallMapCv); this.wallMapTex.colorSpace = THREE.SRGBColorSpace; this.wallMapTex.anisotropy = 8;
+      this.wallMap = new THREE.Mesh(new THREE.PlaneGeometry(MAP_W, MAP_H), new THREE.MeshBasicMaterial({ map: this.wallMapTex, fog: false }));
+      this.wallMap.position.set(DOOR_X, MAP_Y, MAP_Z);
+      g.add(this.wallMap);
+      box(MAP_W + 0.08, MAP_H + 0.08, 0.03, DOOR_X, MAP_Y, MAP_Z - 0.02, m(scaleRGB(LIN.shadow, 1.1)));
+      this.lightMap(null, 0, 0.2);
     } else {
       box(PLATFORM_HALF * 2, 4.5, 0.2, 0, 2.25, -5.8, pw);
     }
     const oc = scaleRGB(LIN.concrete, k);
-    for (let x = -PLATFORM_HALF; x <= PLATFORM_HALF; x += 6) { if (unfamiliar && x > ax0 - 0.5 && x < ax1 + 0.5) continue; box(0.5, 4.3, 0.5, x, 2.15, -3.4, pw); O.box(x, 0, -3.4, 0.5, 4.3, 0.5, oc, 1); }
+    for (let x = -PLATFORM_HALF; x <= PLATFORM_HALF; x += 6) { if (Math.abs(x - DOOR_X) < 1.3 || (unfamiliar && x > ax0 - 0.5 && x < ax1 + 0.5)) continue; box(0.5, 4.3, 0.5, x, 2.15, -3.4, pw); O.box(x, 0, -3.4, 0.5, 4.3, 0.5, oc, 1); }
     for (let x = -PLATFORM_HALF; x <= PLATFORM_HALF; x += 0.6) { if (unfamiliar && x > ax0 && x < ax1) continue; O.seg(x, 0, -5.68, x, 4.3, -5.68, scaleRGB(LIN.concrete, 0.5 * k), 0.7); }
     O.seg(-PLATFORM_HALF, 0.01, -1.9, PLATFORM_HALF, 0.01, -1.9, scaleRGB(LIN.sodium, 0.9 * k), 3);
     const lights = unfamiliar ? this.lightsB : this.lightsA;
@@ -290,13 +352,127 @@ export default class Lost extends CityScene {
     // the station's name on the track wall (metal letters on a plate), repeated along the platform
     const name = unfamiliar ? exitStation().name : yourStop().name;
     const plates = unfamiliar ? this.platesB : this.platesA;
-    for (const x of [-15, -6, 1.6, 10, 18]) {
-      if (unfamiliar && x === 1.6) continue;
-      const sg = new NeonSign({ lines: [unfamiliar ? garble(name) : name], pos: [x, 2.35, -5.66], height: 0.55, kind: 'screen', color: 'paper', bright: unfamiliar ? 0.8 : 1.2, flicker: unfamiliar ? 0.1 : 0.02, seed: x, garbled: unfamiliar });
+    const at: [number, number, number][] = unfamiliar ? [[-14, 2.0, 0.55], [-8, 2.0, 0.55], [13, 2.0, 0.55], [19, 2.0, 0.55]] : [[DOOR_X - 0.85, 1.95, 0.34]];
+    for (const [x, y, hh] of at) {
+      const sg = new NeonSign({ lines: [unfamiliar ? garble(name) : name], pos: [x, y, -5.66], height: hh, kind: 'screen', color: 'paper', bright: unfamiliar ? 0.8 : 1.2, flicker: unfamiliar ? 0.1 : 0.02, seed: x, garbled: unfamiliar });
       g.add(sg.mesh);
       plates.push(sg);
     }
     void box;
+  }
+
+  /** A wall-map canvas rect on screen (px). */
+  mapRectBox(r: { x: number; y: number; w: number; h: number }): Box | null {
+    const pts = [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]].map(([x, y]) => { const v = this.mapWorld({ x: x!, y: y! }); return project(this.cam, v.x, v.y, v.z); });
+    if (pts.some((q) => q.behind)) return null;
+    const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  }
+  /** The openings in the carriage wall on screen this frame: side window panes, the door gap, the leaves' windows. */
+  apertures(openK: number): Box[] {
+    const rects: [number, number, number, number][] = this.panes.map(([a, b]) => [a, b, WIN_Y0, WIN_Y1]);
+    const g = openK * (DOOR_W / 2 - 0.02);
+    if (g > 0.01) rects.push([DOOR_X - g, DOOR_X + g, 0, DOOR_H]);
+    for (const sx of [-1, 1]) {
+      const cx = DOOR_X + sx * (DOOR_W / 4 + g), x0 = Math.max(DOOR_X - DOOR_W / 2, cx - 0.245), x1 = Math.min(DOOR_X + DOOR_W / 2, cx + 0.245);
+      if (x1 - x0 > 0.02) rects.push([x0, x1, 1.0, 1.72]);
+    }
+    const out: Box[] = [];
+    for (const [x0, x1, y0, y1] of rects) {
+      const pts = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => project(this.cam, x!, y!, WALL_Z - 0.03));
+      if (pts.some((q) => q.behind)) continue;
+      const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+      out.push({ x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
+    }
+    return out;
+  }
+  /** Log a platform sign as seen from inside the carriage: whole in one opening, cut by the wall, or hidden. */
+  logThrough(sg: NeonSign, aps: Box[], kind: 'place' | 'garble', scenery: boolean) {
+    const b = sg.screenBox(this.cam);
+    if (!b) return;
+    const ov = (a: Box) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    const hits = aps.filter(ov);
+    if (!hits.length || b.x + b.w < 0 || b.x > W || b.y + b.h < 0 || b.y > H) return;
+    const whole = hits.some((a) => b.x >= a.x - 2 && b.y >= a.y - 2 && b.x + b.w <= a.x + a.w + 2 && b.y + b.h <= a.y + a.h + 2);
+    const inFrame = b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H;
+    const text = sg.o.lines.join(' / ');
+    logText(kind, text, whole && inFrame && b.h >= 12, b, { id: scenery ? `scenery:${kind}:${text}` : `${kind}:${text}`, ...(whole ? {} : { clip: true }) });
+  }
+  /** km (city.json) -> the wall map's canvas px. */
+  mapCv(p: XY | [number, number]) { return { x: MAP_OX + p[0] * MAP_S, y: MAP_OY - p[1] * MAP_S }; }
+  /** The wall map's canvas px -> world (platform B at its station). */
+  mapWorld(q: { x: number; y: number }) { return new THREE.Vector3(this.platB.position.x + DOOR_X + (q.x / MCW - 0.5) * MAP_W, MAP_Y + (0.5 - q.y / MCH) * MAP_H, MAP_Z + 0.01); }
+
+  /** The printed city map (paper): districts, the promzona, streets, the three metro lines, «ВЫ ЗДЕСЬ». */
+  drawWallMapBase() {
+    const cv = document.createElement('canvas'); cv.width = MCW; cv.height = MCH;
+    const c = cv.getContext('2d')!, CT = city();
+    c.fillStyle = '#E4DCC4'; c.fillRect(0, 0, MCW, MCH);
+    // age: damp stains, a fold
+    for (let i = 0; i < 26; i++) { c.fillStyle = `rgba(120,95,60,${0.03 + 0.05 * hash(i, 11)})`; c.beginPath(); c.arc(hash(i, 12) * MCW, hash(i, 13) * MCH, 30 + 90 * hash(i, 14), 0, Math.PI * 2); c.fill(); }
+    const poly = (pts: number[][]) => { c.beginPath(); pts.forEach((p, i) => { const q = this.mapCv(p as [number, number]); if (i) c.lineTo(q.x, q.y); else c.moveTo(q.x, q.y); }); c.closePath(); };
+    for (const d of CT.districts as any[]) { poly(d.poly); c.fillStyle = d.kind === 'centre' ? '#D9C9A8' : d.known ? '#D3CDB5' : '#CEC6AC'; c.fill(); c.strokeStyle = 'rgba(90,80,60,0.35)'; c.lineWidth = 2; c.stroke(); }
+    // the promzona: grey with a hatch and a dashed fence line
+    poly(CT.restricted.poly); c.fillStyle = '#B9B4A6'; c.fill();
+    c.save(); poly(CT.restricted.poly); c.clip(); c.strokeStyle = 'rgba(60,55,50,0.35)'; c.lineWidth = 3;
+    for (let x = -MCH; x < MCW; x += 22) { c.beginPath(); c.moveTo(x, MCH); c.lineTo(x + MCH, 0); c.stroke(); }
+    c.restore(); poly(CT.restricted.poly); c.setLineDash([14, 8]); c.strokeStyle = '#5B544A'; c.lineWidth = 4; c.stroke(); c.setLineDash([]);
+    for (const st of CT.streets as any[]) {
+      c.strokeStyle = st.kind === 'street' ? '#A89F88' : '#9A9079'; c.lineWidth = st.kind === 'prospekt' ? 7 : st.kind === 'ring' ? 6 : 3.5; c.lineCap = 'round'; c.lineJoin = 'round';
+      c.beginPath(); (st.pts as number[][]).forEach((p, i) => { const q = this.mapCv(p as [number, number]); if (i) c.lineTo(q.x, q.y); else c.moveTo(q.x, q.y); }); if (st.kind === 'ring') c.closePath(); c.stroke();
+    }
+    // the metro: the ring line as a circle through its stations, the radial lines through theirs
+    for (const ln of CT.metro.lines as any[]) {
+      c.strokeStyle = ln.color; c.lineWidth = 11; c.lineCap = 'round'; c.lineJoin = 'round';
+      const pts = (ln.stations as any[]).map((q) => this.mapCv(q.at));
+      c.beginPath();
+      if (/Кольцев/.test(ln.name)) { const o = this.mapCv([0, 0]); c.arc(o.x, o.y, Math.hypot(pts[0]!.x - o.x, pts[0]!.y - o.y), 0, Math.PI * 2); }
+      else pts.forEach((q, i) => (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)));
+      c.stroke();
+    }
+    for (const ln of CT.metro.lines as any[]) for (const q of ln.stations as any[]) {
+      const p = this.mapCv(q.at);
+      c.fillStyle = '#FBF7EC'; c.strokeStyle = ln.color; c.lineWidth = 5; c.beginPath(); c.arc(p.x, p.y, 11, 0, Math.PI * 2); c.fill(); c.stroke();
+    }
+    // «ВЫ ЗДЕСЬ» at this station, printed in red with a white knockout
+    const here = this.mapCv(exitStation().at);
+    c.fillStyle = '#C8352B'; c.beginPath(); c.arc(here.x, here.y, 17, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#FBF7EC'; c.lineWidth = 4; c.beginPath(); c.arc(here.x, here.y, 17, 0, Math.PI * 2); c.stroke();
+    c.font = font(F.metro(900), 44); c.textAlign = 'right'; c.textBaseline = 'alphabetic';
+    c.lineWidth = 10; c.strokeStyle = '#E4DCC4'; c.strokeText('ВЫ ЗДЕСЬ', here.x - 30, here.y - 26);
+    { const w = c.measureText('ВЫ ЗДЕСЬ').width; this.wallMapTexts.push({ text: 'ВЫ ЗДЕСЬ', x: here.x - 30 - w - 6, y: here.y - 26 - 38, w: w + 12, h: 50 }); }
+    c.fillStyle = '#C8352B'; c.fillText('ВЫ ЗДЕСЬ', here.x - 30, here.y - 26);
+    // the title band and the frame
+    c.fillStyle = '#2B2A27'; c.fillRect(0, 0, MCW, 92);
+    c.fillStyle = '#E9E2CC'; c.font = font(F.metro(900), 56); c.textAlign = 'left'; c.fillText('СХЕМА ГОРОДА', 40, 66);
+    this.wallMapTexts.push({ text: 'СХЕМА ГОРОДА', x: 34, y: 18, w: c.measureText('СХЕМА ГОРОДА').width + 12, h: 60 });
+    c.fillStyle = '#C8352B'; c.beginPath(); c.arc(MCW - 70, 46, 30, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#FBF7EC'; c.font = font(F.metro(900), 42); c.textAlign = 'center'; c.fillText('М', MCW - 70, 61);
+    c.strokeStyle = '#2B2A27'; c.lineWidth = 10; c.strokeRect(5, 5, MCW - 10, MCH - 10);
+    return cv;
+  }
+
+  /**
+   * The wall map as lit this frame: dim station light (`amb`) plus the torch's spot where its beam hits the map
+   * (`hit` in canvas px, radius `rad` px), warm at the centre.
+   */
+  lightMap(hit: { x: number; y: number; rad: number } | null, on: number, amb: number) {
+    const c = this.wallMapCv.getContext('2d')!;
+    c.globalCompositeOperation = 'source-over';
+    c.drawImage(this.wallMapBase, 0, 0);
+    const dark = 'rgba(10,12,16,';
+    if (hit && on > 0.01) {
+      const g = c.createRadialGradient(hit.x, hit.y, 0, hit.x, hit.y, hit.rad);
+      const a = 1 - amb;
+      g.addColorStop(0, `${dark}${(a * (1 - on)).toFixed(3)})`); g.addColorStop(0.55, `${dark}${(a * (1 - 0.8 * on)).toFixed(3)})`); g.addColorStop(1, `${dark}${a.toFixed(3)})`);
+      c.fillStyle = g; c.fillRect(0, 0, MCW, MCH);
+      c.globalCompositeOperation = 'multiply';
+      const w = c.createRadialGradient(hit.x, hit.y, 0, hit.x, hit.y, hit.rad * 0.8);
+      w.addColorStop(0, `rgba(255,226,180,${on.toFixed(3)})`); w.addColorStop(1, 'rgba(255,255,255,1)');
+      c.fillStyle = w; c.fillRect(0, 0, MCW, MCH);
+      c.globalCompositeOperation = 'source-over';
+    } else { c.fillStyle = `${dark}${(1 - amb).toFixed(3)})`; c.fillRect(0, 0, MCW, MCH); }
+    this.wallMapTex.needsUpdate = true;
   }
 
   // ================================================================ the microdistrict street, the vestibule, the fence
@@ -355,29 +531,23 @@ export default class Lost extends CityScene {
       const c = cv.getContext('2d')!;
       c.fillStyle = '#D9D4C8'; c.fillRect(0, 0, 512, 300);
       c.strokeStyle = '#B3261E'; c.lineWidth = 22; c.strokeRect(14, 14, 484, 272);
-      c.fillStyle = '#231F1A'; c.font = font(F.metro(900), 54); c.textAlign = 'center';
+      // stencil-painted on the tin (TREATMENT r7: stencil for fences), two lines, centred
       const words = this.gateSignText.split(' '), half = Math.ceil(words.length / 2);
-      c.fillText(words.slice(0, half).join(' '), 256, 130, 460); c.fillText(words.slice(half).join(' '), 256, 205, 460);
+      [words.slice(0, half).join(' '), words.slice(half).join(' ')].forEach((ln, k) => {
+        let sz = 64; c.font = font(F.stencil(), sz);
+        const wOf = () => c.measureText(ln).width + sz * 0.08 * ln.length;
+        while (wOf() > 440 && sz > 20) { sz -= 2; c.font = font(F.stencil(), sz); }
+        stencilText(c, ln, 256 - wOf() / 2, 135 + k * 80, sz, '#231F1A', '#D9D4C8');
+      });
       for (let i = 0; i < 30; i++) { c.fillStyle = `rgba(120,70,30,${0.05 + 0.1 * hash(i, 2)})`; c.beginPath(); c.arc(hash(i, 5) * 512, hash(i, 6) * 300, 6 + 20 * hash(i, 7), 0, Math.PI * 2); c.fill(); }
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
       this.gateSign = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.42), new THREE.MeshBasicMaterial({ map: tex, fog: true }));
-      this.gateSign.position.set(GATE_X - 0.8, 1.45, FENCE_Z + 0.04);
+      this.gateSign.position.set(GATE_X - 0.45, 1.45, FENCE_Z + 0.04);
       S.add(this.gateSign);
-    }
-    // the stencil painted along the fence, left of the gate
-    this.stencilTextStr = garble(city().restricted.sign);
-    {
-      const cv = document.createElement('canvas'); cv.width = 2048; cv.height = 256;
-      const c = cv.getContext('2d')!;
-      c.clearRect(0, 0, 2048, 256);
-      stencilText(c, this.stencilTextStr, 20, 190, 150, 'rgba(150,42,30,0.92)', 'rgba(0,0,0,1)');
-      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-      this.stencil = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 0.9), new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: true, depthWrite: false }));
-      this.stencil.position.set(GATE_X - 6.2, 1.62, FENCE_Z + 0.075);
-      S.add(this.stencil);
     }
     // inside the promzona: sawtooth sheds, a chimney with red lights, a gantry crane, a pipe rack
     const shedM = solid(scaleRGB(LIN.shadow, 1.5));
+    box(22, 16, 10, GATE_X + 6, 8, FENCE_Z - 38, shedM); // the works' office block (the letters on its roof)
     for (let x = -60; x <= 60; x += 22) {
       box(18, 7, 14, x, 3.5, FENCE_Z - 16 - hash(x, 1) * 8, shedM);
       for (let k = 0; k < 6; k++) { const sx = x - 9 + k * 3, z = FENCE_Z - 9 - hash(x, 1) * 8; L.seg(sx, 7, z, sx + 3, 8.4, z, dim, 0.8); L.seg(sx + 3, 8.4, z, sx + 3, 7, z, dim, 0.8); }
@@ -439,7 +609,7 @@ export default class Lost extends CityScene {
       { lines: [garble('АПТЕКА')], pos: [52, 3.6, 24], rotY: Math.PI + 0.7, height: 1.0, bright: 1.4, flicker: 0.05, seed: 12, garbled: true, color: 'sodium' },
       { kind: 'led', header: '24', lines: [garble('ГАРАЖНЫЙ КООПЕРАТИВ')], pos: [-20, 3.2, 11.9], rotY: Math.PI, height: 0.7, color: 'sodium', garbled: true },
       { lines: [garble('ТЕПЛОСЕТЬ')], kind: 'screen', pos: [-37, 6.4, 8.35], rotY: Math.PI, height: 0.6, color: 'paper', bright: 0.9, seed: 14, garbled: true },
-      { lines: [garble('ЗАВОД')], pos: [-5, 9.5, FENCE_Z - 12], height: 2.4, bright: 1.5, flicker: 0.25, seed: 16, garbled: true, color: 'neon' },
+      { lines: [garble('ЗАВОД')], pos: [GATE_X + 6, 17, FENCE_Z - 32.9], height: 2.4, bright: 1.5, flicker: 0.25, seed: 16, garbled: true, color: 'neon' },
     ];
     for (const o of soup) { const sg = new NeonSign(o); this.signs.push(sg); S.add(sg.mesh); }
     const fcol = mixRGB(LIN.fog, LIN.smog, 0.25);
@@ -532,14 +702,14 @@ export default class Lost extends CityScene {
     this.noticeText = [garble('ВХОД ЗАКРЫТ'), garble('СТАНЦИЯ ЗАКРЫТА')];
     const cv = noticeCanvas([this.noticeText[1]!], { title: this.noticeText[0], w: 512, h: 360 });
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-    this.notice = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.2531), new THREE.MeshBasicMaterial({ map: tex, fog: true }));
-    this.notice.position.set(-0.5, 1.42, 0.014); this.notice.rotation.z = 0.03;
+    this.notice = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.1828), new THREE.MeshBasicMaterial({ map: tex, fog: true }));
+    this.notice.position.set(0.0, 1.45, 0.014); this.notice.rotation.z = 0.03;
     this.curtain.add(this.notice);
     this.curtain.rotation.y = Math.PI; // the slats' front faces the street
     this.curtain.position.set(0, OPEN_H, CURT_Z);
     S.add(this.curtain);
     // the station board on the wall above the drum; the metro «М» on a post by the roof
-    this.vestBoard = new NeonSign({ kind: 'led', header: 'М', lines: [garble(exitStation().name)], pos: [0, 3.36, FACE_Z - 0.02], rotY: Math.PI, height: 0.55, color: 'sodium', garbled: true });
+    this.vestBoard = new NeonSign({ kind: 'led', header: 'М', lines: [moji(exitStation().name, 1, 'koi8>cp1251')], pos: [0, 3.9, FACE_Z - 0.02], rotY: Math.PI, height: 0.42, color: 'sodium', garbled: true });
     S.add(this.vestBoard.mesh);
     const mtex = new THREE.CanvasTexture(metroSignCanvas(256, 1)); mtex.colorSpace = THREE.SRGBColorSpace;
     const msign = new THREE.Mesh(new THREE.CircleGeometry(0.5, 40), new THREE.MeshBasicMaterial({ map: mtex, fog: true }));
@@ -581,29 +751,34 @@ export default class Lost extends CityScene {
       const stand = prog(t, T.stand, T.stand + 0.5, E);
       const wk = prog(t, T.walk0, T.shut0 - 0.1, (x) => x);
       const back = prog(t, T.go + 0.3, T.go + 0.9, E) * (1 - prog(t, T.boardEnd, T.arrive, E));
-      const out = prog(t, T.exit0, T.exit1, E), toArch = prog(t, T.walkP0 + 0.7, T.cut, (x) => x);
-      const z = lerp(lerp(lerp(SEAT[2], -0.6, ease.inOutQuad(wk)), zb, back), -2.6, out) + (-4.55 + 2.6) * ease.inOutQuad(toArch);
+      const out = prog(t, T.exit0, T.exit1, E), toArch = prog(t, T.turnArch + 0.2, T.cut, (x) => x);
+      const zMap = PORTRAIT ? -3.55 : -3.9;
+      const z = lerp(lerp(lerp(SEAT[2], -0.6, ease.inOutQuad(wk)), zb, back), zMap, out) - 0.5 * toArch;
       const y = lerp(SEAT[1], EYE, stand);
       const pb = PORTRAIT ? 0.5 : 0.74, pl = PORTRAIT ? 0.12 : 0.17, ps = PORTRAIT ? 0.04 : 0.12;
-      const pitch = keys(t, [[0, ps], [T.look1, ps], [T.look1 + 0.6, pl + 0.1, E], [T.look2, pl + 0.1, E], [T.look2 + 0.6, ps, E], [T.walk0, ps], [T.walk0 + 0.6, 0.05, E], [T.go + 0.3, 0.0, E], [T.go + 0.9, pb, E], [T.boardEnd, pb, E], [T.arrive, 0.0, E], [T.exit0, 0.0], [T.exit1, 0.16, E], [T.lost + 0.9, 0.1, E], [T.walkP0 + 0.7, 0.06, E], [T.cut, 0.14, E]]);
-      const yaw = keys(t, [[0, 0], [T.lost + 0.1, 0], [T.lost + 0.5, 0.42, E], [T.lost + 0.95, -0.36, E], [T.walkP0 + 0.7, 0, E]]);
+      const pitch = keys(t, [[0, ps], [T.look1, ps], [T.look1 + 0.6, pl + 0.1, E], [T.look2, pl + 0.1, E], [T.look2 + 0.6, ps, E], [T.walk0, ps], [T.walk0 + 0.6, 0.05, E], [T.go + 0.3, 0.0, E], [T.go + 0.7, pb, E], [T.boardEnd, pb, E], [T.arrive, 0.0, E], [T.exit0, 0.0], [T.exit1, PORTRAIT ? 0.2 : 0.27, E], [T.turnArch, PORTRAIT ? 0.2 : 0.27], [T.cut, 0.16, E]]);
+      const yaw = keys(t, [[0, 0], [T.turnArch, 0], [T.cut, -0.75, E]]);
       const walk = (wk > 0 && wk < 1) || (out > 0 && out < 1) || (toArch > 0 && toArch < 1) ? 1 : 0;
-      return { space: 'car', p: [DOOR_X, y, z], yaw, pitch, walk };
+      return { space: 'car', p: [DOOR_X + 0.5 * toArch, y, z], yaw, pitch, walk };
     }
     // the street (world): out of the vestibule; look around; turn back; run to the shutter; the fence; in
-    const w0 = prog(t, T.cut, T.cut + 1.5, (x) => x);
+    const w0 = prog(t, T.cut, T.cut + 0.9, (x) => x);
     const run = prog(t, T.run0, T.run1, (x) => x);
     const run2 = prog(t, T.run2a, T.run2b, (x) => x), inn = prog(t, T.walkIn, T.walkIn + 1.5, (x) => x);
-    let x = lerp(0, 0.3, w0), z = lerp(GATE_Z - 0.3, 1.4, ease.inOutQuad(w0));
+    let x = lerp(0, 0.3, w0), z = lerp(2.4, 1.4, ease.inOutQuad(w0));
     x = lerp(x, 0, run); z = lerp(z, GATE_Z - 1.0, ease.inOutQuad(run));
-    x = lerp(x, GATE_X - 0.2, ease.inOutQuad(run2)); z = lerp(z, FENCE_Z + 1.2, ease.inOutQuad(run2));
-    x = lerp(x, GATE_X + 0.45, inn); z = lerp(z, FENCE_Z - 2.4, inn);
-    const toGate = -Math.atan2(GATE_X - 0.2, -(FENCE_Z + 1.2 - (GATE_Z - 1.0)));
-    const yaw = keys(t, [[T.cut, 0], [T.cut + 1.5, 0], [T.cut + 1.9, 0.8, E], [T.turnBack - 0.15, -0.55, E], [T.turnBack + 0.7, -Math.PI + 0.02, E], [T.turnZone, -Math.PI + 0.02, E], [T.turnZone + 0.65, -2 * Math.PI + toGate * 0.6, E], [T.run2b, -2 * Math.PI + toGate, E], [T.walkIn + 1.5, -2 * Math.PI - 0.1, E]]);
+    // across the road to the promzona gate; the chapter ends on its threshold, pushing in by the ajar leaf
+    x = lerp(x, GATE_X - 0.2, ease.inOutQuad(run2)); z = lerp(z, FENCE_Z + 2.6, ease.inOutQuad(run2));
+    x = lerp(x, GATE_X - 0.3, ease.outQuad(inn)); z = lerp(z, FENCE_Z + 2.0, ease.outQuad(inn));
+    const toGate = -Math.atan2(GATE_X - 0.1, -(FENCE_Z + 1.7 - (GATE_Z - 1.0)));
+    const yaw = keys(t, [[T.cut, 0.65], [T.turnBack - 0.1, 0.15, E], [T.turnBack + 0.7, -Math.PI + 0.02, E], [T.turnZone, -Math.PI + 0.02, E], [T.turnZone + 0.65, -2 * Math.PI + toGate * 0.6, E], [T.run2b, -2 * Math.PI + toGate, E], [T.walkIn + 1.5, -2 * Math.PI - 0.12, E]]);
     const pS = PORTRAIT ? 0.14 : 0.08;
-    const pitch = keys(t, [[T.cut, 0.05], [T.turnBack + 0.7, pS, E], [T.run1, PORTRAIT ? 0.05 : -0.02, E], [T.turnZone + 0.65, 0.06, E], [T.walkIn + 1.5, 0.1, E]]);
+    const pitch = keys(t, [[T.cut, 0.1], [T.turnBack + 0.7, pS, E], [T.run1, PORTRAIT ? 0.05 : 0.12, E], [T.turnZone + 0.65, 0.06, E], [T.walkIn + 1.5, 0.02, E]]);
     const walk = (w0 > 0 && w0 < 1) || (run > 0 && run < 1) || (run2 > 0 && run2 < 1) || (inn > 0 && inn < 1) ? 1 : 0;
-    return { space: 'world', p: [x, EYE, z], yaw, pitch, walk };
+    // across the road the eyes stay on the gate
+    const head = -2 * Math.PI - Math.atan2(GATE_X - 0.1 - x, -(FENCE_Z - z));
+    const k = smoothstep(T.turnZone + 0.5, T.turnZone + 0.75, t);
+    return { space: 'world', p: [x, EYE, z], yaw: lerp(yaw, head, k), pitch, walk };
   }
 
   /** Gate-1 proof views (?proof=...): fixed cameras on the new assets. */
@@ -643,7 +818,7 @@ export default class Lost extends CityScene {
     // slats still rolled in the drum stay hidden (nothing pokes out above the housing)
     const topHide = OPEN_H + 0.45 - SLAT;
     this.slats.forEach((s, k) => { s.visible = yB + BAR + k * SLAT < topHide; });
-    this.notice.visible = yB + 1.42 < OPEN_H + 0.3;
+    this.notice.visible = yB + 1.45 < OPEN_H + 0.3;
     this.drawThree(out);
     const lampsL = torch && torchOn > 0.01 ? [makeLamp(torch[0]!, torch[1]!, 11, 12, 1.25 * torchOn)] : [];
     const gateLamp = makeLamp(new THREE.Vector3(GATE_X, 4.1, FENCE_Z - 0.4), new THREE.Vector3(GATE_X, 0, FENCE_Z + 0.8), 55, 9, 1.0);
@@ -660,7 +835,7 @@ export default class Lost extends CityScene {
       g.add(w.p[0], w.p[1], w.p[2], w.ry !== undefined ? 0.8 : 0.6, w.ry !== undefined ? 0.9 : 0.6, w.c, (w.ry !== undefined ? 0.22 : 0.9) * w.k * k, 2);
     }
     for (const p of this.lamps) g.add(p[0], p[1], p[2], 0.35, 0.35, LIN.sodium, 2.2 * Math.exp(-Math.hypot(p[0] - cp.x, p[1] - cp.y, p[2] - cp.z) * 0.012), 4);
-    for (const p of this.lamps) g.add(p[0], 0.05, p[2], 3, 3, LIN.sodium, 0.16, 2.5);
+    for (const p of this.lamps) g.add(p[0], 0.05, p[2], 1.6, 1.6, LIN.sodium, 0.1, 2.5);
     for (const p of this.redLights) g.add(p[0], p[1], p[2], 0.4, 0.4, LIN.red, 1.4 * (0.6 + 0.4 * Math.sin(t * 3 + p[0])), 4);
     // the vestibule: cold light inside (dimmer once the shutter is down)
     const inside = 0.35 + 0.65 * clamp(yB / OPEN_H);
@@ -672,11 +847,10 @@ export default class Lost extends CityScene {
     this.fogCards.render(renderer, out, cam, t, 1);
     if (lampsL.length) this.cone.render(renderer, out, cam, lampsL[0]!, t, { density: 0.035, floorY: 0, maxDist: 9 });
     // QA: what the child sees (mojibake) is reported
-    for (const sg of this.signs) { sg.log(cam, { min: 18, scenery: true }); this.addObst(sg.screenBox(cam)); }
-    this.vestBoard.log(cam, { min: 18, scenery: true }); this.addObst(this.vestBoard.screenBox(cam));
+    for (const sg of this.signs) { sg.log(cam, { min: 18, scenery: true }); }
+    this.vestBoard.log(cam, { min: 18, scenery: true });
     this.logPlane(this.gateSign, this.gateSignText, 14, 'gate-sign');
-    this.logPlane(this.stencil, this.stencilTextStr, 14, 'stencil');
-    if (this.notice.visible && yB + 1.42 + 0.13 < OPEN_H) this.logPlane(this.notice, this.noticeText.join(' / '), 14, 'notice');
+    if (this.notice.visible && yB + 1.45 + 0.13 < OPEN_H) this.logPlane(this.notice, this.noticeText.join(' / '), 14, 'notice');
   }
 
   /** Report a textured plane's text (mojibake) with its projected box, when it is on screen and big enough. */
@@ -690,12 +864,11 @@ export default class Lost extends CityScene {
     const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
     const vis = x1 > 0 && x0 < W && y1 > 0 && y0 < H && (y1 - y0) / 2 >= min;
     if (x1 < 0 || x0 > W || y1 < 0 || y0 > H) return;
-    this.addObst({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
     logText('garble', text, vis, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, { id: `plane:${id}` });
   }
 
   // ================================================================ rendering: the carriage and the tunnel
-  renderCar(out: THREE.WebGLRenderTarget, t: number) {
+  renderCar(out: THREE.WebGLRenderTarget, t: number, torch: THREE.Vector3[] | null = null, torchOn = 0) {
     const { renderer } = this.ctx;
     const cam = this.cam, T = this.T;
     const s = this.trainS(t);
@@ -711,6 +884,18 @@ export default class Lost extends CityScene {
     this.platA.position.x = -sLocal; this.platB.position.x = -sLocal;
     for (const sg of onB ? this.platesB : this.platesA) sg.update(t);
     if (onB) this.exitSign.update(t);
+    if (onB) {
+      // the torch's spot on the wall map (the beam axis meets the wall plane)
+      let hit: { x: number; y: number; rad: number } | null = null;
+      if (torch) {
+        const o = torch[0]!, d = torch[1]!.clone().sub(o).normalize();
+        if (d.z < -1e-3) {
+          const k = (MAP_Z - o.z) / d.z, hx = o.x + d.x * k, hy = o.y + d.y * k;
+          hit = { x: ((hx - this.platB.position.x - DOOR_X) / MAP_W + 0.5) * MCW, y: (0.5 - (hy - MAP_Y) / MAP_H) * MCH, rad: k * 0.2 / MAP_W * MCW };
+        }
+      }
+      this.lightMap(hit, torchOn, 0.2);
+    }
     renderer.render(this.outside, cam);
     (onB ? this.linesB : this.linesA).emit(this.lines3D, cam, { base: onB ? 0.4 : 0.6, fog: 0.02, offset: [-sLocal, 0, 0] });
     this.lines3D.render(renderer, out, cam);
@@ -749,8 +934,13 @@ export default class Lost extends CityScene {
     for (let x = -13; x < 13; x += 2.6) g.add(x + 0.95, CEIL - 0.1, -0.55, 1.4, 0.35, cold, 0.18, 2);
     g.render(renderer, out, cam);
     g.clear();
-    for (const sg of onB ? this.platesB : this.platesA) { sg.log(this.cam, { kind: onB ? 'garble' : 'place', min: 12, scenery: onB }); this.addObst(sg.screenBox(this.cam)); }
-    if (onB) { this.exitSign.log(this.cam, { min: 14 }); this.addObst(this.exitSign.screenBox(this.cam)); }
+    if (onB && torch && torchOn > 0.01) {
+      const lamp = makeLamp(torch[0]!, torch[1]!, 11, 12, 1.25 * torchOn);
+      this.cone.render(renderer, out, cam, lamp, t, { density: 0.03, floorY: 0, maxDist: 6 });
+    }
+    if (onB) for (const r of this.wallMapTexts) { const b = this.mapRectBox(r); if (b && b.x + b.w > 0 && b.x < W && b.y + b.h > 0 && b.y < H) logText('sign', r.text, b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H, b, { id: `wallmap:${r.text}` }); }
+    { const aps = this.apertures(openK); for (const sg of onB ? this.platesB : this.platesA) this.logThrough(sg, aps, onB ? 'garble' : 'place', onB); }
+    if (onB) this.exitSign.log(this.cam, { min: 14, scenery: true });
     this.drawBoard(this.world.ctx, t);
   }
 
@@ -768,7 +958,6 @@ export default class Lost extends CityScene {
     const M = 130, LY = 150, LW = 10, DR = 13, FS = 32, OFF = 38;
     const sx = (i: number) => M + i * ((DW - 2 * M) / (n - 1));
     const lineCol = city().metro.color;
-    { const xs = [a.x, b.x, d.x, b.x + d.x - a.x], ys = [a.y, b.y, d.y, b.y + d.y - a.y]; this.addObst({ x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }); }
     const M2 = new DOMMatrix([(b.x - a.x) / DW, (b.y - a.y) / DW, (d.x - a.x) / DH, (d.y - a.y) / DH, a.x, a.y]);
     const pxPer = Math.hypot(b.x - a.x, b.y - a.y) / DW;
     c.save();
@@ -833,90 +1022,25 @@ export default class Lost extends CityScene {
     return '';
   }
 
-  // ================================================================ the map card (once, at "You are lost")
-  mapView() {
-    const f = city().mapFrame;
-    const kmW = f[2] - f[0], kmH = f[3] - f[1];
-    const s = PORTRAIT ? 115 : 90;
-    const w = kmW * s + 40, h = kmH * s + 40;
-    const x = PORTRAIT ? 60 : SAFE, y = PORTRAIT ? 480 : 90;
-    return { v: { ox: x + 20 - f[0] * s, oy: y + 20 + f[3] * s, s } as MapView, box: { x, y, w, h } };
-  }
-
-  drawMapCard(c: CanvasRenderingContext2D, t: number) {
+  /** Where the torch points on the wall map (world) and how firmly (0..1), or null when it rests. */
+  mapAimPoint(t: number) {
     const T = this.T;
-    const a = smoothstep(T.lost - 0.02, T.lost + 0.18, t) * (1 - smoothstep(T.mapOut - 0.15, T.mapOut, t));
-    if (a <= 0.001) return;
-    const { v, box } = this.mapView();
-    c.save();
-    c.globalAlpha *= a;
-    c.fillStyle = rgba('shadow', 0.9); c.fillRect(box.x, box.y, box.w, box.h);
-    c.strokeStyle = rgba('lamp', 0.35); c.lineWidth = 1; c.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
-    drawCityMap(c, v, { weight: PORTRAIT ? 1.4 : 1.1, clip: box });
-    const ex = exitStation(), ys = yourStop();
-    const dot = mapPx(v, ex.at);
-    const pulse = 0.5 + 0.5 * Math.sin(t * 5);
-    c.fillStyle = rgba('coat'); c.beginPath(); c.arc(dot.x, dot.y, 10, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = rgba('coat', 0.7 * (1 - pulse)); c.lineWidth = 2; c.beginPath(); c.arc(dot.x, dot.y, 13 + pulse * 18, 0, Math.PI * 2); c.stroke();
-    // "missed the stop": the route draws back along the line to your stop
-    const L2 = this.ly.get('You missed the stop');
-    const wStop = L2.words.find((w) => /stop/i.test(w.w))!;
-    const st = stations(), i0 = stationIndex(ex.id), i1 = stationIndex(ys.id);
-    const k = prog(t, L2.words[0]!.start, wStop.start, ease.inOutQuad);
-    if (k > 0) {
-      const pts = st.slice(i1, i0 + 1).reverse().map((s) => mapPx(v, s.at));
-      c.strokeStyle = rgba('red', 0.95); c.lineWidth = PORTRAIT ? 7 : 6; c.lineCap = 'round'; c.setLineDash([2, 12]);
-      let left = k * pts.slice(1).reduce((Lx, p, j) => Lx + Math.hypot(p.x - pts[j]!.x, p.y - pts[j]!.y), 0);
-      c.beginPath(); c.moveTo(pts[0]!.x, pts[0]!.y);
-      for (let j = 1; j < pts.length && left > 0; j++) {
-        const dd = Math.hypot(pts[j]!.x - pts[j - 1]!.x, pts[j]!.y - pts[j - 1]!.y), q = Math.min(1, left / dd);
-        c.lineTo(lerp(pts[j - 1]!.x, pts[j]!.x, q), lerp(pts[j - 1]!.y, pts[j]!.y, q)); left -= dd;
-      }
-      c.stroke(); c.setLineDash([]);
-    }
-    c.restore();
-    const S = PORTRAIT ? 34 : 24;
-    drawCallout(c, t, { ax: dot.x, ay: dot.y, lx: dot.x - 40, ly: box.y + box.h - 30, side: -1, text: ['ТЫ ЗДЕСЬ', ex.name], places: [ex.name], at: T.lost + 0.05, cps: 150, out: T.mapOut - 0.15, color: 'coat', size: S, plate: 0.75 });
-    const yp = mapPx(v, ys.at);
-    drawCallout(c, t, { ax: yp.x, ay: yp.y, lx: box.x + 26, ly: box.y + 30 + S, side: 1, text: 'ТВОЯ ОСТАНОВКА', at: T.lost + 0.1, cps: 150, out: T.mapOut - 0.15, size: S, plate: 0.75 });
-    this.drawBanner(c, t, T.lost + 0.15, box, a);
-    logText('map', 'map card', a >= 0.97, box, { id: 'map' });
-  }
-
-  /** «НЕТ НА КАРТЕ»: a hazard-striped strip on the map card over the unmapped part (our own design). */
-  drawBanner(c: CanvasRenderingContext2D, t: number, at: number, box: { x: number; y: number; w: number; h: number }, alpha: number) {
-    const k = prog(t, at - 0.05, at + 0.2, ease.outBack);
-    if (k <= 0 || alpha <= 0.001) return;
-    const l1 = 'НЕТ НА КАРТЕ';
-    const s1 = PORTRAIT ? 40 : 30;
-    const w1 = measure(l1, F.metro(900), s1, s1 * 0.06);
-    const bw = w1 + 90, bh = s1 + 34;
-    const cx = box.x + box.w - bw / 2 - 12, cy = box.y + bh / 2 + 12;
-    c.save();
-    c.globalAlpha *= alpha * clamp(k * 3);
-    c.translate(cx, cy);
-    c.fillStyle = rgba('shadow', 0.94); c.fillRect(-bw / 2, -bh / 2, bw, bh);
-    for (const sx of [-1, 1]) {
-      c.save();
-      c.beginPath(); c.rect(sx < 0 ? -bw / 2 : bw / 2 - 26, -bh / 2, 26, bh); c.clip();
-      c.fillStyle = rgba('neon', 0.85);
-      for (let x = -bw / 2 - 60; x < bw / 2 + 60; x += 18) { c.beginPath(); c.moveTo(x, -bh / 2); c.lineTo(x + 9, -bh / 2); c.lineTo(x + 9 - bh * 0.6, bh / 2); c.lineTo(x - bh * 0.6, bh / 2); c.closePath(); c.fill(); }
-      c.restore();
-    }
-    c.strokeStyle = rgba('neon', 0.9); c.lineWidth = 2; c.strokeRect(-bw / 2 + 1, -bh / 2 + 1, bw - 2, bh - 2);
-    c.textAlign = 'center'; c.textBaseline = 'alphabetic';
-    const n = Math.floor(Math.max(0, t - at) * 150);
-    c.font = font(F.metro(900), s1); c.letterSpacing = `${s1 * 0.06}px`; c.fillStyle = rgba('neon');
-    c.fillText(l1.slice(0, n), 0, s1 * 0.36);
-    c.restore();
-    logText('banner', l1, n >= l1.length && alpha >= 0.97, { x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh });
+    const k = smoothstep(T.lost + 0.05, T.lost + 0.45, t) * (1 - smoothstep(T.turnArch - 0.1, T.turnArch + 0.35, t));
+    if (k <= 0.001) return null;
+    // ВЫ ЗДЕСЬ, then back along Линия 2 station by station to your stop, which it holds
+    const st = stations(), i0 = stationIndex(exitStation().id), i1 = stationIndex(yourStop().id);
+    const pts = st.slice(i1, i0 + 1).reverse().map((q) => this.mapCv(q.at));
+    const u = prog(t, T.trace0, T.trace1, ease.inOutQuad) * (pts.length - 1);
+    const j = Math.min(pts.length - 2, Math.floor(u)), f = u - j;
+    const drift = 6 * Math.sin(t * 2.1);
+    const q = { x: lerp(pts[j]!.x, pts[j + 1]!.x, f) + drift, y: lerp(pts[j]!.y, pts[j + 1]!.y, f) + drift * 0.6 };
+    return { p: this.mapWorld(q), k };
   }
 
   // ================================================================ frame
   render(f: Frame, out: THREE.WebGLRenderTarget) {
     const t = f.t, T = this.T, { renderer } = this.ctx;
     this.begin();
-    this.obst = [];
     if (PROOF === 'hand' || PROOF === 'sign') return this.renderProof2D(t, out);
     const P = this.proofPov() ?? this.pov(t);
     const moving = t < T.stop || (t > T.go && t < T.arrive) ? 1 : 0;
@@ -926,9 +1050,16 @@ export default class Lost extends CityScene {
     const lit = PROOF ? 1 : t > T.lost ? clamp(prog(t, T.lost + 0.2, T.lost + 0.3)) * flicker(t, t < T.lost + 0.7 ? 0.8 : 0.02, 5) : 0;
     const raise = PROOF ? 1 : prog(t, T.lost, T.lost + 0.4);
     const beat = ((t - this.B(0)) / 0.811) % 1;
-    const pose = raise > 0 ? torchPose(cam, t, { raise, walk: P.walk, beat }) : null;
+    let pose = raise > 0 ? torchPose(cam, t, { raise, walk: P.walk, beat }) : null;
+    const mapAim = !PROOF && P.space === 'car' && pose ? this.mapAimPoint(t) : null;
+    if (pose && mapAim) {
+      // aim the beam at a point of the wall map (camera-space angles relative to the torch's resting aim)
+      const pc = cam.worldToLocal(mapAim.p.clone()).sub(pose.headC).normalize();
+      const ax = Math.atan2(pc.x, -pc.z), ay = Math.asin(clamp(pc.y, -1, 1));
+      pose = torchPose(cam, t, { raise, walk: P.walk, beat, aim: { x: (ax + 0.2) * mapAim.k, y: (ay + 0.1) * mapAim.k } });
+    }
     if (P.space === 'world') this.renderDistrict(out, t, pose && raise > 0.5 ? [pose.head, pose.target] : null, lit);
-    else this.renderCar(out, t);
+    else this.renderCar(out, t, pose && raise > 0.5 ? [pose.head, pose.target] : null, lit);
     rain(this.lines2D, t, { count: P.space === 'world' ? 700 : 0, alpha: 0.1, speed: 1500, angle: 0.08, seed: 9 });
     this.composite2D(this.world, out);
     if (P.space === 'world') this.lines2D.render(renderer, out);
@@ -963,7 +1094,7 @@ export default class Lost extends CityScene {
     }
     const touch = prog(t, T.touch0 - 0.2, T.touch0 + 0.05, ease.outCubic) * (1 - prog(t, T.touch1, T.touch1 + 0.25, ease.inCubic));
     if (touch > 0.001 && t >= T.cut) {
-      const pt = new THREE.Vector3(0.2, 1.05, CURT_Z - 0.02);
+      const pt = new THREE.Vector3(0.25, 0.9, CURT_Z - 0.02);
       const e = project(cam, pt.x, pt.y, pt.z);
       const depth = Math.max(0.3, cam.position.distanceTo(pt));
       const s = 0.055 * pxAt(cam, depth);
@@ -982,39 +1113,29 @@ export default class Lost extends CityScene {
     const hx = PORTRAIT ? 60 : SAFE, hy = PORTRAIT ? 1416 : H - 96, hw = PORTRAIT ? W - 210 : 1000, hs = PORTRAIT ? 100 : 64;
     drawHeading(c, L1, e1!.heading, t, { x: hx, y: hy, width: hw, size: hs, until: L2.words[0]!.start, plate: 0.45 });
     drawHeading(c, L2, e2!.heading, t, { x: hx, y: hy, width: hw, size: hs, until: f.end + 1, plate: 0.45 });
-    // ---- one callout at a time
-    const lx = PORTRAIT ? 80 : 120, lyTop = PORTRAIT ? 300 : 170;
-    if (t < T.cut) {
-      // ТВОЯ ОСТАНОВКА on the station's plate through the door (Садовая)
-      // ТВОЯ ОСТАНОВКА on the diagram's Садовая dot
-      const n0 = stations().length, ys0 = stationIndex(yourStop().id);
-      const yd = project(cam, lerp(BX0, BX1, (130 + ys0 * ((DW - 260) / (n0 - 1))) / DW), lerp(BY0, BY1, 150 / DH), BZ);
-      const cands: [number, number, 1 | -1][] = PORTRAIT ? [[80, 300, 1], [80, 620, 1], [W - 160, 620, -1]] : [[120, 170, 1], [W - 160, 170, -1], [120, 420, 1], [W - 160, 420, -1]];
-      const L1c = this.pickLabel('ТВОЯ ОСТАНОВКА', S, cands, T.stop - 2.3, T.stop + 0.0);
-      if (!yd.behind) drawCallout(c, t, { ax: clamp(yd.x, 40, W - 40), ay: clamp(yd.y, 40, H - 40), ...L1c, text: 'ТВОЯ ОСТАНОВКА', at: T.stop - 2.3, cps: 150, out: T.stop + 0.0, size: S, plate: 0.75 });
-      const dl = project(cam, DOOR_X + DOOR_W / 2 + 0.09, 1.62, WALL_Z + 0.08);
-      const L2c = this.pickLabel('ДВЕРИ ЗАКРЫВАЮТСЯ', S, PORTRAIT ? [[80, 420, 1], [W - 150, 420, -1], [80, 700, 1], [W - 150, 700, -1], [80, 1000, 1]] : [[W - 620, 300, 1], [W - 620, 520, 1], [120, 300, 1]], T.stop + 0.38, T.go + 0.2);
-      drawCallout(c, t, { ax: clamp(dl.x, 40, W - 40), ay: clamp(dl.y, 40, H - 40), ...L2c, text: 'ДВЕРИ ЗАКРЫВАЮТСЯ', at: T.stop + 0.38, cps: 150, out: T.go + 0.2, size: S, plate: 0.75, color: 'sodium' });
-      // past the known part: the board's names break up
-      const ring = stationIndex(yourStop().id) + 1;
-      const n = stations().length;
-      const bxAt = lerp(BX0, BX1, (130 + ring * ((DW - 260) / (n - 1))) / DW);
-      const bp = project(cam, bxAt, lerp(BY0, BY1, (150 + 38 + 22) / DH), BZ);
-      drawCallout(c, t, { ax: clamp(bp.x, 40, W - 40), ay: clamp(bp.y, 40, H - 40), lx, ly: PORTRAIT ? 1100 : H * 0.66, side: 1, text: 'ДАЛЬШЕ КАРТЫ НЕТ', at: T.go + 0.6, cps: 150, out: T.arrive - 0.1, size: S, plate: 0.75 });
-    } else {
-      // СТАНЦИЯ ЗАКРЫТА on the curtain
-      const yB = this.shutterY(t);
-      const ap = project(cam, -0.1, Math.min(OPEN_H - 0.15, yB + 1.2), CURT_Z - 0.02);
-      const SC: [number, number, 1 | -1][] = PORTRAIT ? [[W - 150, 900, -1], [80, 300, 1], [W - 150, 300, -1], [80, 900, 1], [80, 600, 1]] : [[W - 120, H * 0.45, -1], [120, 170, 1], [W - 120, 170, -1], [120, H * 0.45, 1]];
-      const L3c = this.pickLabel('СТАНЦИЯ ЗАКРЫТА', S, SC, T.shutterGo + 0.1, T.land + 1.3);
-      drawCallout(c, t, { ax: clamp(ap.x, 40, W - 40), ay: clamp(ap.y, 40, H - 40), ...L3c, text: 'СТАНЦИЯ ЗАКРЫТА', at: T.shutterGo + 0.1, cps: 150, out: T.land + 1.3, size: S, plate: 0.75 });
-      // the promzona's sign, and the only way home
-      const gp = project(cam, GATE_X - 0.8, 1.45, FENCE_Z + 0.04);
-      const zt = [city().restricted.sign, homeLabel('lost')];
-      const L4c = this.pickLabel(zt, S, [[120 + (PORTRAIT ? -40 : 0), lyTop, 1], [W - (PORTRAIT ? 150 : 120), lyTop, -1], [120 + (PORTRAIT ? -40 : 0), PORTRAIT ? 700 : H * 0.42, 1], [W - (PORTRAIT ? 150 : 120), PORTRAIT ? 700 : H * 0.42, -1]], T.land + 1.7, T.walkIn + 1.5);
-      drawCallout(c, t, { ax: gp.behind ? W / 2 : clamp(gp.x, 40, W - 40), ay: gp.behind ? H / 2 : clamp(gp.y, 40, H - 40), ...L4c, text: zt, at: T.land + 1.7, cps: 150, out: f.end + 1, size: S, plate: 0.75, color: 'neon', places: [city().restricted.sign, city().home.name] });
-    }
-    this.drawMapCard(c, t);
+    // ---- one callout at a time; each label rides a short leader next to its object, clear of signs and boards
+    const call = (text: string | string[], at: number, out: number, anchor: (t: number) => { x: number; y: number } | null, extra: Partial<Parameters<typeof drawCallout>[2]> = {}) => {
+      if (t < at - 0.05 || t > out + 0.4) return;
+      const o = this.pickLabel(text, S, at, out, anchor);
+      const a = anchor(t);
+      if (!a) return;
+      drawCallout(c, t, { ax: a.x, ay: a.y, ...this.placeLabel(text, S, a, o), text, at, cps: 150, out, size: S, plate: 0.75, ...extra });
+    };
+    const onScreen = (p: { x: number; y: number; behind?: boolean }) => (!p.behind && p.x > 20 && p.x < W - 20 && p.y > 20 && p.y < H - 20 ? { x: p.x, y: p.y } : null);
+    const boardPt = (i: number, yPx: number) => { const n = stations().length; return project(this.cam, lerp(BX0, BX1, (130 + i * ((DW - 260) / (n - 1))) / DW), lerp(BY0, BY1, yPx / DH), BZ); };
+    // (a) your stop on the line diagram; the doors
+    call('ТВОЯ ОСТАНОВКА', T.stop - 2.3, T.stop, () => onScreen(boardPt(stationIndex(yourStop().id), 150)));
+    call('ДВЕРИ ЗАКРЫВАЮТСЯ', T.stop + 0.38, T.go + 0.2, () => onScreen(project(this.cam, DOOR_X, 1.36, WALL_Z + 0.05)), { color: 'sodium' });
+    // (b) past the known part the diagram's names break up
+    call('ДАЛЬШЕ КАРТЫ НЕТ', T.go + 0.6, T.arrive - 0.1, () => onScreen(boardPt(stationIndex(yourStop().id) + 1, 150 + 38 + 22)));
+    // (c) your stop on the wall map, where the torch runs back to
+    call('ТВОЯ ОСТАНОВКА', T.stopCall, T.turnArch + 0.3, () => { const w = this.mapWorld(this.mapCv(yourStop().at)); return onScreen(project(this.cam, w.x, w.y, w.z)); });
+    // (d) the station closed, on the shutter
+    call('СТАНЦИЯ ЗАКРЫТА', T.shutterGo, T.land + 1.0, (tt) => onScreen(PORTRAIT ? project(this.cam, 0, this.shutterY(tt) + 1.56, CURT_Z - 0.02) : project(this.cam, -0.55, Math.min(OPEN_H - 0.15, this.shutterY(tt) + 0.95), CURT_Z - 0.02)));
+    // (e) the only way home is through the promzona's gate
+    const zt = [city().restricted.sign, homeLabel('lost')];
+    call(zt, T.turnZone + 0.4, f.end + 1, () => onScreen(project(this.cam, GATE_X - 0.45, 1.67, FENCE_Z + 0.04)), { color: 'neon', places: [city().restricted.sign, city().home.name] });
+    void cam;
   }
 
   /** Gate-1 proof stills drawn in 2D: the hand alone; a sign beside its mojibake variant. */
@@ -1034,7 +1155,7 @@ export default class Lost extends CityScene {
       const variant = garble(src);
       const info = MOJI.get(variant);
       const cols = PORTRAIT ? [[W / 2, H * 0.33], [W / 2, H * 0.62]] : [[W * 0.28, H * 0.48], [W * 0.72, H * 0.48]];
-      [[src, 'как написано'], [variant, `как видит ребёнок · ${info?.codec ?? ''}`]].forEach(([txt, cap], i) => {
+      [[src, 'как написано'], [variant, `как видит ребёнок: ${info ? CODEC_RU[info.codec] : ''}`]].forEach(([txt, cap], i) => {
         const [cx, cy] = cols[i]!;
         const pw = PORTRAIT ? 900 : 780, ph = 200;
         c.fillStyle = '#1B1F24'; c.fillRect(cx! - pw / 2, cy! - ph / 2, pw, ph);

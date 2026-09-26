@@ -39,6 +39,8 @@ export interface TextItem {
   moji?: (Moji | null)[];
   /** A layout self-check failure reported by the drawing code (e.g. a line-map label on a dot: A12). */
   bad?: string;
+  /** Cut by scene geometry this frame (e.g. a platform sign half behind a window post): no text may be cut. */
+  clip?: boolean;
 }
 
 let frame: TextItem[] | null = null;

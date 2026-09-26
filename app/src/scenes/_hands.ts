@@ -43,8 +43,8 @@ export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: 
   const raise = clamp(o.raise ?? 1), walk = o.walk ?? 0, beat = o.beat ?? 0;
   const bob = walk * Math.sin(t * 7.4) * 0.012;
   const sway = Math.sin(beat * Math.PI * 2) * 0.018 + Math.sin(t * 1.1) * 0.006;
-  const home = PORTRAIT ? new THREE.Vector3(0.1, -0.205, -0.45) : new THREE.Vector3(0.155, -0.155, -0.45);
-  const low = home.clone().add(new THREE.Vector3(0.12, -0.32, 0.12));
+  const home = PORTRAIT ? new THREE.Vector3(0.035, -0.215, -0.5) : new THREE.Vector3(0.05, -0.085, -0.5);
+  const low = home.clone().add(new THREE.Vector3(0.1, -0.3, 0.1));
   const headC = low.lerp(home, easeOut(raise)).add(new THREE.Vector3(sway * 0.4, bob, 0));
   // the beam aims forward and a little down, towards the middle of the view
   const ax = -0.2 + (o.aim?.x ?? 0) + sway, ay = -0.1 + (o.aim?.y ?? 0) + walk * Math.sin(t * 7.4 + 1) * 0.02;
@@ -151,12 +151,12 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   const heel = L2S(1.2, 1.35);
   const down = PORTRAIT ? { x: 0.28, y: 1 } : { x: 0.42, y: 1 };
   const dn = Math.hypot(down.x, down.y);
-  const cuff = { x: heel.x + (down.x / dn) * r * 2.3, y: heel.y + (down.y / dn) * r * 2.3 };
+  const cuff = { x: heel.x + (down.x / dn) * r * 2.0, y: heel.y + (down.y / dn) * r * 2.0 };
   const base = { x: cuff.x + (down.x / dn) * (H - cuff.y + r * 9) * 1.05, y: H + r * 9 };
-  const outline = drawSleeve(c, base, cuff, r * 11.5, r * 4.3, l, 1);
+  const outline = drawSleeve(c, base, cuff, r * 6.6, r * 3.9, l, 1);
   // the wrist, out of the cuff into the heel of the hand
   c.lineCap = 'round';
-  c.strokeStyle = skinC(l, 0.82); c.lineWidth = r * 2.9;
+  c.strokeStyle = skinC(l, 0.95); c.lineWidth = r * 2.6;
   c.beginPath(); c.moveTo(cuff.x, cuff.y); c.lineTo(heel.x, heel.y); c.stroke();
   // --- the torch: body, bevelled head, the lens rim
   c.save();
@@ -194,7 +194,7 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   back.bezierCurveTo(0.7, -2.1, 0.0, -1.4, -0.1, -0.4);
   back.closePath();
   const gk = c.createLinearGradient(0, 2.2, 0, -1.6);
-  gk.addColorStop(0, skinHC(l)); gk.addColorStop(0.35, skinC(l, 1)); gk.addColorStop(1, skinC(l, 0.72));
+  gk.addColorStop(0, skinHC(l)); gk.addColorStop(0.4, skinC(l, 1.02)); gk.addColorStop(1, skinC(l, 0.84));
   c.fillStyle = gk; c.fill(back);
   // tendons fanning to the knuckles, faint
   c.strokeStyle = skinDC(l); c.globalAlpha = 0.22; c.lineWidth = 0.09;
@@ -217,9 +217,9 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
     p.lineTo(x1, 0.5);
     p.closePath();
     const gf = c.createLinearGradient(0, 0.6, 0, f.b);
-    gf.addColorStop(0, skinC(l, 0.95)); gf.addColorStop(0.55, skinC(l, 0.85)); gf.addColorStop(1, skinC(l, 0.6));
+    gf.addColorStop(0, skinC(l, 1)); gf.addColorStop(0.55, skinC(l, 0.93)); gf.addColorStop(1, skinC(l, 0.8));
     c.fillStyle = gf; c.fill(p);
-    c.strokeStyle = skinDC(l); c.lineWidth = 0.07; c.globalAlpha = 0.8; c.stroke(p); c.globalAlpha = 1;
+    c.strokeStyle = skinDC(l); c.lineWidth = 0.05; c.globalAlpha = 0.6; c.stroke(p); c.globalAlpha = 1;
     // the middle joint's crease and the knuckle's highlight
     c.strokeStyle = skinDC(l); c.lineWidth = 0.06; c.globalAlpha = 0.6;
     c.beginPath(); c.moveTo(x0 + 0.12 + tilt * 0.3, f.b * 0.45); c.quadraticCurveTo(f.x + tilt * 0.3, f.b * 0.45 - 0.1, x1 - 0.12 + tilt * 0.3, f.b * 0.45); c.stroke();
@@ -235,7 +235,7 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   thumb.bezierCurveTo(4.6, 0.25, 3.6, 0.55, 2.6, 0.9);
   thumb.closePath();
   const gt = c.createLinearGradient(0, 2.2, 0, 0.2);
-  gt.addColorStop(0, skinHC(l)); gt.addColorStop(0.5, skinC(l, 1)); gt.addColorStop(1, skinC(l, 0.75));
+  gt.addColorStop(0, skinHC(l)); gt.addColorStop(0.5, skinC(l, 1.02)); gt.addColorStop(1, skinC(l, 0.86));
   c.fillStyle = gt; c.fill(thumb);
   c.strokeStyle = skinDC(l); c.lineWidth = 0.07; c.globalAlpha = 0.7; c.stroke(thumb); c.globalAlpha = 1;
   // nail and joint

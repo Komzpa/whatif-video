@@ -39,7 +39,7 @@ const NV_EGL = '/usr/share/glvnd/egl_vendor.d/10_nvidia.json';
 
 type Kind = 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop' | 'book' | 'hand' | 'map';
 type Box = { x: number; y: number; w: number; h: number };
-interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string }
+interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string; clip?: boolean }
 const OBJECTS: Kind[] = ['book', 'hand', 'map'];
 
 // ------------------------------------------------------------------ city names
@@ -279,21 +279,45 @@ try {
   const a12 = new Map<string, string>();
   frames.forEach((fr, i) => { for (const it of fr) if (it.bad && !a12.has(it.id)) a12.set(it.id, `${times[i]!.toFixed(2)}s ${JSON.stringify(it.text)}: ${it.bad}`); });
   offenders.push(...[...a12.values()].map((s) => `A12      ${s}`));
-  // A13: no Latin letters on screen, except mojibake that re-derives from a Russian name by the logged codec
+  // A13: no Latin letters on screen at all (mojibake too must be Cyrillic-to-Cyrillic, TREATMENT r7), and every
+  // mojibake string must re-derive from a Russian source by its logged codec
   const a13 = new Map<string, string>();
   const LATIN = /[A-Za-z\u00C0-\u024F]/;
   for (const fr of frames) for (const it of fr) {
-    if (OBJECTS.includes(it.kind) || it.kind === 'prop' || !LATIN.test(it.text) || a13.has(it.text)) continue;
+    if (OBJECTS.includes(it.kind) || it.kind === 'prop' || a13.has(it.text)) continue;
+    if (LATIN.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Latin letters`); continue; }
     if (it.kind === 'garble') {
       const parts = it.text.split(' / ');
-      const ok = parts.every((p, k) => !LATIN.test(p) || (() => { const m = it.moji?.[k]; return !!m && /[А-яЁё]/.test(m.src) && !LATIN.test(m.src) && mojibake(m.src, m.codec, m.level) === p; })());
-      if (ok) continue;
-      a13.set(it.text, `garble ${JSON.stringify(it.text)} is not a codec transform of a logged Russian source`);
-    } else a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Latin letters`);
+      const ok = parts.every((p, k) => { const m = it.moji?.[k]; return !!m && /[А-яЁё]/.test(m.src) && mojibake(m.src, m.codec, m.level) === p; });
+      if (!ok) a13.set(it.text, `garble ${JSON.stringify(it.text)} is not a codec transform of a logged Russian source`);
+    }
   }
   offenders.push(...[...a13.values()].slice(0, 12).map((s) => `A13      ${s}`));
   if (a13.size > 12) offenders.push(`A13      … and ${a13.size - 12} more`);
-  const frameLine = `frame checks: A4 intersections ${a4.size} · A12 board faults ${a12.size} · A13 Latin ${a13.size} · A5 ${kmBad ? 'FAIL' : 'ok'} · `
+  // B1: the torch hand with its sleeve stays within 25% of the frame
+  const polyArea = (pts: [number, number][]) => { const p = hull(pts); let a = 0; p.forEach((q, i) => { const r = p[(i + 1) % p.length]!; a += q[0] * r[1] - r[0] * q[1]; }); return Math.abs(a) / 2; };
+  let handMax = 0, handAt = 0;
+  frames.forEach((fr, i) => { for (const it of fr) if (it.kind === 'hand' && it.poly && it.poly.length > 2) { const clipped = [clipTo, clipTo, clipTo, clipTo].reduce((p, f, k) => f(p, [(q: [number, number]) => q[1] >= 0, (q: [number, number]) => q[1] <= LH, (q: [number, number]) => q[0] >= 0, (q: [number, number]) => q[0] <= LW][k]!, [cutY(0), cutY(LH), cutX(0), cutX(LW)][k]!), hull(it.poly)); const a = clipped.length > 2 ? polyArea(clipped) / (LW * LH) : 0; if (a > handMax) { handMax = a; handAt = times[i]!; } } });
+  if (handMax > 0.25) offenders.push(`B1       a hand with its sleeve covers ${(handMax * 100).toFixed(0)}% of the frame at ${handAt.toFixed(2)}s (max 25%)`);
+  // C1: readable text is never cut by the frame edge or by scene geometry for longer than a pan's or a moving
+  // train's crossing (0.5 s)
+  const CUTK: Kind[] = ['sign', 'garble', 'place', 'callout', 'banner', 'chip', 'note', 'karaoke', 'title'];
+  const cutRun = new Map<string, number>(), cutBad = new Map<string, string>();
+  frames.forEach((fr, i) => {
+    const now = new Set<string>();
+    for (const it of fr) {
+      if (!CUTK.includes(it.kind) || !it.box) continue;
+      const b = it.box, on = b.x + b.w > 0 && b.x < LW && b.y + b.h > 0 && b.y < LH;
+      const inside = b.x >= -1 && b.y >= -1 && b.x + b.w <= LW + 1 && b.y + b.h <= LH + 1;
+      if (!it.clip && (!on || inside || b.h < 14)) continue;
+      now.add(it.id);
+      const n = (cutRun.get(it.id) ?? 0) + 1; cutRun.set(it.id, n);
+      if (n * DT > 0.5 + 1e-6 && !cutBad.has(it.id)) cutBad.set(it.id, `${it.kind} ${JSON.stringify(it.text)} cut by ${it.clip ? 'scene geometry' : 'the frame edge'} for > 0.5 s (from ${(times[i]! - (n - 1) * DT).toFixed(2)}s)`);
+    }
+    for (const id of [...cutRun.keys()]) if (!now.has(id)) cutRun.delete(id);
+  });
+  offenders.push(...[...cutBad.values()].slice(0, 12).map((s) => `C1       ${s}`));
+  const frameLine = `frame checks: A4 intersections ${a4.size} · A12 board faults ${a12.size} · A13 Latin/moji ${a13.size} · A5 ${kmBad ? 'FAIL' : 'ok'} · B1 hand ≤ ${(handMax * 100).toFixed(0)}% · C1 cut ${cutBad.size} · `
     + `book ${bookSec.toFixed(2)}s · counter ${(counterFrames * DT).toFixed(2)}s · max overlays ${maxOv} (at ${maxAt.toFixed(2)}s) · lower-40% covered in ${(coverFrac * 100).toFixed(1)}% of frames (worst ${(worstCover * 100).toFixed(0)}%) · sung-line/sign overlaps ${clash.size}`;
   const kinds = new Map<string, number>();
   for (const { item } of runs.values()) kinds.set(item.kind, (kinds.get(item.kind) ?? 0) + 1);

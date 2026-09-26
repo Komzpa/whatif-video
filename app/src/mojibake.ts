@@ -1,15 +1,19 @@
 // Cyrillic mojibake by real wrong-codec transforms (TREATMENT r7, TESTPLAN A13). A Russian string is encoded
 // with one codec and decoded with another, exactly as a mis-configured sign controller would show it:
-//   «ПРОЕЗД» UTF-8 read as CP1251 -> «РџР РћР•Р—Р”»;  «СТАНЦИЯ» UTF-8 read as CP1252 -> «Ð¡Ð¢ÐÐÐ¦ÐÐ¯» (controls vanish).
+//   «ПРОЕЗД» UTF-8 read as CP1251 -> «РџР РћР•Р—Р”»;  «ВЫХОД В ГОРОД» KOI8-R read as CP1251 -> «бшунд б цнпнд».
+// Only Cyrillic-to-Cyrillic confusions are used (TREATMENT r7, coordinator 27.09): the output is Cyrillic and
+// punctuation, never Latin letters (a CP1252 or CP866 reading would put «Ð…» or «®» on a Russian street).
 // The byte tables are the browser's own WHATWG decoders (TextDecoder); an encoder is the inverse of the decoder
 // over the 256 byte values, so nothing here is hand-drawn glyph soup. Characters a codec cannot encode become
 // '?', and C0/C1 control characters produced by the wrong decoder are dropped (a display shows nothing there).
 // `level` < 1 transforms only some characters (a deterministic per-character choice), for names that degrade
 // step by step; each transformed character is still the codec's real output for that character.
 
-export type Codec = 'utf8>cp1251' | 'koi8>cp1251' | 'cp1251>koi8' | 'utf8>cp1252' | 'cp1251>cp1252' | 'cp866>cp1251';
-export const CODECS: Codec[] = ['utf8>cp1251', 'koi8>cp1251', 'cp1251>koi8', 'utf8>cp1252', 'cp1251>cp1252', 'cp866>cp1251'];
-const LABEL: Record<string, string> = { cp1251: 'windows-1251', cp1252: 'windows-1252', koi8: 'koi8-r', cp866: 'ibm866' };
+export type Codec = 'utf8>cp1251' | 'koi8>cp1251' | 'cp1251>koi8';
+export const CODECS: Codec[] = ['utf8>cp1251', 'koi8>cp1251', 'cp1251>koi8'];
+const LABEL: Record<string, string> = { cp1251: 'windows-1251', koi8: 'koi8-r' };
+/** How the codec is named for people (Russian, for captions). */
+export const CODEC_RU: Record<Codec, string> = { 'utf8>cp1251': 'юникод прочитан как 1251', 'koi8>cp1251': 'КОИ-8 прочитан как 1251', 'cp1251>koi8': '1251 прочитан как КОИ-8' };
 
 const dec = new Map<string, TextDecoder>();
 const decoder = (cs: string) => { let d = dec.get(cs); if (!d) { d = new TextDecoder(LABEL[cs]!); dec.set(cs, d); } return d; };
