@@ -92,6 +92,13 @@ The author's words: «надписи надо держать на экране �
    "I'm looking and can't read it". Child layer: I can't read anything here. Adult layer: a city that stops
    speaking your language.
 
+7. **Every draft ships in two formats** (author, 00:20: «делай версию под тикток»): the 16:9 master and a native
+   vertical 9:16 TikTok cut, 1080×1920, rendered from the same timeline with its own camera framing per shot (a
+   second render target, not a crop of the 16:9 frame). TikTok safe area: keep karaoke, callouts, WHAT TO DO and the
+   page counter out of the top 150 px, the bottom 480 px (caption and UI) and the right 140 px (buttons). Type is
+   scaled up for a phone (karaoke cap height ≥ 70 px at 1080 wide). The reading-time and safe-area checks run on the
+   vertical render too. File names: `whatif-video-<kind>-<subject>-YYYY-MM-DD-rN.mp4` and `...-rN-tiktok.mp4`.
+
 ## The idea in one paragraph
 
 A small child walks through a huge, hazy future city at night with **an old paper handbook** and **a
