@@ -24,6 +24,26 @@ The order is the song's meaning: practical accidents, then weather, then lonelin
 fear. A handbook has an answer page for each. The song never turns to the page. The video does, and
 the answers stop fitting.
 
+## r4: the book's contents are the source, the song is secondary (author, 2026-09-26)
+Stage every chapter from the handbook's own heading (photo: `reference/handbook-contents-photo-2.png`),
+not from the English lyric's wording. The lyric is a loose translation; where they differ, the heading wins.
+Each chapter shows its original heading small under the sung line as the translation note, with its page.
+| page | heading (as printed) | what it means for the staging |
+|---|---|---|
+| 12 | ВВЕДЕНИЕ | the `book` intro is the handbook's introduction page |
+| 22 | ТЫ ПОТЕРЯЛСЯ | you got lost: the unmapped district |
+| 26 | НЕ УСПЕЛ ВЫЙТИ ИЗ ВАГОНА МЕТРО | you didn't get off in time: the doors close before you step out and the train carries you away from your stop; "the metro closed" in the lyric is the doors closing |
+| 32 | ТЫ ОДИН ДОМА, А В ДВЕРЬ ЗВОНЯТ | home alone, the doorbell rings (as written) |
+| 40 | ТЕБЕ ПОВСТРЕЧАЛИСЬ ЧУЖИЕ СОБАКИ | somebody else's dogs, not strays: big dogs off the leash, the owner far away or absent |
+| 48 | ТВОЯ КОШКА ЗАЛЕЗЛА НА ДЕРЕВО | your cat climbed a tree (as written) |
+| 52 / 62 | СЛИШКОМ ЖАРКО / СЛИШКОМ ХОЛОДНО | too hot / too cold (as written) |
+| 70 | ПОГОДА СТАНОВИТСЯ ОПАСНОЙ | the weather turns dangerous (as written) |
+| 7· | ТЕБЯ ДРАЗНЯТ РЕБЯТА | the other kids tease you |
+| 8· | С ТОБОЙ НИКТО НЕ ДРУЖИТ | nobody is friends with you |
+| 10· | ТЕБЯ СИЛЬНО ОБИЖАЮТ | you are badly hurt, badly wronged |
+| 11· | ПРИСТАЁТ НЕЗНАКОМЫЙ ЧЕЛОВЕК | a stranger won't leave you alone |
+| 13· | ТЫ БОИШЬСЯ ТЕМНОТЫ И МОНСТРОВ | afraid of the dark **and monsters**: the child's imagination turns the unknown shapes into monsters |
+
 ## The idea in one paragraph
 
 A small child walks through a huge, hazy future city at night with **an old paper handbook** and **a
@@ -147,7 +167,7 @@ first line near 0–22 s and the last near 2:30–2:38, with instrumental space 
 | `dark` | You’re scared of dark and things you can’t see. | 13· | the unknown |
 | `close` | outro | last page | small human comfort |
 
-### `book` — "Contents"
+### `book` — "Contents" (r4: the handbook's introduction, p. 12)
 A wide shot in smog: the city, megastructures in haze, one tiny yellow coat on a bridge. Push in to
 the child sitting under an overhang in the rain, opening the handbook; the drone wakes with a click and
 lights the page. Drone callout: `HANDBOOK · CHILDREN'S SAFETY · PRINTED ON PAPER` and a translation
@@ -164,15 +184,13 @@ Three beats, one per phrase; the viewer must always know where the child is.
    NOT OPEN YET` (our own design, not any specific game's UI). Callouts `YOU` and `HOME · 6.4 km ·
    UNKNOWN ROUTE`. Child layer: I don't know where I am. Adult layer: a city that has parts you are not
    let into.
-2. **"You missed the stop."** Inside a train car at night: seats, a window with the city streaking past,
-   the route display above the door with stations lighting up in sequence. The child sits with the book,
-   the drone dozes (lamp dim). The route display passes the station marked `YOUR STOP` on the beat; the
-   doors open at the next one, the child steps out, and the station sign gets a callout `WRONG STATION`.
-3. **"The metro closed."** Outside, at street level, looking back at the station entrance: the child has
-   just come up the stairs, and the shutters roll down behind them on the beat; the entrance sign flips to
-   `SERVICE ENDED · NEXT SERVICE 05:40 · THANK YOU FOR YOUR PATIENCE`. The child is alone on the street and
-   cannot go back in. A patrol drone passes, scans, `MINOR · LOGGED`, leaves.
-WHAT TO DO across the chapter: `1. Stay where you are. 2. Find someone in uniform. 3. Say your address.`
+2. **"You missed the stop, the metro closed"** (heading p. 26: didn't get off the car in time). Inside a
+   train car at night: the window, the route display above the door. The train stops at the station marked
+   `YOUR STOP`; the child gets up with the book, walks to the door, and on "closed" the doors slide shut in
+   front of them. Callouts `DOORS CLOSING` and `YOUR STOP` on the sign as the platform slides away and the
+   train carries the child into the dark tunnel. The route display moves on past the stop.
+   (r3's "outside the closed station" beat is dropped: the heading says the doors closed with you inside.)
+WHAT TO DO: beat 1 `1. Stay where you are. 2. Find someone in uniform. 3. Say your address.`; beat 2 `1. Get off at the next station. 2. Stay on the platform. 3. Wait for your grown-up to come.`
 The page counter flips 22 → 26 on "You missed".
 
 ### `door` — p. 32
@@ -183,11 +201,13 @@ labelled `UNKNOWN`. Door panel system line: `VISITOR · FACE NOT RECOGNISED · O
 YES button glowing bigger than NO. WHAT TO DO: `1. Do not open the door. 2. Do not say you are alone.
 3. Call a parent.` The phone screen: `PARENT · AT WORK · CALL BACK LATER`.
 
-### `dogs` — p. 40
-A street under an elevated highway, sodium lights in the haze, wet reflections. The drone's light
-sweeps; pairs of eye-dots light up with detection boxes `DOG · 0.91`, `DOG · 0.87`; the dogs are
-drawn as loose, gentle lines, thin and hungry, not monsters. A billboard above: `PET-FREE ZONE ·
-STRAYS WILL BE COLLECTED`. The adult layer turns the fear around: the dogs are lost too. WHAT TO DO:
+### `dogs` — p. 40 (r4: somebody else's dogs, per the heading)
+A residential street under an elevated highway, sodium lights in the haze, wet reflections. Two or three
+big dogs off the leash come round the corner: they belong to someone (collars glint, a leash drags on the
+ground), but the owner is nowhere, a tiny far-away figure on a phone or not there at all. Detection boxes
+`DOG · OWNER: UNKNOWN`, `LEASH: NONE`, a distance ticking on beats. The dogs are drawn as loose, gentle
+lines, big but not monsters. A sign on the fence: `ALL DOGS MUST BE LEASHED · FINE 500`. Adult layer: the
+rule exists and nobody is enforcing it; the danger is somebody else's carelessness. WHAT TO DO:
 `1. Do not run. 2. Do not look them in the eye. 3. Stand still like a tree.` Step 3 hands off to the tree.
 
 ### `cat` — p. 48
@@ -238,12 +258,15 @@ counting down `12 m · 9 m · 6 m` on beats. Cameras on every corner turn to wat
 anything: `INCIDENT NOT DETECTED`. WHAT TO DO: `1. Say NO loudly. 2. Go where there are people.` and
 the map around the child has no people on it. The child runs to the one lit window (a noodle stall).
 
-### `dark` — p. 13·
+### `dark` — p. 13· (r4: the dark and monsters, per the heading)
 The last chapter. City-wide blackout: the neon goes off block by block on the beat, then the drone's
 light fails on "dark". Black. Sparse scan pulses from the drone's last battery reveal half-shapes that
-are never the same twice, each labelled `UNKNOWN`, `UNKNOWN`, `NOT FOUND`. "Things you can't see":
-callouts pointing at nothing. WHAT TO DO is empty. The child sits down. Then one small warm point turns
-on at floor level.
+are never the same twice. In the child's eyes they become monsters: a coat on a hook grows a long head,
+a stack of boxes gets teeth, a crane outside the window turns into a giant; each is drawn as the child
+imagines it (simple, childlike line monsters of our own design), then the next pulse shows what it really
+is. Callouts flip: `MONSTER?` → `COAT`, `MONSTER?` → `BOXES`, and finally one that stays `NOT FOUND`.
+"Things you can't see": callouts pointing at nothing. WHAT TO DO is empty. The child sits down. Then one
+small warm point turns on at floor level.
 
 ### `close` — outro
 The warm point is a night-light the child has switched on, and in its glow the handbook lies open at
