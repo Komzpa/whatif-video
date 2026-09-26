@@ -23,6 +23,7 @@ each once, with sound. After one viewing:
 | R8 | Tube arms with glove claws ("cannons with crooked cannonballs") | 27.09 | B1 |
 | R9 | The roller shutter is a floating slab with a gap | 27.09 | B3 |
 | R10 | Overlays pile up: counters, map, callouts, signs, lyric, title | 27.09 | A3, A4 |
+| R11 | In-car line map: staircase stations, labels on dots, clipped names, floating marker | 27.09 | A12, B6 |
 
 ## Gate 1: proof stills before any full render (builder)
 Render single frames at 1920×1080 and 1080×1920 of every new or changed asset, alone and in its shot:
@@ -46,6 +47,7 @@ Each check must fail on the rejected draft named in its row (baseline proof) and
 | A8 | TikTok safe area (top 150, bottom 480, right 140 px) holds every readable item; karaoke cap height ≥ 70 px | all | — |
 | A9 | WCAG contrast of readable text against its local background | ≥ 4.5:1 (≥ 3:1 for text ≥ 48 px) | — |
 | A10 | Loudness and sync: integrated LUFS −14 ± 1; each lyric line starts within ±60 ms of its aligned word | all | — |
+| A12 | Line-map labels intersecting a station dot, the line or the board edge; stations not evenly spaced on one straight line | 0 | lost r3 (≈9 s) |
 | A11 | Draft identity: file name carries rN, and a `…-rN.json` next to it holds the content sha of the render inputs (code, data, audio) | present, sha differs from r(N−1) | — |
 
 ## Gate 3: visual self-check (builder)
@@ -89,6 +91,13 @@ Only then open them for the author, saying which version changed and what change
 - **B5 Scale and depth.**
   - Every object stands on something: floor, wall, rails.
   - Nothing is a flat card in front of a void.
+
+- **B6 Line map board.**
+  - One straight line with evenly spaced stations.
+  - Labels on one side at 45°, or strictly alternating, never clipped.
+  - Passed stations grey, the current/next one a ring with the direction arrow on the line.
+  - Garbled script only past the child's stop.
+  - Shot nearly frontal and readable.
 
 ## C. Story checklist per chapter (by eye at gates 5 and 6)
 - The chapter's beats, as listed in TREATMENT, are each a full-frame event, in order.
