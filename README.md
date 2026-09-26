@@ -65,21 +65,37 @@ it mentions were removed in this fork, see below).
 
 ## QA
 
+Gate 2 runs every check on both aspects over the whole chapter:
+
 ```sh
 cd app
-bun scripts/qa-reading-time.ts --from 0 --to 26.2                  # 16:9
-bun scripts/qa-reading-time.ts --from 0 --to 26.2 --aspect 9:16    # the vertical cut, plus its safe area
+bun scripts/qa-reading-time.ts --from 0 --to 26.4 [--aspect 9:16]   # A1-A8, A12, A13, B1, C1, A6 per frame
+bun scripts/qa-contrast.ts     --from 0 --to 26.4 [--aspect 9:16]   # A9 on the rendered pixels
+bun scripts/qa-drone.ts        [--rev <commit>]                     # A6 in the scene code (runs on old drafts too)
+bun scripts/qa-av.ts --video ../out/whatif-video-draft-lost-YYYY-MM-DD-rN[-tiktok].mp4   # A10, A11 on the file
+bun scripts/identity.ts        [--rev <commit>]                     # the input sha behind A11
 ```
 
-Implements TESTPLAN A1 (reading time ≥ max(1.5 s, 0.4 s + chars/14, 0.3 s/word); background signs
-glimpsed in a pan are logged as `scenery:` and exempt from reading time only), A2 (book, cover, printed
-steps, page counter: 0 s), A3 (≤ 2 overlays incl. the sung line), A4 (text boxes vs signs, boards, the
-sung line and each other), A5 (names from city.json; `ДОМ · x км` only decreases), A7 (lower-40% single
-prop coverage ≤ 20% of frames), A8 (TikTok safe area, cap height ≥ 70 px), A12 (the line diagram's own
-layout faults), A13 (no Latin letters or box glyphs anywhere; every mojibake string re-derives from a Russian
-source by its logged codec), B1 (the largest hand ≤ 25% of the frame) and C1 (no text cut by the frame edge
-or by scene geometry for more than 0.5 s). Not yet automated: A6 (drone objects), A9 (contrast), A10 (LUFS and sync), A11 (identity
-json). Exit code 1 lists each offender; `--debug <text>` prints per-frame visibility and boxes.
+`qa-reading-time.ts` implements A1 (reading time ≥ max(1.5 s, 0.4 s + chars/14, 0.3 s/word); background
+signs glimpsed in a pan are logged as `scenery:` and exempt from reading time only), A2 (book, cover, printed
+steps, page counter: 0 s), A3 (≤ 2 overlays incl. the sung line), A4 (text boxes vs signs, boards, the sung
+line and each other), A5 (names from city.json; `ДОМ · x км` only decreases), A6 (no drone drawn in any
+frame), A7 (lower-40% single prop coverage ≤ 20% of frames), A8 (TikTok safe area, cap height ≥ 70 px), A12
+(the line diagram's own layout faults), A13 (no Latin letters or box glyphs anywhere; every mojibake string
+re-derives from a Russian source by its logged codec), B1 (the largest hand ≤ 25% of the frame) and C1 (no
+text cut by the frame edge or by scene geometry for more than 0.5 s). Text is "fully visible" only when it
+can be read: not during the fade from black, and wall-map text only inside the torch spot.
+
+`qa-contrast.ts` (A9) renders frames at 4 fps and reads them back from the GPU. The chapter line logs its
+inks (sung, front letter, unsung) with their boxes, and each is measured against the median of the pixels
+around it that are not ink. Every other readable text is split by Otsu's threshold inside its box: the
+lettering's stroke cores against the background class. Pass is ≥ 4.5:1, or ≥ 3:1 at ≥ 48 px.
+
+`qa-av.ts` (A10, A11) measures integrated loudness (−14 ± 1 LUFS) and stream alignment. It finds the first
+frame of the file in which each lyric line's red front letter appears (±60 ms of its aligned word). It checks
+that the `…-rN.json` next to the file holds the work tree's input sha, that this differs from the previous
+draft's (recomputed from its commit), and that the file's sha256 matches. Every script exits 1 and lists
+each offender; `qa-reading-time.ts --debug <text>` prints per-frame visibility and boxes.
 
 ## Running
 
@@ -89,9 +105,16 @@ bun install
 bunx vite                                  # preview at the printed URL (?t=12.5 to seek)
 bun scripts/render.ts stills --t 5,14 --out ../out/stills
 bun scripts/render.ts sheet --cuts --out ../out/sheets/cuts.png   # 4 frames around every chapter cut
-nice -n 19 ionice -c3 bun scripts/render.ts video --samples 4 --from 0 --to 26.2 --out ../out/whatif-video-draft-lost-YYYY-MM-DD-rN.mp4
-nice -n 19 ionice -c3 bun scripts/render.ts video --aspect 9:16 --samples 4 --from 0 --to 26.2 --out ../out/whatif-video-draft-lost-YYYY-MM-DD-rN-tiktok.mp4
+nice -n 19 ionice -c3 bun scripts/render.ts video --samples 4 --from 0 --to 26.4 --out ../out/draft-lost-rN.mp4
+nice -n 19 ionice -c3 bun scripts/render.ts video --aspect 9:16 --samples 4 --from 0 --to 26.4 --out ../out/draft-lost-rN-tiktok.mp4
+bun scripts/deliver.ts --r N --date YYYY-MM-DD --chapter lost --prev-rev <r(N-1) commit> --poster <t>
 ```
+
+`deliver.ts` turns the two full-quality renders into the viewing copies
+`out/whatif-video-draft-lost-YYYY-MM-DD-rN.mp4` and `…-rN-tiktok.mp4`. It bakes the poster (the master's own
+frame at `--poster`) in as frame 0, so duration and frame count are unchanged. It sets the audio to −14 LUFS
+with a fixed gain and a −1 dBFS limiter, encodes two-pass h264 under 15 MB, and writes the `…-rN.json`
+identity manifest.
 
 `render.ts` starts its own Vite server without live reload (or uses `--url`). On Linux, headless
 Chrome gets hardware WebGL2 only through ANGLE on EGL; the script selects NVIDIA's EGL vendor when
