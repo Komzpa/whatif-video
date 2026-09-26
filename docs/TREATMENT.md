@@ -87,10 +87,14 @@ The author's words: «надписи надо держать на экране �
    every sign, board and screen is broken-encoding glyph soup (our own generated glyphs: mis-decoded Latin/Cyrillic
    fragments, box and block characters, dot-matrix rendering), with only the frame/header readable. Each garbled
    string is generated deterministically from the real city.json name (so it is the same sign every time it
-   appears). The drone may try and fail: callout `TRANSLATION UNAVAILABLE`. Garbled strings are exempt from the
+   appears). The drone is the grown-up and can read everything (author, 00:25: «не работает метафора. дрон же
+   "взрослый" он всё будет знать»): no `TRANSLATION UNAVAILABLE`. The signs are unreadable from the child's POV
+   only; where a sign matters, the drone's callout calmly gives its meaning in clean mono (`STATION CLOSED`,
+   `NO ENTRY FOR MINORS`), so the viewer sees both: the glyph soup the child sees, and the grown-up who reads it
+   without effort. Garbled strings are exempt from the
    reading-time rule and from the city.json name check, but stay on screen long enough (≥1.5 s) to register as
-   "I'm looking and can't read it". Child layer: I can't read anything here. Adult layer: a city that stops
-   speaking your language.
+   "I'm looking and can't read it". Child layer: I can't read anything here, but my grown-up can. Adult layer:
+   being a child means living among signs written for someone else.
 
 7. **Every draft ships in two formats** (author, 00:20: «делай версию под тикток»): the 16:9 master and a native
    vertical 9:16 TikTok cut, 1080×1920, rendered from the same timeline with its own camera framing per shot (a
