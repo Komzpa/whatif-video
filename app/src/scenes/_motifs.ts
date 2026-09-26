@@ -1472,6 +1472,7 @@ export function drawBeam2D(c: CanvasRenderingContext2D, x: number, y: number, tx
  * itself goes in a GlowBatch via droneGlow). `look` tilts the lens towards a screen direction.
  */
 export function drawDrone(c: CanvasRenderingContext2D, x: number, y: number, r: number, o: { t: number; lamp?: number; look?: [number, number]; alpha?: number; tilt?: number; dark?: number } = { t: 0 }) {
+  if ((o.alpha ?? 1) > 0.001) logText('drone', 'drone', true, { x: x - r, y: y - r, w: 2 * r, h: 2 * r }, { id: 'drone' }); // A6: must never be on screen
   const t = o.t, lamp = o.lamp ?? 1;
   const look = o.look ?? [0.3, 0.4];
   const ll = Math.hypot(look[0], look[1]) || 1;

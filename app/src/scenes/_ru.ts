@@ -32,30 +32,39 @@ export function drawHeading(c: CanvasRenderingContext2D, L: Line, heading: strin
   const cap = c.measureText('Н').actualBoundingBoxAscent;
   const bw = Math.max(...rows.map((r) => c.measureText(r).width));
   c.globalAlpha *= a;
-  if (o.plate) {
-    const g = c.createLinearGradient(0, top - cap - size * 0.5, 0, o.y + size * 0.4);
-    g.addColorStop(0, rgba('shadow', 0)); g.addColorStop(0.35, rgba('shadow', o.plate)); g.addColorStop(1, rgba('shadow', o.plate));
-    c.fillStyle = g; c.fillRect(o.x - size * 0.4, top - cap - size * 0.5, bw + size * 0.8, o.y - top + cap + size * 0.9);
-  }
+  // the plate holds every row whole (cap top to below the baseline) so no row fades into the ground behind it
+  const plate = o.plate ? { x: o.x - size * 0.4, y: top - cap - size * 0.32, w: bw + size * 0.8, h: o.y - top + cap + size * 0.62 } : null;
+  if (plate) { c.fillStyle = rgba('shadow', o.plate!); c.fillRect(plate.x, plate.y, plate.w, plate.h); }
   // progress over the sung line, in characters
   const total = rows.join('').length;
   const p = clamp((t - w0.start) / Math.max(0.3, w1.end - w0.start));
   const lit = p * total;
+  // sung letters paper, the front letter red, the unsung rest a solid muted paper (A9: >= 4.5:1 on the plate)
+  const SUNG = rgba('paper', 1), FRONT = mixRgba('red', 'paper', 0.15), UNSUNG = mixRgba('paper', 'shadow', 0.32);
+  const ink: { box: { x: number; y: number; w: number; h: number }; fg: string; size: number }[] = [];
   let k = 0;
   rows.forEach((row, ri) => {
     let x = o.x;
     const y = top + ri * lead;
     for (const ch of row) {
       const on = clamp(lit - k);
-      c.fillStyle = on >= 1 ? rgba('paper', 1) : on > 0 ? mixRgba('red', 'paper', 0.15) : rgba('paper', 0.34);
+      const fg = on >= 1 ? SUNG : on > 0 ? FRONT : UNSUNG;
+      c.fillStyle = fg;
       c.fillText(ch, x, y);
-      x += c.measureText(ch).width + size * 0.02;
+      const cw = c.measureText(ch).width;
+      // runs of letters that share one ink, with their boxes (for the contrast check)
+      const lastInk = ink[ink.length - 1];
+      if (ch !== ' ') {
+        if (lastInk && lastInk.fg === fg && Math.abs(lastInk.box.y - (y - cap)) < 1 && x - (lastInk.box.x + lastInk.box.w) < size * 0.4) lastInk.box.w = x + cw - lastInk.box.x;
+        else ink.push({ box: { x, y: y - cap, w: cw, h: cap }, fg, size });
+      }
+      x += cw + size * 0.02;
       k++;
     }
   });
   c.restore();
   const box = { x: o.x, y: top - cap, w: bw, h: o.y - top + cap + size * 0.22 };
-  logText('karaoke', heading, a >= 0.97, box, { cap, id: `karaoke:${heading}` });
+  logText('karaoke', heading, a >= 0.97, box, { cap, id: `karaoke:${heading}`, ink: a >= 0.97 ? ink : undefined, lit: Math.floor(lit) });
   return box;
 }
 

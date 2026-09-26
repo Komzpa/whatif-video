@@ -23,6 +23,7 @@ export type TextKind =
   // objects (not text), logged for the r4/r6 frame checks:
   | 'book' // the handbook as a picture (r6: must never be on screen)
   | 'hand' // the child's hand and sleeve in the POV (a prop: counts for the lower-frame coverage check)
+  | 'drone' // the drone (TREATMENT r5 item 8: none; A6)
   | 'map'; // the map card (a non-diegetic overlay; labels inside it belong to it)
 
 export interface TextBox { x: number; y: number; w: number; h: number }
@@ -41,6 +42,10 @@ export interface TextItem {
   bad?: string;
   /** Cut by scene geometry this frame (e.g. a platform sign half behind a window post): no text may be cut. */
   clip?: boolean;
+  /** Runs of glyphs that share one fill colour (css), with their boxes and font size (A9 contrast). */
+  ink?: { box: TextBox; fg: string; size: number }[];
+  /** Karaoke: how many letters are lit (sung) this frame (A10 sync). */
+  lit?: number;
 }
 
 let frame: TextItem[] | null = null;
@@ -49,6 +54,8 @@ export const textlog = {
   get on() { return frame !== null; },
   begin() { frame = []; },
   push(it: TextItem) { if (frame) frame.push(it); },
+  /** Everything logged so far this frame is not fully visible (a fade over the whole frame). */
+  dim() { if (frame) for (const it of frame) it.full = false; },
   end(): TextItem[] { const f = frame ?? []; frame = null; return f; },
 };
 

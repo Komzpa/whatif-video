@@ -25,7 +25,7 @@ import { clamp, ease, lerp, prog, smoothstep, keys, hash, mulberry32 } from '../
 import { F, font, measure } from '../engine/type';
 import {
   CityScene, LitLines, NeonSign, FogCards, LIN, POST_BASE, SAFE, rgba, mixRgba, scaleRGB, mixRGB, solid, col3, project,
-  drawCallout, makeLamp, flicker, rain, logText,
+  drawCallout, makeLamp, flicker, rain, logText, textlog,
 } from './_motifs';
 import { drawHeading, stencilText, noticeCanvas, metroSignCanvas } from './_ru';
 import { torchPose, drawTorchHand, drawOpenHand, pxAt, type Light } from './_hands';
@@ -393,10 +393,10 @@ export default class Lost extends CityScene {
     this.logBoxThrough(b, aps, kind, text, scenery ? `scenery:${kind}:${text}` : `${kind}:${text}`);
   }
   /** Log any text box seen through the carriage wall's openings (aps null: the camera is outside the car). */
-  logBoxThrough(b: Box, aps: Box[] | null, kind: 'place' | 'garble' | 'sign', text: string, id: string) {
+  logBoxThrough(b: Box, aps: Box[] | null, kind: 'place' | 'garble' | 'sign', text: string, id: string, lit = true) {
     if (!aps) {
       if (b.x + b.w < 0 || b.x > W || b.y + b.h < 0 || b.y > H) return;
-      logText(kind, text, b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H && b.h >= 12, b, { id });
+      logText(kind, text, lit && b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H && b.h >= 12, b, { id });
       return;
     }
     const ov = (a: Box) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -404,7 +404,7 @@ export default class Lost extends CityScene {
     if (!hits.length || b.x + b.w < 0 || b.x > W || b.y + b.h < 0 || b.y > H) return;
     const whole = hits.some((a) => b.x >= a.x - 2 && b.y >= a.y - 2 && b.x + b.w <= a.x + a.w + 2 && b.y + b.h <= a.y + a.h + 2);
     const inFrame = b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H;
-    logText(kind, text, whole && inFrame && b.h >= 12, b, { id, ...(whole ? {} : { clip: true }) });
+    logText(kind, text, lit && whole && inFrame && b.h >= 12, b, { id, ...(whole ? {} : { clip: true }) });
   }
   /** km (city.json) -> the wall map's canvas px. */
   mapCv(p: XY | [number, number]) { return { x: MAP_OX + p[0] * MAP_S, y: MAP_OY - p[1] * MAP_S }; }
@@ -444,12 +444,12 @@ export default class Lost extends CityScene {
     }
     // «ВЫ ЗДЕСЬ» at this station, printed in red with a white knockout
     const here = this.mapCv(exitStation().at);
-    c.fillStyle = '#C8352B'; c.beginPath(); c.arc(here.x, here.y, 17, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#A3241C'; c.beginPath(); c.arc(here.x, here.y, 17, 0, Math.PI * 2); c.fill();
     c.strokeStyle = '#FBF7EC'; c.lineWidth = 4; c.beginPath(); c.arc(here.x, here.y, 17, 0, Math.PI * 2); c.stroke();
     c.font = font(F.metro(900), 44); c.textAlign = 'right'; c.textBaseline = 'alphabetic';
     c.lineWidth = 10; c.strokeStyle = '#E4DCC4'; c.strokeText('ВЫ ЗДЕСЬ', here.x - 30, here.y - 26);
     { const w = c.measureText('ВЫ ЗДЕСЬ').width; this.wallMapTexts.push({ text: 'ВЫ ЗДЕСЬ', x: here.x - 30 - w - 6, y: here.y - 26 - 38, w: w + 12, h: 50 }); }
-    c.fillStyle = '#C8352B'; c.fillText('ВЫ ЗДЕСЬ', here.x - 30, here.y - 26);
+    c.fillStyle = '#62120D'; c.fillText('ВЫ ЗДЕСЬ', here.x - 30, here.y - 26);
     // the title band and the frame
     c.fillStyle = '#2B2A27'; c.fillRect(0, 0, MCW, 92);
     c.fillStyle = '#E9E2CC'; c.font = font(F.metro(900), 56); c.textAlign = 'left'; c.fillText('СХЕМА ГОРОДА', 40, 66);
@@ -464,7 +464,17 @@ export default class Lost extends CityScene {
    * The wall map as lit this frame: dim station light (`amb`) plus the torch's spot where its beam hits the map
    * (`hit` in canvas px, radius `rad` px), warm at the centre.
    */
+  mapLight: { hit: { x: number; y: number; rad: number } | null; on: number; amb: number } = { hit: null, on: 0, amb: 0 };
+  /** How much of the paper's brightness reaches canvas point (x, y) under the current lighting (0 dark .. 1 lit). */
+  mapBright(x: number, y: number) {
+    const { hit, on, amb } = this.mapLight, a = 1 - amb;
+    if (!hit || on <= 0.01) return 1 - a;
+    const d = Math.hypot(x - hit.x, y - hit.y) / hit.rad;
+    const al = d <= 0.6 ? lerp(a * (1 - on), a * (1 - 0.92 * on), d / 0.6) : d <= 1 ? lerp(a * (1 - 0.92 * on), a, (d - 0.6) / 0.4) : a;
+    return 1 - al;
+  }
   lightMap(hit: { x: number; y: number; rad: number } | null, on: number, amb: number) {
+    this.mapLight = { hit, on, amb };
     const c = this.wallMapCv.getContext('2d')!;
     c.globalCompositeOperation = 'source-over';
     c.drawImage(this.wallMapBase, 0, 0);
@@ -472,11 +482,11 @@ export default class Lost extends CityScene {
     if (hit && on > 0.01) {
       const g = c.createRadialGradient(hit.x, hit.y, 0, hit.x, hit.y, hit.rad);
       const a = 1 - amb;
-      g.addColorStop(0, `${dark}${(a * (1 - on)).toFixed(3)})`); g.addColorStop(0.55, `${dark}${(a * (1 - 0.8 * on)).toFixed(3)})`); g.addColorStop(1, `${dark}${a.toFixed(3)})`);
+      g.addColorStop(0, `${dark}${(a * (1 - on)).toFixed(3)})`); g.addColorStop(0.6, `${dark}${(a * (1 - 0.92 * on)).toFixed(3)})`); g.addColorStop(1, `${dark}${a.toFixed(3)})`);
       c.fillStyle = g; c.fillRect(0, 0, MCW, MCH);
       c.globalCompositeOperation = 'multiply';
       const w = c.createRadialGradient(hit.x, hit.y, 0, hit.x, hit.y, hit.rad * 0.8);
-      w.addColorStop(0, `rgba(255,226,180,${on.toFixed(3)})`); w.addColorStop(1, 'rgba(255,255,255,1)');
+      w.addColorStop(0, `rgba(255,238,212,${on.toFixed(3)})`); w.addColorStop(1, 'rgba(255,255,255,1)');
       c.fillStyle = w; c.fillRect(0, 0, MCW, MCH);
       c.globalCompositeOperation = 'source-over';
     } else { c.fillStyle = `${dark}${(1 - amb).toFixed(3)})`; c.fillRect(0, 0, MCW, MCH); }
@@ -537,7 +547,7 @@ export default class Lost extends CityScene {
     {
       const cv = document.createElement('canvas'); cv.width = 512; cv.height = 300;
       const c = cv.getContext('2d')!;
-      c.fillStyle = '#D9D4C8'; c.fillRect(0, 0, 512, 300);
+      c.fillStyle = '#EEEAE0'; c.fillRect(0, 0, 512, 300);
       c.strokeStyle = '#B3261E'; c.lineWidth = 22; c.strokeRect(14, 14, 484, 272);
       // stencil-painted on the tin (TREATMENT r7: stencil for fences), two lines, centred
       const words = this.gateSignText.split(' '), half = Math.ceil(words.length / 2);
@@ -545,11 +555,11 @@ export default class Lost extends CityScene {
         let sz = 64; c.font = font(F.stencil(), sz);
         const wOf = () => c.measureText(ln).width + sz * 0.08 * ln.length;
         while (wOf() > 440 && sz > 20) { sz -= 2; c.font = font(F.stencil(), sz); }
-        stencilText(c, ln, 256 - wOf() / 2, 135 + k * 80, sz, '#231F1A', '#D9D4C8');
+        stencilText(c, ln, 256 - wOf() / 2, 135 + k * 80, sz, '#15120E', '#EEEAE0');
       });
-      for (let i = 0; i < 30; i++) { c.fillStyle = `rgba(120,70,30,${0.05 + 0.1 * hash(i, 2)})`; c.beginPath(); c.arc(hash(i, 5) * 512, hash(i, 6) * 300, 6 + 20 * hash(i, 7), 0, Math.PI * 2); c.fill(); }
+      for (let i = 0; i < 30; i++) { c.fillStyle = `rgba(120,70,30,${0.03 + 0.05 * hash(i, 2)})`; c.beginPath(); c.arc(hash(i, 5) * 512, hash(i, 6) * 300, 6 + 20 * hash(i, 7), 0, Math.PI * 2); c.fill(); }
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-      this.gateSign = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.42), new THREE.MeshBasicMaterial({ map: tex, fog: true }));
+      this.gateSign = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.42), new THREE.MeshBasicMaterial({ map: tex, fog: false }));
       this.gateSign.position.set(GATE_X - 0.45, 1.45, FENCE_Z + 0.04);
       S.add(this.gateSign);
     }
@@ -857,7 +867,7 @@ export default class Lost extends CityScene {
     // QA: what the child sees (mojibake) is reported
     for (const sg of this.signs) { sg.log(cam, { min: 18, scenery: true }); }
     this.vestBoard.log(cam, { min: 18, scenery: true });
-    this.logPlane(this.gateSign, this.gateSignText, 14, 'gate-sign');
+    this.logPlane(this.gateSign, this.gateSignText, 33, 'gate-sign'); // the letters are ~0.21 of the sign's height: below ~14 px letters (sign half-height 33 px) the tin sign is a red-rimmed blur, not text
     if (this.notice.visible && yB + 1.45 + 0.13 < OPEN_H) this.logPlane(this.notice, this.noticeText.join(' / '), 14, 'notice');
   }
 
@@ -947,7 +957,12 @@ export default class Lost extends CityScene {
     }
     const aps = this.apertures(openK), inside = t < T.exit1 ? aps : null;
     // the wall map is black until the doors open and the torch comes up (nothing to read through the windows)
-    if (onB && t >= T.open) for (const r of this.wallMapTexts) { const b = this.mapRectBox(r); if (b) this.logBoxThrough(b, inside, 'sign', r.text, `wallmap:${r.text}`); }
+    // a wall-map text is readable only where the torch lights it (the ambient light leaves the paper near black)
+    if (onB && t >= T.open) for (const r of this.wallMapTexts) {
+      const b = this.mapRectBox(r);
+      const lit = Math.min(this.mapBright(r.x, r.y), this.mapBright(r.x + r.w, r.y), this.mapBright(r.x, r.y + r.h), this.mapBright(r.x + r.w, r.y + r.h)) >= 0.88;
+      if (b) this.logBoxThrough(b, inside, 'sign', r.text, `wallmap:${r.text}`, lit);
+    }
     for (const sg of onB ? this.platesB : this.platesA) this.logThrough(sg, aps, onB ? 'garble' : 'place', onB);
     this.drawBoard(this.world.ctx, t);
   }
@@ -1033,12 +1048,15 @@ export default class Lost extends CityScene {
   /** Where the torch points on the wall map (world) and how firmly (0..1), or null when it rests. */
   mapAimPoint(t: number) {
     const T = this.T;
-    const k = smoothstep(T.lost + 0.05, T.lost + 0.45, t) * (1 - smoothstep(T.turnArch - 0.1, T.turnArch + 0.35, t));
+    const k = smoothstep(T.lost + 0.0, T.lost + 0.35, t) * (1 - smoothstep(T.turnArch - 0.1, T.turnArch + 0.35, t));
     if (k <= 0.001) return null;
     // ВЫ ЗДЕСЬ, then back along Линия 2 station by station to your stop, which it holds
     const st = stations(), i0 = stationIndex(exitStation().id), i1 = stationIndex(yourStop().id);
     const pts = st.slice(i1, i0 + 1).reverse().map((q) => this.mapCv(q.at));
-    const u = prog(t, T.trace0, T.trace1, ease.inOutQuad) * (pts.length - 1);
+    // it starts on the printed «ВЫ ЗДЕСЬ» itself (the child reads it; it sits beside its dot, towards your stop)
+    const lab = this.wallMapTexts.find((r) => r.text === 'ВЫ ЗДЕСЬ');
+    if (lab) pts[0] = { x: lab.x + lab.w / 2, y: lab.y + lab.h / 2 };
+    const u = prog(t, T.trace0 + 0.3, T.trace1, ease.inOutQuad) * (pts.length - 1);
     const j = Math.min(pts.length - 2, Math.floor(u)), f = u - j;
     const drift = 6 * Math.sin(t * 2.1);
     const q = { x: lerp(pts[j]!.x, pts[j + 1]!.x, f) + drift, y: lerp(pts[j]!.y, pts[j + 1]!.y, f) + drift * 0.6 };
@@ -1055,7 +1073,7 @@ export default class Lost extends CityScene {
     this.setCam(P, t, P.space === 'car' ? moving : 0);
     const cam = this.cam;
     // the torch: up on "lost", on the whole time after (a flicker as it comes on)
-    const lit = PROOF ? 1 : t > T.lost ? clamp(prog(t, T.lost + 0.2, T.lost + 0.3)) * flicker(t, t < T.lost + 0.7 ? 0.8 : 0.02, 5) : 0;
+    const lit = PROOF ? 1 : t > T.lost ? clamp(prog(t, T.lost + 0.2, T.lost + 0.3)) * flicker(t, t < T.lost + 0.35 ? 0.8 : 0.02, 5) : 0;
     const raise = PROOF ? 1 : prog(t, T.lost, T.lost + 0.4);
     const beat = ((t - this.B(0)) / 0.811) % 1;
     let pose = raise > 0 ? torchPose(cam, t, { raise, walk: P.walk, beat }) : null;
@@ -1064,7 +1082,16 @@ export default class Lost extends CityScene {
       // aim the beam at a point of the wall map (camera-space angles relative to the torch's resting aim)
       const pc = cam.worldToLocal(mapAim.p.clone()).sub(pose.headC).normalize();
       const ax = Math.atan2(pc.x, -pc.z), ay = Math.asin(clamp(pc.y, -1, 1));
-      pose = torchPose(cam, t, { raise, walk: P.walk, beat, aim: { x: (ax + 0.2) * mapAim.k, y: (ay + 0.1) * mapAim.k } });
+      let aim = { x: (ax + 0.2) * mapAim.k, y: (ay + 0.1) * mapAim.k };
+      pose = torchPose(cam, t, { raise, walk: P.walk, beat, aim });
+      for (let it = 0; it < 2; it++) {
+        // where the beam actually points (camera space) vs where it should: correct the aim by the difference
+        const want = cam.worldToLocal(mapAim.p.clone()).sub(pose.headC).normalize();
+        const got = pose.tailC.clone().sub(pose.headC).negate().normalize();
+        const dx = Math.atan2(want.x, -want.z) - Math.atan2(got.x, -got.z), dy = Math.asin(clamp(want.y, -1, 1)) - Math.asin(clamp(got.y, -1, 1));
+        aim = { x: aim.x + dx * mapAim.k, y: aim.y + dy * mapAim.k };
+        pose = torchPose(cam, t, { raise, walk: P.walk, beat, aim });
+      }
     }
     if (P.space === 'world') this.renderDistrict(out, t, pose && raise > 0.5 ? [pose.head, pose.target] : null, lit);
     else this.renderCar(out, t, pose && raise > 0.5 ? [pose.head, pose.target] : null, lit);
@@ -1084,6 +1111,7 @@ export default class Lost extends CityScene {
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);
     const fadeIn = 1 - smoothstep(0, 0.5, t);
+    if (fadeIn > 0.03) textlog.dim(); // nothing is readable through the fade from black
     return { ...POST_BASE, fade: PROOF ? 0 : fadeIn };
   }
 
@@ -1119,8 +1147,8 @@ export default class Lost extends CityScene {
     const S = PORTRAIT ? 34 : 26;
     // ---- the chapter line: the handbook's Russian heading, lit as the line is sung (bottom left)
     const hx = PORTRAIT ? 60 : SAFE, hy = PORTRAIT ? 1416 : H - 96, hw = PORTRAIT ? W - 210 : 1000, hs = PORTRAIT ? 100 : 64;
-    drawHeading(c, L1, e1!.heading, t, { x: hx, y: hy, width: hw, size: hs, until: L2.words[0]!.start, plate: 0.45 });
-    drawHeading(c, L2, e2!.heading, t, { x: hx, y: hy, width: hw, size: hs, until: f.end + 1, plate: 0.45 });
+    drawHeading(c, L1, e1!.heading, t, { x: hx, y: hy, width: hw, size: hs, until: L2.words[0]!.start, plate: 0.85 });
+    drawHeading(c, L2, e2!.heading, t, { x: hx, y: hy, width: hw, size: hs, until: f.end + 1, plate: 0.85 });
     // ---- one callout at a time; each label rides a short leader next to its object, clear of signs and boards
     const call = (text: string | string[], at: number, out: number, anchor: (t: number) => { x: number; y: number } | null, extra: Partial<Parameters<typeof drawCallout>[2]> = {}) => {
       if (t < at - 0.05 || t > out + 0.4) return;

@@ -37,10 +37,10 @@ const LW = PORTRAIT ? 1080 : 1920, LH = PORTRAIT ? 1920 : 1080;
 const FPS = +opt('fps', '20')!, DT = 1 / FPS;
 const NV_EGL = '/usr/share/glvnd/egl_vendor.d/10_nvidia.json';
 
-type Kind = 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop' | 'book' | 'hand' | 'map';
+type Kind = 'drone' | 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop' | 'book' | 'hand' | 'map';
 type Box = { x: number; y: number; w: number; h: number };
 interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string; clip?: boolean }
-const OBJECTS: Kind[] = ['book', 'hand', 'map'];
+const OBJECTS: Kind[] = ['book', 'hand', 'map', 'drone'];
 
 // ------------------------------------------------------------------ city names
 const cityFile = [path.join(ROOT, 'data/city.json'), path.join(APP, 'src/data-fallback/city.json')].find(existsSync);
@@ -184,6 +184,9 @@ try {
   }
   const counterFrames = frames.filter((fr) => fr.some((it) => it.kind === 'counter')).length;
   if (counterFrames) offenders.push(`book     the page counter is on screen ${(counterFrames * DT).toFixed(2)}s (r6: no page numbers)`);
+  // A6: no drone on screen (TREATMENT r5 item 8); scripts/qa-drone.ts checks the scene code statically
+  const droneFrames = frames.filter((fr) => fr.some((it) => it.kind === 'drone')).length;
+  if (droneFrames) offenders.push(`A6       a drone is drawn in ${droneFrames} frames (first at ${times[frames.findIndex((fr) => fr.some((it) => it.kind === 'drone'))]!.toFixed(2)}s)`);
   // overlays
   const OVERLAY: Kind[] = ['callout', 'banner', 'chip', 'counter', 'map', 'title', 'system', 'step'];
   const inside = (b: Box, m: Box) => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; return cx >= m.x && cx <= m.x + m.w && cy >= m.y && cy <= m.y + m.h; };
@@ -319,7 +322,7 @@ try {
   });
   offenders.push(...[...cutBad.values()].slice(0, 12).map((s) => `C1       ${s}`));
   const frameLine = `frame checks: A4 intersections ${a4.size} · A12 board faults ${a12.size} · A13 Latin/moji ${a13.size} · A5 ${kmBad ? 'FAIL' : 'ok'} · B1 hand ≤ ${(handMax * 100).toFixed(0)}% · C1 cut ${cutBad.size} · `
-    + `book ${bookSec.toFixed(2)}s · counter ${(counterFrames * DT).toFixed(2)}s · max overlays ${maxOv} (at ${maxAt.toFixed(2)}s) · lower-40% covered in ${(coverFrac * 100).toFixed(1)}% of frames (worst ${(worstCover * 100).toFixed(0)}%) · sung-line/sign overlaps ${clash.size}`;
+    + `A6 drone ${(droneFrames * DT).toFixed(2)}s · book ${bookSec.toFixed(2)}s · counter ${(counterFrames * DT).toFixed(2)}s · max overlays ${maxOv} (at ${maxAt.toFixed(2)}s) · lower-40% covered in ${(coverFrac * 100).toFixed(1)}% of frames (worst ${(worstCover * 100).toFixed(0)}%) · sung-line/sign overlaps ${clash.size}`;
   const kinds = new Map<string, number>();
   for (const { item } of runs.values()) kinds.set(item.kind, (kinds.get(item.kind) ?? 0) + 1);
   console.log(`qa-reading-time ${PORTRAIT ? '9:16' : '16:9'}  ${from.toFixed(2)}–${to.toFixed(2)}s  ${frames.length} frames @ ${FPS} fps  city: ${path.relative(ROOT, cityFile)}`);
