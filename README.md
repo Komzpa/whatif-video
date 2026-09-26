@@ -21,17 +21,24 @@ it mentions were removed in this fork, see below).
 - `data/lyrics.json`, `data/audio.json`: word timings, beats and chapter sections (from `analysis/`).
   The dev server serves `data/` and `audio/` from the repo root; `app/src/data-fallback/` would stand
   in for a missing data file.
-- `app/src/contents.ts`: the contents table (lyric line → chapter → page). The only place that maps
-  lines to pages.
+- `app/src/contents.ts`: the contents table (lyric line → chapter → page → the heading as printed in
+  the handbook, plus the introduction row, p. 12). The only place that maps lines to pages; the
+  printed heading is shown small under each sung line as the translation note (TREATMENT r4).
 - `app/src/timeline.ts`: one entry per chapter; boundaries come from `data/audio.json` sections
   (the downbeat at or before each chapter's first line). A chapter without its own scene module
   plays `scenes/placeholder.ts` (its contents entry, sung word by word, and the page counter).
 - `app/src/scenes/_motifs.ts`: shared motifs used by every chapter — contents entry with dot leader
   and per-word karaoke, red page numbers and the split-flap page counter, WHAT TO DO panel,
   callouts, the lamp (volumetric cone, CPU line lighting, flicker/die), the child and the
-  lantern-drone, sky/fog/rain/glows/wet reflections, city blocks, system lines and signage, and the
-  `CityScene` base class.
-- `app/src/scenes/book.ts`, `lost.ts`: the first two chapters.
+  lantern-drone (incl. the child from behind holding the book), sky/fog/rain/glows/wet reflections,
+  depth kit (`FogCards` layered haze that parallaxes, `LightShafts`, `NeonSign` with flicker and a
+  wet-ground reflection), city blocks with thousands of lit windows and megastructure light strips,
+  system lines and signage, and the `CityScene` base class.
+- `app/src/scenes/book.ts`: the intro (the handbook's introduction, p. 12): crane and dolly out of a
+  canyon street over the bridge, the child and the drone from behind with the book, the contents page.
+- `app/src/scenes/lost.ts`: p. 22 the unmapped district (street level, then the drone's map with the
+  grey unmapped area) and p. 26 inside the train car (the doors close on "closed" before the child
+  gets off).
 
 ## Running
 
@@ -41,7 +48,7 @@ bun install
 bunx vite                                  # preview at the printed URL (?t=12.5 to seek)
 bun scripts/render.ts stills --t 5,14 --out ../out/stills
 bun scripts/render.ts sheet --cuts --out ../out/sheets/cuts.png   # 4 frames around every chapter cut
-nice -n 19 ionice -c3 bun scripts/render.ts video --samples 4 --from 0 --to 23.793 --out ../out/draft-book-lost.mp4
+nice -n 19 ionice -c3 bun scripts/render.ts video --samples 4 --from 0 --to 23.793 --out ../out/draft-book-lost-r2.mp4
 ```
 
 `render.ts` starts its own Vite server without live reload (or uses `--url`). On Linux, headless

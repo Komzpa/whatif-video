@@ -9,13 +9,14 @@
 import * as THREE from 'three';
 import { Scene, type Frame, type PostOverrides, type SceneCtx } from '../engine/scene';
 import { FSPass, Layer2D, W, H, rtScale } from '../engine/gl';
+import { GLSL_COMMON } from '../engine/glsl/common';
 import { LineBatch } from '../engine/lines';
 import { HEX, LIN, rgba, mixRgba, type PaletteKey } from '../engine/palette';
 import { F, font, measure, layout } from '../engine/type';
 import { Lyrics, type Line, type Word } from '../engine/lyrics';
 import type { AudioData } from '../engine/audio';
 import { clamp, ease, frameIdx, hash, lerp, mulberry32, noise1, prog, smoothstep } from '../engine/util';
-import { CONTENTS } from '../contents';
+import { CONTENTS, INTRO } from '../contents';
 
 export { HEX, LIN, rgba, mixRgba };
 type RGB = [number, number, number];
@@ -120,7 +121,8 @@ export function drawPageNumber(c: CanvasRenderingContext2D, page: string, right:
  * (`chapter`, `chapterStart`: the scene's own entry), later pages at their lyric line.
  */
 export function pageAt(ly: Lyrics, t: number, chapter?: string, chapterStart?: number): { page: string | null; prev: string | null; since: number } {
-  let page: string | null = null, prev: string | null = null, since = -Infinity;
+  // before the first entry the book is open at its introduction (p. 12)
+  let page: string | null = INTRO.page, prev: string | null = null, since = -Infinity;
   CONTENTS.forEach((e, i) => {
     const first = chapter && e.chapter === chapter && CONTENTS.findIndex((x) => x.chapter === chapter) === i;
     const s = first && chapterStart !== undefined ? chapterStart : ly.get(e.line).words[0]!.start;
@@ -208,6 +210,11 @@ export interface EntryOpts {
   numberClip?: 'tear' | 'frame';
   /** Colour of the printed/sung text (defaults: paper on dark, ink on paper). */
   base?: PaletteKey;
+  /**
+   * The translation note under the sung line: the heading as printed in the handbook, small, in mono,
+   * with its own leader and page (TREATMENT r4). Default: shown for sung (not printed) entries.
+   */
+  heading?: string | false;
 }
 
 /**
@@ -304,8 +311,43 @@ export function drawEntry(c: CanvasRenderingContext2D, ly: Lyrics, au: AudioData
       c.restore();
     }
   }
+  // the printed heading, as a translation note: types in once the first word is sung
+  const entry = CONTENTS.find((e) => ly.get(e.line) === L);
+  const heading = o.heading === false ? null : o.heading ?? (o.printed ? null : entry?.heading ?? null);
+  let noteY = lastY;
+  if (heading && page) {
+    const ns = Math.max(18, Math.round(size * 0.3)), nfam = F.mono(500);
+    const t0 = words[0]!.start + 0.15;
+    const n = o.printed ? heading.length : Math.floor(Math.max(0, t - t0) * 45);
+    if (n > 0) {
+      noteY = lastY + size * 0.36 + ns * 1.25;
+      c.font = font(nfam, ns);
+      c.letterSpacing = `${ns * 0.06}px`;
+      const txt = heading.slice(0, n);
+      c.fillStyle = rgba(base, 0.62);
+      c.fillText(txt, o.x, noteY);
+      const hw = measure(heading, nfam, ns, ns * 0.06);
+      c.letterSpacing = '0px';
+      const done = clamp((n - heading.length) / 12);
+      if (done > 0) {
+        const nr = o.x + Math.min(o.width * 0.62, Math.max(hw + ns * 5, o.width * 0.42));
+        const pw = measure(page.replace('·', '') + (page.includes('·') ? '0' : ''), F.archivo(62, 900), ns * 1.15);
+        const d0 = o.x + hw + ns * 0.5, d1 = nr - pw - ns * 0.4;
+        c.fillStyle = rgba(base, 0.5);
+        const nd = Math.floor((d1 - d0) / (ns * 0.42));
+        for (let i = 0; i < Math.floor(nd * done); i++) c.fillRect(d0 + i * ns * 0.42, noteY - 2, 2, 2);
+        if (done >= 1) drawPageNumber(c, page, nr, noteY, ns * 1.15, { clip: 'tear', alpha: 0.9 });
+      }
+    }
+  }
   c.restore();
-  return { rows: rows.length, lastY, wordX, widths, leader: [l0, l1] as [number, number], numRight, numW, height: lead * (rows.length - 1) + size };
+  return { rows: rows.length, lastY, wordX, widths, leader: [l0, l1] as [number, number], numRight, numW, height: lead * (rows.length - 1) + size, noteY };
+}
+
+/** A printed (non-sung) contents line, e.g. the introduction row: a Line with untimed words. */
+export function printedLine(text: string): Line {
+  const words = text.split(' ').map((w, i) => ({ w, start: -1, end: -1, line: -1, index: i, gi: -1 }));
+  return { i: -1, text, start: -1, end: -1, words };
 }
 
 /** Visibility of a lyric line as an on-screen entry: from 0.4 s before its first word to `hold` after its end. */
@@ -1003,65 +1045,123 @@ export function drawChild(c: CanvasRenderingContext2D, x: number, y: number, h: 
 }
 
 /**
- * The child seen from behind and above (over the shoulder, reading): the hood as a dome at (cx, cy)
- * with radius s, shoulders spreading below, sleeves reaching forward (up the screen) to `hands`.
+ * The child seen from behind and a little above, reading: the hood (a soft dome, slightly pointed at the
+ * back, bowed forward), a small shoulder line, the coat's back falling out of frame, and two sleeves
+ * bending forward at the elbows to two small hands that hold the book's edges (`hands`, screen px).
+ * `s` = the hood's radius in px. The coat is the only warm colour; the hands are pale and cool.
+ * Draw the book first: the hands and the hood overlap it.
  */
-export function drawChildOver(c: CanvasRenderingContext2D, cx: number, cy: number, s: number, o: {
-  hands: [{ x: number; y: number }, { x: number; y: number }]; t?: number; lit?: number; litSide?: -1 | 1; shade?: number;
+export function drawChildBack(c: CanvasRenderingContext2D, cx: number, cy: number, s: number, o: {
+  hands: [{ x: number; y: number }, { x: number; y: number }]; t?: number; lit?: number; litFrom?: { x: number; y: number }; shade?: number;
 }) {
-  const coat = mixRgba('coat', 'shadow', (o.shade ?? 0) * 0.7);
-  const dark = mixRgba('coat', 'shadow', 0.5 + (o.shade ?? 0) * 0.3);
-  const t = o.t ?? 0, breathe = Math.sin(t * 1.7) * s * 0.01;
+  const t = o.t ?? 0, lit = o.lit ?? 0, shade = o.shade ?? 0;
+  const breathe = Math.sin(t * 1.7) * s * 0.012;
+  const coat = mixRgba('coat', 'shadow', 0.12 + shade * 0.6);
+  const coatLo = mixRgba('coat', 'shadow', 0.55 + shade * 0.3);
+  const seam = mixRgba('coat', 'shadow', 0.62 + shade * 0.25);
+  const L = o.litFrom ?? { x: cx - s * 2, y: cy - s * 2 };
+  const lw = Math.max(1.2, s * 0.028);
   c.save();
-  // sleeves: from the shoulders to the hands (long, covering the hands)
-  for (const [i, sx] of [[0, -1], [1, 1]] as const) {
-    const h = o.hands[i];
-    const sh = { x: cx + sx * s * 1.25, y: cy + s * 0.75 };
-    const w0 = s * 0.42, w1 = s * 0.26;
-    const ang = Math.atan2(h.y - sh.y, h.x - sh.x), nx = -Math.sin(ang), ny = Math.cos(ang);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  const coatFill = (y0: number, y1: number) => {
+    const g = c.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, coat); g.addColorStop(1, coatLo);
+    return g;
+  };
+  // ---- sleeves (behind the back at the shoulder, in front of the book at the cuff)
+  const sleeve = (sh: { x: number; y: number }, el: { x: number; y: number }, h: { x: number; y: number }, w0: number, w1: number) => {
+    // a tapered tube shoulder -> elbow -> wrist, as a thick stroked path in two tones
+    c.strokeStyle = coatLo; c.lineWidth = w0 * 2;
+    c.beginPath(); c.moveTo(sh.x, sh.y); c.quadraticCurveTo(el.x, el.y, h.x, h.y); c.stroke();
+    c.strokeStyle = coat; c.lineWidth = w0 * 1.55;
+    c.beginPath(); c.moveTo(sh.x, sh.y - w0 * 0.2); c.quadraticCurveTo(el.x, el.y - w0 * 0.25, lerp(h.x, el.x, 0.12), lerp(h.y, el.y, 0.12) - w1 * 0.2); c.stroke();
+    // the elbow crease and the cuff (a little too long: it swallows half the hand)
+    c.strokeStyle = seam; c.lineWidth = lw;
+    const ex = lerp(lerp(sh.x, el.x, 0.5), lerp(el.x, h.x, 0.5), 0.5), ey = lerp(lerp(sh.y, el.y, 0.5), lerp(el.y, h.y, 0.5), 0.5);
+    c.beginPath(); c.arc(ex, ey, w0 * 0.55, -0.4, 1.2); c.stroke();
+    const ang = Math.atan2(h.y - el.y, h.x - el.x);
     c.fillStyle = coat;
-    c.beginPath();
-    c.moveTo(sh.x + nx * w0, sh.y + ny * w0);
-    c.quadraticCurveTo((sh.x + h.x) / 2 + nx * w0 * 1.1 + sx * s * 0.15, (sh.y + h.y) / 2 + ny * w0, h.x + nx * w1, h.y + ny * w1);
-    c.arc(h.x, h.y, w1, ang + Math.PI / 2, ang - Math.PI / 2, true);
-    c.quadraticCurveTo((sh.x + h.x) / 2 - nx * w0 * 0.9, (sh.y + h.y) / 2 - ny * w0, sh.x - nx * w0, sh.y - ny * w0);
-    c.closePath();
-    c.fill();
-    c.strokeStyle = dark; c.lineWidth = Math.max(1, s * 0.02);
-    c.beginPath(); c.arc(h.x, h.y, w1 * 0.92, ang + Math.PI / 2 + 0.3, ang - Math.PI / 2 - 0.3, true); c.stroke();
+    c.beginPath(); c.ellipse(h.x - Math.cos(ang) * w1 * 0.3, h.y - Math.sin(ang) * w1 * 0.3, w1 * 1.05, w1 * 0.8, ang, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = seam; c.beginPath(); c.ellipse(h.x - Math.cos(ang) * w1 * 0.3, h.y - Math.sin(ang) * w1 * 0.3, w1 * 1.05, w1 * 0.8, ang, -1.2, 1.2); c.stroke();
+  };
+  const hand = (h: { x: number; y: number }, dir: 1 | -1) => {
+    // small pale fingers curled over the book's edge (cool: the coat stays the only warm thing)
+    const skin = mixRgba('paper', 'concrete', 0.45), skinD = mixRgba('paper', 'shadow', 0.55);
+    c.fillStyle = skin;
+    c.beginPath(); c.ellipse(h.x + dir * s * 0.05, h.y - s * 0.08, s * 0.2, s * 0.15, dir * 0.4, 0, Math.PI * 2); c.fill();
+    for (let i = 0; i < 4; i++) {
+      c.beginPath();
+      c.ellipse(h.x + dir * s * (0.16 + i * 0.015) , h.y - s * (0.2 - i * 0.09), s * 0.085, s * 0.05, dir * 0.2, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.strokeStyle = skinD; c.lineWidth = Math.max(0.8, s * 0.012);
+    for (let i = 1; i < 4; i++) { c.beginPath(); c.moveTo(h.x + dir * s * 0.1, h.y - s * (0.245 - i * 0.09)); c.lineTo(h.x + dir * s * 0.22, h.y - s * (0.245 - i * 0.09)); c.stroke(); }
+  };
+  const shL = { x: cx - s * 1.3, y: cy + s * 1.0 }, shR = { x: cx + s * 1.3, y: cy + s * 1.0 };
+  const [hL, hR] = o.hands;
+  const elL = { x: cx - s * 1.95, y: cy + s * 0.35 }, elR = { x: cx + s * 2.05, y: cy + s * 0.55 };
+  sleeve(shL, elL, hL, s * 0.34, s * 0.22);
+  sleeve(shR, elR, hR, s * 0.34, s * 0.22);
+  hand(hL, 1); hand(hR, -1);
+  // cuffs over the hands' base
+  for (const [h, el] of [[hL, elL], [hR, elR]] as const) {
+    const ang = Math.atan2(h.y - el.y, h.x - el.x);
+    c.fillStyle = coat;
+    c.beginPath(); c.ellipse(h.x - Math.cos(ang) * s * 0.2, h.y - Math.sin(ang) * s * 0.2, s * 0.2, s * 0.17, ang, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = seam; c.lineWidth = lw;
+    c.beginPath(); c.ellipse(h.x - Math.cos(ang) * s * 0.2, h.y - Math.sin(ang) * s * 0.2, s * 0.2, s * 0.17, ang, -1.3, 1.3); c.stroke();
   }
-  // shoulders and back
-  c.fillStyle = coat;
+  // ---- the back: a small shoulder line, the coat falling away out of frame
+  const yB = cy + s * 5;
+  c.fillStyle = coatFill(cy + s * 0.6, yB);
   c.beginPath();
-  c.moveTo(cx - s * 2.6, cy + s * 3);
-  c.bezierCurveTo(cx - s * 2.2, cy + s * 0.9, cx - s * 1.5, cy + s * 0.35, cx - s * 0.6, cy + s * 0.3 + breathe);
-  c.lineTo(cx + s * 0.6, cy + s * 0.3 + breathe);
-  c.bezierCurveTo(cx + s * 1.5, cy + s * 0.35, cx + s * 2.2, cy + s * 0.9, cx + s * 2.6, cy + s * 3);
+  c.moveTo(cx - s * 2.0, yB);
+  c.bezierCurveTo(cx - s * 1.85, cy + s * 2.0, cx - s * 1.75, cy + s * 1.05, cx - s * 1.2, cy + s * 0.82 + breathe);
+  c.quadraticCurveTo(cx, cy + s * 0.55 + breathe, cx + s * 1.2, cy + s * 0.82 + breathe);
+  c.bezierCurveTo(cx + s * 1.75, cy + s * 1.05, cx + s * 1.85, cy + s * 2.0, cx + s * 2.0, yB);
   c.closePath();
   c.fill();
-  // hood dome (a little pointed at the back = towards the camera, i.e. down the screen)
-  c.beginPath();
-  c.moveTo(cx - s * 0.98, cy + s * 0.15);
-  c.bezierCurveTo(cx - s * 1.02, cy - s * 0.75, cx - s * 0.5, cy - s * 1.02, cx, cy - s * 1.02);
-  c.bezierCurveTo(cx + s * 0.5, cy - s * 1.02, cx + s * 1.02, cy - s * 0.75, cx + s * 0.98, cy + s * 0.15);
-  c.bezierCurveTo(cx + s * 0.8, cy + s * 0.75, cx + s * 0.3, cy + s * 1.05, cx, cy + s * 1.12);
-  c.bezierCurveTo(cx - s * 0.3, cy + s * 1.05, cx - s * 0.8, cy + s * 0.75, cx - s * 0.98, cy + s * 0.15);
-  c.closePath();
-  c.fill();
-  // seams: the hood's centre seam and its rim against the shoulders
-  c.strokeStyle = dark; c.lineWidth = Math.max(1, s * 0.03); c.lineCap = 'round';
-  c.beginPath(); c.moveTo(cx, cy - s * 1.0); c.quadraticCurveTo(cx + s * 0.04, cy, cx, cy + s * 1.1); c.stroke();
-  c.beginPath(); c.moveTo(cx - s * 0.96, cy + s * 0.3); c.quadraticCurveTo(cx - s * 0.8, cy + s * 0.95, cx, cy + s * 1.18); c.quadraticCurveTo(cx + s * 0.8, cy + s * 0.95, cx + s * 0.96, cy + s * 0.3); c.stroke();
-  // the lamp's warmth on the top of the hood
-  if ((o.lit ?? 0) > 0.01) {
-    c.globalCompositeOperation = 'source-atop';
-    const side = o.litSide ?? -1;
-    const g = c.createRadialGradient(cx + side * s * 0.6, cy - s * 0.9, s * 0.1, cx + side * s * 0.6, cy - s * 0.9, s * 1.8);
-    g.addColorStop(0, rgba('lamp', 0.55 * o.lit!));
-    g.addColorStop(1, rgba('lamp', 0));
-    c.fillStyle = g;
-    c.fillRect(cx - s * 3, cy - s * 1.5, s * 6, s * 5);
-    c.globalCompositeOperation = 'source-over';
+  // folds of the too-big coat and the centre back seam
+  c.strokeStyle = seam; c.lineWidth = lw;
+  c.beginPath(); c.moveTo(cx + s * 0.02, cy + s * 1.15); c.bezierCurveTo(cx + s * 0.06, cy + s * 2.2, cx - s * 0.04, cy + s * 3.2, cx + s * 0.02, yB); c.stroke();
+  c.globalAlpha = 0.6;
+  c.beginPath(); c.moveTo(cx - s * 1.2, cy + s * 1.5); c.quadraticCurveTo(cx - s * 1.0, cy + s * 2.6, cx - s * 1.25, yB); c.stroke();
+  c.beginPath(); c.moveTo(cx + s * 1.25, cy + s * 1.45); c.quadraticCurveTo(cx + s * 1.05, cy + s * 2.7, cx + s * 1.3, yB); c.stroke();
+  c.globalAlpha = 1;
+  // ---- the hood: a soft dome, pointed at the back (towards us = down the screen), bowed forward
+  const hood = new Path2D();
+  hood.moveTo(cx - s * 0.98, cy + s * 0.2);
+  hood.bezierCurveTo(cx - s * 1.04, cy - s * 0.7, cx - s * 0.55, cy - s * 1.05, cx + s * 0.02, cy - s * 1.04);
+  hood.bezierCurveTo(cx + s * 0.58, cy - s * 1.03, cx + s * 1.05, cy - s * 0.68, cx + s * 0.98, cy + s * 0.2);
+  hood.bezierCurveTo(cx + s * 0.85, cy + s * 0.8, cx + s * 0.35, cy + s * 1.12, cx, cy + s * 1.24);
+  hood.bezierCurveTo(cx - s * 0.35, cy + s * 1.12, cx - s * 0.85, cy + s * 0.8, cx - s * 0.98, cy + s * 0.2);
+  hood.closePath();
+  const hg = c.createRadialGradient(cx - s * 0.2, cy - s * 0.4, s * 0.1, cx, cy + s * 0.2, s * 1.35);
+  hg.addColorStop(0, coat); hg.addColorStop(1, coatLo);
+  c.fillStyle = hg;
+  c.fill(hood);
+  c.strokeStyle = seam; c.lineWidth = lw * 1.2;
+  // centre seam from the crown down to the point, and the gathered hem where it meets the collar
+  c.beginPath(); c.moveTo(cx + s * 0.02, cy - s * 1.0); c.bezierCurveTo(cx + s * 0.07, cy - s * 0.3, cx + s * 0.04, cy + s * 0.5, cx, cy + s * 1.2); c.stroke();
+  c.beginPath(); c.moveTo(cx - s * 0.92, cy + s * 0.45); c.quadraticCurveTo(cx - s * 0.6, cy + s * 1.05, cx, cy + s * 1.3); c.quadraticCurveTo(cx + s * 0.6, cy + s * 1.05, cx + s * 0.92, cy + s * 0.45); c.stroke();
+  c.globalAlpha = 0.5;
+  c.beginPath(); c.moveTo(cx - s * 0.62, cy - s * 0.7); c.quadraticCurveTo(cx - s * 0.75, cy - s * 0.1, cx - s * 0.55, cy + s * 0.7); c.stroke();
+  c.beginPath(); c.moveTo(cx + s * 0.64, cy - s * 0.68); c.quadraticCurveTo(cx + s * 0.78, cy - s * 0.1, cx + s * 0.57, cy + s * 0.7); c.stroke();
+  c.globalAlpha = 1;
+  // ---- the lamp's warmth: a rim on the side facing the drone
+  if (lit > 0.01) {
+    c.save();
+    c.clip(hood);
+    const g = c.createRadialGradient(L.x, L.y, s * 0.2, L.x, L.y, s * 3.2);
+    g.addColorStop(0, rgba('lamp', 0.32 * lit)); g.addColorStop(0.45, rgba('lamp', 0.12 * lit)); g.addColorStop(1, rgba('lamp', 0));
+    c.fillStyle = g; c.globalCompositeOperation = 'lighter';
+    c.fillRect(cx - s * 2, cy - s * 2, s * 4, s * 4);
+    c.restore();
+    // a thin bright edge along the hood and the shoulder on the lamp side
+    c.strokeStyle = rgba('lamp', 0.55 * lit); c.lineWidth = lw * 1.3;
+    const sd = L.x < cx ? -1 : 1;
+    c.beginPath(); c.arc(cx, cy - s * 0.05, s * 1.0, sd < 0 ? Math.PI * 1.05 : -0.9, sd < 0 ? Math.PI * 1.6 : -0.05); c.stroke();
+    c.beginPath(); c.moveTo(cx + sd * s * 1.15, cy + s * 0.85); c.quadraticCurveTo(cx + sd * s * 1.7, cy + s * 1.05, cx + sd * s * 1.85, cy + s * 1.9); c.stroke();
   }
   c.restore();
 }
@@ -1240,6 +1340,8 @@ export class CityBlocks {
   towers: Tower[] = [];
   mesh: THREE.InstancedMesh;
   windows: { x: number; y: number; z: number; w: number; h: number; warm: number; seed: number }[] = [];
+  strips: { x: number; y: number; z: number; rgb: RGB; seed: number }[] = [];
+  beacons: { x: number; y: number; z: number; seed: number }[] = [];
   edges = new LitLines();
   constructor(o: {
     seed?: number; count?: number; x0?: number; x1?: number; z0?: number; z1?: number; hMin?: number; hMax?: number;
@@ -1270,6 +1372,10 @@ export class CityBlocks {
       const z = lerp(z0 * 1.05, z0 * 0.7, r());
       const w = lerp(160, 320, r()), h = lerp(700, 1100, r());
       this.towers.push({ x, z, w, d: w * 0.6, h, y0: yb, shade: 0.2 * r() });
+      // a vertical light strip up the face (the megastructure's spine) and a beacon on top
+      const sx = x + (r() - 0.5) * w * 0.4, col = r() < 0.4 ? LIN.neon : LIN.sodium;
+      for (let y = yb + 6; y < yb + h; y += 3.2) this.strips.push({ x: sx, y, z: z + w * 0.3 + 0.5, rgb: col, seed: y });
+      this.beacons.push({ x, y: yb + h + (r() < 0.7 ? h * 0.25 : 0) + 4, z, seed: r() });
       if (r() < 0.7) this.towers.push({ x, z, w: w * 0.3, d: w * 0.3, h: h * 0.25, y0: yb + h, shade: 0 });
     }
     if (o.extra) this.towers.push(...o.extra);
@@ -1287,8 +1393,10 @@ export class CityBlocks {
       const rate = (o.windowRate ?? 0.035) * (tw.w > 150 ? 0.35 : 1);
       const floors = Math.floor(tw.h / 4.2), cols = Math.max(1, Math.floor(tw.w / 3.6));
       const rr = mulberry32(i * 7919 + (o.seed ?? 3));
+      const litFloors = new Set<number>();
+      for (let fl = 1; fl < floors; fl++) if (rr() < rate * 1.6) litFloors.add(fl);
       for (let fl = 1; fl < floors; fl++) for (let cc = 0; cc < cols; cc++) {
-        if (rr() > rate) continue;
+        if (rr() > (litFloors.has(fl) ? 0.55 : rate)) continue;
         this.windows.push({ x: tw.x - tw.w / 2 + (cc + 0.5) * (tw.w / cols), y: tw.y0 + fl * 4.2, z: tw.z + tw.d / 2 + 0.3, w: 1.1, h: 1.3, warm: rr(), seed: rr() });
       }
       if (o.edgeWithin && o.edgeWithin(tw)) {
@@ -1312,9 +1420,208 @@ export class CityBlocks {
       if (f < 0.02) continue;
       const k = o.off ? o.off(w) : 1;
       if (k <= 0) continue;
-      const tv = 0.85 + 0.15 * Math.sin(t * (0.3 + w.seed) + w.seed * 40);
+      const tv = (0.85 + 0.15 * Math.sin(t * (0.3 + w.seed) + w.seed * 40)) * (0.3 + 0.7 * smoothstep(30, 220, d));
       g.add(w.x, w.y, w.z, w.w, w.h, w.warm > 0.3 ? warm : cold, 1.3 * f * gain * tv * k, 3.5);
     }
+  }
+  /** Megastructure light strips (a slow pulse running up) and blinking red beacons. */
+  emitStrips(g: GlowBatch, cam: THREE.Camera, t: number, o: { density?: number; gain?: number } = {}) {
+    const cp = (cam as THREE.PerspectiveCamera).position;
+    const dens = o.density ?? 0.001, gain = o.gain ?? 1;
+    for (const s of this.strips) {
+      const f = Math.exp(-Math.hypot(s.x - cp.x, s.y - cp.y, s.z - cp.z) * dens);
+      const run = 0.55 + 0.45 * Math.pow(0.5 + 0.5 * Math.sin(s.y * 0.02 - t * 2.2), 6);
+      g.add(s.x, s.y, s.z, 2.2, 1.6, s.rgb, 1.6 * f * gain * run, 3);
+    }
+    for (const b of this.beacons) {
+      const f = Math.exp(-Math.hypot(b.x - cp.x, b.y - cp.y, b.z - cp.z) * dens * 0.8);
+      const on = ((t + b.seed * 2) % 1.6) < 0.25 ? 1 : 0.08;
+      g.add(b.x, b.y, b.z, 5, 5, LIN.neon, 3 * f * on * gain, 4);
+    }
+  }
+}
+
+
+// =====================================================================================================
+// Depth: fog cards (layered haze that parallaxes), light shafts through it, neon signs with wet reflections
+// =====================================================================================================
+
+const FOGCARD_VERT = /* glsl */ `
+precision highp float;
+in vec3 position; in vec2 uv;
+uniform mat4 projectionMatrix, modelViewMatrix, modelMatrix;
+out vec3 vW; out vec2 vUv;
+void main() { vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+
+/**
+ * Layered haze: vertical translucent sheets at fixed depths, each a drifting fbm veil graded by height
+ * (denser low). Being real planes in the scene, they parallax against the towers as the camera moves;
+ * they fade out as the camera flies through them.
+ */
+export class FogCards {
+  scene = new THREE.Scene();
+  cards: { mesh: THREE.Mesh; mat: THREE.RawShaderMaterial; z: number }[] = [];
+  add(o: { z: number; x?: number; w: number; y0: number; y1: number; color: RGB; alpha: number; scale?: number; seed?: number; low?: number; high?: number; rotY?: number }) {
+    const mat = new THREE.RawShaderMaterial({
+      glslVersion: THREE.GLSL3, vertexShader: FOGCARD_VERT,
+      fragmentShader: `precision highp float;\nin vec3 vW; in vec2 vUv; out vec4 fragColor;\n${GLSL_COMMON}\n
+        uniform vec3 col, camPos; uniform float alpha, time, sc, seed, low, high, cardZ;
+        void main() {
+          float n = fbm(vec2(vW.x * sc + time * 0.6 * sc * 20.0 + seed, vW.y * sc * 2.4 + seed * 0.37), 5) * 0.5 + 0.5;
+          float g = smoothstep(high, low, vW.y);
+          float edge = smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x) * smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.7, vUv.y);
+          float near = smoothstep(4.0, 40.0, abs(camPos.z - cardZ));
+          float a = alpha * mix(0.35, 1.0, n * n * 1.6) * g * edge * near;
+          fragColor = vec4(col * a, a);
+        }`,
+      uniforms: { col: { value: new THREE.Vector3(...o.color) }, camPos: { value: new THREE.Vector3() }, alpha: { value: o.alpha }, time: { value: 0 },
+        sc: { value: o.scale ?? 0.004 }, seed: { value: o.seed ?? 0 }, low: { value: o.low ?? o.y0 }, high: { value: o.high ?? o.y1 }, cardZ: { value: o.z } },
+      transparent: true, depthWrite: false, depthTest: true, blending: THREE.CustomBlending,
+    });
+    mat.blendEquation = THREE.AddEquation; mat.blendSrc = THREE.OneFactor; mat.blendDst = THREE.OneMinusSrcAlphaFactor;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(o.w, o.y1 - o.y0), mat);
+    mesh.position.set(o.x ?? 0, (o.y0 + o.y1) / 2, o.z);
+    mesh.rotation.y = o.rotY ?? 0;
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
+    this.cards.push({ mesh, mat, z: o.z });
+    return mesh;
+  }
+  render(renderer: THREE.WebGLRenderer, out: THREE.WebGLRenderTarget, cam: THREE.Camera, t: number, gain = 1) {
+    for (const c of this.cards) {
+      (c.mat.uniforms.camPos!.value as THREE.Vector3).copy((cam as THREE.PerspectiveCamera).position);
+      c.mat.uniforms.time!.value = t;
+      c.mesh.visible = gain > 0.001;
+      c.mat.uniforms.alpha!.value = (c.mat.userData.a0 ??= c.mat.uniforms.alpha!.value) * gain;
+    }
+    renderer.setRenderTarget(out);
+    renderer.render(this.scene, cam);
+  }
+}
+
+/**
+ * Light shafts: long soft beams of haze-light (sun through a gap in the smog, a searchlight), each a
+ * camera-facing ribbon along its axis, additive, depth-tested against the city, faded by distance.
+ */
+export class LightShafts {
+  scene = new THREE.Scene();
+  mats: THREE.RawShaderMaterial[] = [];
+  add(o: { top: V3; dir: V3; length: number; width: number; color: RGB; intensity: number; seed?: number; fog?: number; spread?: number }) {
+    const geo = new THREE.PlaneGeometry(2, 1, 1, 24);
+    geo.translate(0, 0.5, 0); // x: -1..1 across, y: 0..1 along
+    const d = new THREE.Vector3(...o.dir).normalize();
+    const mat = new THREE.RawShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      vertexShader: /* glsl */ `precision highp float;
+        in vec3 position; uniform mat4 projectionMatrix, viewMatrix; uniform vec3 top, dir, camPos; uniform float len, width, spread;
+        out vec2 vP; out vec3 vW;
+        void main() {
+          vec3 c = top + dir * len * position.y;
+          vec3 side = normalize(cross(dir, camPos - c));
+          vec3 w = c + side * position.x * width * (1.0 + spread * position.y);
+          vP = position.xy; vW = w;
+          gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
+        }`,
+      fragmentShader: `precision highp float;\nin vec2 vP; in vec3 vW; out vec4 fragColor;\n${GLSL_COMMON}\n
+        uniform vec3 col, camPos; uniform float inten, time, seed, fogD;
+        void main() {
+          float across = pow(1.0 - vP.x * vP.x, 2.0);
+          float along = smoothstep(0.0, 0.08, vP.y) * pow(1.0 - vP.y, 1.6);
+          float streak = 0.6 + 0.4 * fbm(vec2(vP.x * 3.0 + seed, vP.y * 2.0 - time * 0.05), 3);
+          float fog = exp(-length(vW - camPos) * fogD);
+          fragColor = vec4(col * inten * across * along * streak * fog, 0.0);
+        }`,
+      uniforms: { top: { value: new THREE.Vector3(...o.top) }, dir: { value: d }, camPos: { value: new THREE.Vector3() }, len: { value: o.length }, width: { value: o.width },
+        spread: { value: o.spread ?? 0.6 }, col: { value: new THREE.Vector3(...o.color) }, inten: { value: o.intensity }, time: { value: 0 }, seed: { value: o.seed ?? 0 }, fogD: { value: o.fog ?? 0.0006 } },
+      transparent: true, depthWrite: false, depthTest: true, side: THREE.DoubleSide, blending: THREE.CustomBlending,
+    });
+    mat.blendEquation = THREE.AddEquation; mat.blendSrc = THREE.OneFactor; mat.blendDst = THREE.OneFactor;
+    const m = new THREE.Mesh(geo, mat);
+    m.frustumCulled = false;
+    this.scene.add(m);
+    this.mats.push(mat);
+  }
+  render(renderer: THREE.WebGLRenderer, out: THREE.WebGLRenderTarget, cam: THREE.Camera, t: number, gain = 1) {
+    for (const m of this.mats) {
+      (m.uniforms.camPos!.value as THREE.Vector3).copy((cam as THREE.PerspectiveCamera).position);
+      m.uniforms.time!.value = t;
+      m.uniforms.inten!.value = (m.userData.i0 ??= m.uniforms.inten!.value) * gain;
+    }
+    renderer.setRenderTarget(out);
+    renderer.render(this.scene, cam);
+  }
+}
+
+type V3 = [number, number, number];
+
+/**
+ * A city sign in 3D: neon letters (bare tubes, additive) or a screen (dark panel, lit text), with a
+ * slight flicker and its reflection on the wet ground below (a mirrored, dimmed copy seen through the
+ * translucent ground). Every sign speaks in the city's system-line voice.
+ */
+export class NeonSign {
+  mesh: THREE.Mesh; refl: THREE.Mesh | null = null;
+  mat: THREE.MeshBasicMaterial; rmat: THREE.MeshBasicMaterial | null = null;
+  w: number; h: number; pos: THREE.Vector3;
+  constructor(public o: {
+    lines: string[]; pos: V3; height: number; rotY?: number; color?: PaletteKey; kind?: 'neon' | 'screen';
+    groundY?: number; bright?: number; flicker?: number; seed?: number; vertical?: boolean; reflect?: number; wall?: 'left' | 'right';
+  }) {
+    const kind = o.kind ?? 'neon', col = o.color ?? 'neon';
+    const fam = F.mono(600), fs = 120, tr = fs * 0.12;
+    const lines = o.vertical ? o.lines[0]!.split('') : o.lines;
+    // measure with the canvas itself (what it draws is what we size for)
+    const mc = document.createElement('canvas').getContext('2d')!;
+    mc.font = font(fam, fs); mc.letterSpacing = o.vertical ? '0px' : `${tr}px`;
+    const wMax = Math.max(...lines.map((l) => mc.measureText(l).width));
+    const lh = fs * (o.vertical ? 1.05 : 1.3);
+    const pad = fs * 0.6;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(wMax + pad * 2); cv.height = Math.ceil(lh * lines.length + pad * 1.4);
+    const c = cv.getContext('2d')!;
+    if (kind === 'screen') {
+      c.fillStyle = rgba('shadow', 0.92); c.fillRect(0, 0, cv.width, cv.height);
+      c.strokeStyle = rgba(col, 0.55); c.lineWidth = fs * 0.06; c.strokeRect(fs * 0.12, fs * 0.12, cv.width - fs * 0.24, cv.height - fs * 0.24);
+    }
+    c.font = font(fam, fs); c.letterSpacing = o.vertical ? '0px' : `${tr}px`;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    lines.forEach((l, i) => {
+      const y = pad * 0.7 + lh * (i + 0.5);
+      if (kind === 'neon') { c.shadowColor = rgba(col, 0.9); c.shadowBlur = fs * 0.25; c.fillStyle = rgba(col, 0.55); c.fillText(l, cv.width / 2, y); c.shadowBlur = 0; }
+      c.fillStyle = kind === 'neon' ? mixRgba(col, 'paper', 0.35) : rgba(col);
+      c.fillText(l, cv.width / 2, y);
+    });
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    this.h = o.height; this.w = o.height * cv.width / cv.height;
+    const additive = kind === 'neon';
+    this.mat = new THREE.MeshBasicMaterial({ map: tex, fog: true, transparent: additive, depthWrite: !additive, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(this.w, this.h), this.mat);
+    this.pos = new THREE.Vector3(...o.pos);
+    // mounted on a wall (x = pos.x): slide the sign out so its angled plane doesn't sink into the wall
+    if (o.wall) this.pos.x += (o.wall === 'left' ? 1 : -1) * (Math.abs(Math.cos(o.rotY ?? 0)) * this.w / 2 + 0.4);
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = o.rotY ?? 0;
+    if (o.groundY !== undefined) {
+      this.rmat = new THREE.MeshBasicMaterial({ map: tex, fog: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+      this.refl = new THREE.Mesh(new THREE.PlaneGeometry(this.w, this.h), this.rmat);
+      this.refl.position.set(this.pos.x, 2 * o.groundY - o.pos[1], o.pos[2]);
+      this.refl.rotation.y = o.rotY ?? 0;
+      this.refl.scale.y = -1.25; // stretched by the wet ground
+    }
+  }
+  /** Per-frame brightness (flicker), `k` 0..1 master (e.g. a blackout). */
+  update(t: number, k = 1) {
+    const b = (this.o.bright ?? 1.6) * k * flicker(t, this.o.flicker ?? 0.08, this.o.seed ?? 1);
+    this.mat.color.setScalar(b);
+    if (this.rmat) this.rmat.color.setScalar(b * (this.o.reflect ?? 0.3));
+  }
+  /** A soft halo of the sign's colour around it (3D glow), and its smear on the ground. */
+  glow(g: GlowBatch, k = 1) {
+    const rgb = LIN[this.o.color ?? 'neon'];
+    const b = (this.o.bright ?? 1.6) * k * 0.05;
+    g.add(this.pos.x, this.pos.y, this.pos.z + 0.5, this.w * 0.8, this.h * 1.6, rgb, b, 2);
+    if (this.o.groundY !== undefined) g.add(this.pos.x, this.o.groundY + 0.3, this.pos.z + 0.5, this.w * 0.5, Math.min(40, (this.pos.y - this.o.groundY) * 0.6 + this.h), rgb, b * 1.2, 2.5);
   }
 }
 
@@ -1336,7 +1643,7 @@ export abstract class CityScene extends Scene {
   lines3D = new LineBatch(60000, { screen2D: false, blend: 'normal', depthTest: true });
   lines2D = new LineBatch(8000, { screen2D: true, blend: 'add' });
   glow2D = new GlowBatch(512, { screen2D: true });
-  glow3D = new GlowBatch(20000, { screen2D: false, depthTest: true });
+  glow3D = new GlowBatch(48000, { screen2D: false, depthTest: true });
   world = new Layer2D();
   ui = new Layer2D();
 

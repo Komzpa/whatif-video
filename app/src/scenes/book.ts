@@ -7,11 +7,11 @@ import * as THREE from 'three';
 import type { Frame } from '../engine/scene';
 import { W, H } from '../engine/gl';
 import { F, font, measure } from '../engine/type';
-import { clamp, ease, lerp, prog, smoothstep, hash, mulberry32 } from '../engine/util';
-import { CONTENTS } from '../contents';
+import { clamp, ease, keys, lerp, prog, smoothstep, hash, mulberry32 } from '../engine/util';
+import { CONTENTS, INTRO } from '../contents';
 import {
-  CityScene, CityBlocks, LitLines, drawChildOver, drawBeam2D, type Tower, LIN, POST_BASE, SAFE, rgba, mixRgba, scaleRGB, mixRGB, smogSky, solid, col3, project,
-  drawChild, drawDrone, droneGlow, drawCallout, drawEntry, drawPageNumber, drawPageCounter, drawSystemLine, rain, makeLamp, flicker,
+  CityScene, CityBlocks, LitLines, drawChildBack, drawBeam2D, type Tower, LIN, POST_BASE, SAFE, rgba, mixRgba, scaleRGB, mixRGB, smogSky, solid, col3, project,
+  drawChild, drawDrone, droneGlow, drawCallout, drawEntry, drawPageNumber, drawPageCounter, rain, flicker, printedLine, NeonSign, FogCards, LightShafts, GlowBatch,
 } from './_motifs';
 
 type V3 = [number, number, number];
@@ -20,44 +20,84 @@ const v = (a: V3) => new THREE.Vector3(...a);
 // the child sits on the bridge deck under the canopy, facing the city (-z)
 const CHILD: V3 = [6, 42, -0.6];
 const DECK_Y = 42;
-const SCREEN_TEXT = 'CURFEW FOR MINORS 22:00 · FOR YOUR SAFETY';
+const GROUND = -60; // the street at the bottom of the canyon (wet)
+// megablock 7: the huge slab the MEGABLOCK callout points at
+const MEGA = { x: -250, z: -820, w: 280, d: 150, h: 880 };
 
-// the contents page, in page units (1000 wide)
+// the contents page, in page units (1000 wide): the introduction row, the header, the thirteen entries
 const PW_ = 1000, PH_ = 1300;
-const PAGE_TOP = 250, PAGE_STEP = 62, PAGE_SIZE = 35, PAGE_X = 70, PAGE_RIGHT = 920;
+const INTRO_Y = 118, HEAD_Y = 212;
+const PAGE_TOP = 290, PAGE_STEP = 61, PAGE_SIZE = 35, PAGE_X = 70, PAGE_RIGHT = 920;
 const TEAR_X = 930; // the torn edge: entries whose page ends in '·' lose their last digit here
+
+// the city speaks: signs at different depths (TREATMENT: every sign has something to say)
+const SIGNS: ConstructorParameters<typeof NeonSign>[0][] = [
+  { lines: ['CURFEW FOR MINORS 22:00 · FOR YOUR SAFETY'], pos: [-66, 62, -170.4], height: 3.8, rotY: 0.12, kind: 'screen', bright: 1.5, flicker: 0.05, seed: 2 },
+  { lines: ['LOST CHILDREN · REPORT TO ANY TERMINAL'], wall: 'left', pos: [-50, -47, 150], height: 3.6, rotY: 1.2, groundY: GROUND, bright: 1.8, flicker: 0.12, seed: 3 },
+  { lines: ['NO LOITERING'], vertical: true, wall: 'left', pos: [-50, -18, -48], height: 34, rotY: 1.15, groundY: GROUND, bright: 1.7, flicker: 0.06, seed: 4 },
+  { lines: ['AIR QUALITY: POOR · BREATHE LESS'], wall: 'right', pos: [70, -32, -112], height: 5.5, rotY: -1.1, kind: 'screen', groundY: GROUND, color: 'sodium', bright: 1.3, flicker: 0.04, seed: 5 },
+  { lines: ['SMILE · YOU ARE ON CAMERA'], wall: 'left', pos: [-50, -36, -236], height: 4.6, rotY: 1.1, groundY: GROUND, bright: 1.8, flicker: 0.2, seed: 6 },
+  { lines: ['YOUR RATING: 4.2', 'KEEP IT UP'], wall: 'right', pos: [70, 18, -300], height: 13, rotY: -1.0, kind: 'screen', groundY: GROUND, bright: 1.4, flicker: 0.05, seed: 7 },
+  { lines: ['QUIET HOURS 22:00–06:00'], wall: 'right', pos: [70, -26, -540], height: 7, rotY: -0.95, groundY: GROUND, bright: 1.8, flicker: 0.08, seed: 8 },
+  { lines: ['MEGABLOCK 7'], pos: [MEGA.x, 470, MEGA.z + MEGA.d / 2 + 1], height: 34, bright: 1.6, flicker: 0.03, seed: 9 },
+];
 
 export default class Book extends CityScene {
   city!: CityBlocks;
   near = new LitLines();
-  fog = new THREE.FogExp2(0x000000, 0.0017);
-  screenMat!: THREE.MeshBasicMaterial;
+  fog = new THREE.FogExp2(0x000000, 0.0006);
+  signs: NeonSign[] = [];
+  reflScene = new THREE.Scene();
+  glowRefl = new GlowBatch(4000, { screen2D: false, depthTest: false });
+  fogCards = new FogCards();
+  shafts = new LightShafts();
+  posts: V3[] = [];
+  street: V3[] = [];
+  curfew!: NeonSign;
 
   override init() {
-    const fogCol = mixRGB(scaleRGB(LIN.smog2, 0.8), scaleRGB(LIN.smog, 0.72), 0.4);
+    const fogCol = mixRGB(scaleRGB(LIN.smog2, 0.75), scaleRGB(LIN.smog, 0.7), 0.45);
     this.fog.color = col3(fogCol);
-    this.fog.density = 0.00105;
     this.three.fog = this.fog;
-    // the city: a canyon of towers beyond the bridge; near ones frame it, megastructures stand far off
+    this.reflScene.fog = this.fog;
+    // the city: a canyon of towers beyond the bridge, walls lining the street below, megastructures far off
     const extra: Tower[] = [
       // the towers the bridge hangs between
-      { x: -58, z: 0, w: 24, d: 26, h: 190, y0: -200, shade: 0.1 },
-      { x: 70, z: -4, w: 28, d: 30, h: 230, y0: -200, shade: 0.3 },
+      { x: -58, z: 0, w: 24, d: 26, h: 250, y0: GROUND, shade: 0.1 },
+      { x: 70, z: -4, w: 28, d: 30, h: 290, y0: GROUND, shade: 0.3 },
       // near framing towers (dark, close)
-      { x: -150, z: -60, w: 60, d: 50, h: 320, y0: -200, shade: 0 },
-      { x: 175, z: -90, w: 70, d: 60, h: 380, y0: -200, shade: 0.05 },
-      { x: -240, z: -170, w: 80, d: 60, h: 300, y0: -200, shade: 0.1 },
-      { x: 270, z: -230, w: 90, d: 70, h: 420, y0: -200, shade: 0.1 },
+      { x: -150, z: -60, w: 60, d: 50, h: 380, y0: GROUND, shade: 0 },
+      { x: 175, z: -90, w: 70, d: 60, h: 440, y0: GROUND, shade: 0.05 },
+      { x: -240, z: -170, w: 80, d: 60, h: 360, y0: GROUND, shade: 0.1 },
+      { x: 270, z: -230, w: 90, d: 70, h: 480, y0: GROUND, shade: 0.1 },
       // the tower that carries the public screen
-      { x: -72, z: -186, w: 64, d: 30, h: 150, y0: -200, shade: 0.2 },
+      { x: -72, z: -186, w: 64, d: 30, h: 210, y0: GROUND, shade: 0.2 },
+      // megablock 7
+      { x: MEGA.x, z: MEGA.z, w: MEGA.w, d: MEGA.d, h: MEGA.h, y0: GROUND, shade: 0.15 },
     ];
+    // the canyon's walls: the street runs along z under the bridge (x from -50 to 70)
+    const rw = mulberry32(21);
+    for (let z = 190; z > -700; z -= 70 + rw() * 30) {
+      if (Math.abs(z) < 30) continue;
+      extra.push({ x: -64 - rw() * 4, z, w: 28, d: 60 + rw() * 20, h: 90 + rw() * 200, y0: GROUND, shade: rw() * 0.4 });
+      extra.push({ x: 84 + rw() * 4, z: z - 30, w: 28, d: 60 + rw() * 20, h: 90 + rw() * 220, y0: GROUND, shade: rw() * 0.4 });
+    }
     this.city = new CityBlocks({
-      seed: 11, count: 300, x0: -1300, x1: 1300, z0: -2200, z1: -120,
-      keepOut: (x, z, w) => Math.abs(x - 10) < 60 + w / 2 && z > -420,
+      seed: 11, count: 340, x0: -1400, x1: 1400, z0: -2400, z1: -120,
+      keepOut: (x, z, w) => Math.abs(x - 10) < 60 + w / 2 && z > -760,
       edgeWithin: (tw) => tw.z > -700 && tw.z < -100 && tw.w < 150, edgeFloors: 14,
-      extra, color: LIN.shadow, yBase: -200, windowRate: 0.05,
+      extra, color: LIN.shadow, yBase: GROUND, windowRate: 0.07, mega: 6,
     });
+    // megablock 7's own spine of light and its beacon
+    for (let y = GROUND + 8; y < GROUND + MEGA.h; y += 3.2) this.city.strips.push({ x: MEGA.x + 60, y, z: MEGA.z + MEGA.d / 2 + 0.6, rgb: LIN.sodium, seed: y });
+    this.city.beacons.push({ x: MEGA.x, y: GROUND + MEGA.h + 6, z: MEGA.z, seed: 0.3 });
     this.three.add(this.city.mesh);
+    // the wet street: dark and translucent, so the mirrored signs show through it
+    const gm = solid(scaleRGB(LIN.shadow, 0.9), { transparent: true, opacity: 0.72 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3400), gm);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(0, GROUND, -1300);
+    this.three.add(ground);
     // bridge deck, canopy, pillars
     const deckMat = solid(scaleRGB(LIN.deep, 0.9));
     const add = (w: number, h: number, d: number, x: number, y: number, z: number, m = deckMat) => {
@@ -88,37 +128,41 @@ export default class Book extends CityScene {
     for (let x = -46; x <= 64; x += 3) L.seg(x, DECK_Y + 0.01, -2.9, x, DECK_Y + 0.01, 2.9, scaleRGB(conc, 0.6), 0.6);
     // lamp posts on the bridge (sodium)
     for (let x = -40; x <= 60; x += 14) { L.seg(x, DECK_Y, 2.95, x, DECK_Y + 3.2, 2.95, conc, 1); this.posts.push([x, DECK_Y + 3.2, 2.95]); }
-    // the street, far below, in the dark haze: sodium points along a few avenues
+    // the street below: sodium lamps along both kerbs, far avenues beyond
+    for (let z = 280; z > -1600; z -= 24) for (const x of [-42, 62]) { this.street.push([x, GROUND + 7, z]); L.seg(x, GROUND, z, x, GROUND + 7, z, scaleRGB(conc, 0.7), 0.8); }
     const r = mulberry32(5);
     for (let i = 0; i < 700; i++) {
       const av = Math.floor(r() * 6);
-      const along = lerp(-2000, 60, r());
-      const x = av < 3 ? lerp(-500, 500, av / 2) + (r() - 0.5) * 8 : lerp(-900, 900, r());
-      const z = av < 3 ? along : lerp(-1800, -150, (av - 3) / 3) + (r() - 0.5) * 8;
-      this.street.push([av < 3 ? x : lerp(-900, 900, r()), -180 + r() * 3, z]);
+      const along = lerp(-2400, -700, r());
+      const x = av < 3 ? lerp(-600, 600, av / 2) + (r() - 0.5) * 8 : lerp(-1200, 1200, r());
+      const z = av < 3 ? along : lerp(-2200, -760, (av - 3) / 3) + (r() - 0.5) * 8;
+      this.street.push([x, GROUND + 3, z]);
     }
-    // the public screen: a real surface in the city (fogged like everything else)
-    const cv = document.createElement('canvas');
-    cv.width = 2048; cv.height = 256;
-    const c = cv.getContext('2d')!;
-    c.fillStyle = rgba('shadow'); c.fillRect(0, 0, cv.width, cv.height);
-    c.strokeStyle = rgba('neon', 0.5); c.lineWidth = 6; c.strokeRect(8, 8, cv.width - 16, cv.height - 16);
-    const fsz = Math.min(86, (cv.width - 120) / (measure(SCREEN_TEXT, F.mono(600), 100, 8) / 100));
-    c.font = font(F.mono(600), fsz); c.letterSpacing = '8px';
-    c.fillStyle = rgba('neon'); c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(SCREEN_TEXT, cv.width / 2, cv.height / 2 + 4);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 8;
-    this.screenMat = new THREE.MeshBasicMaterial({ map: tex, fog: true });
-    this.screenMat.color.setScalar(1.3);
-    const scr = new THREE.Mesh(new THREE.PlaneGeometry(84, 10.5), this.screenMat);
-    scr.position.set(-66, 62, -170);
-    scr.rotation.y = 0.12;
-    this.three.add(scr);
+    // signs (and their reflections in the wet street)
+    for (const o of SIGNS) {
+      const sg = new NeonSign(o);
+      this.signs.push(sg);
+      this.three.add(sg.mesh);
+      if (sg.refl) this.reflScene.add(sg.refl);
+    }
+    this.curfew = this.signs[0]!;
+    // layered haze: cool and dark near, amber and bright far (atmospheric depth)
+    const fc = this.fogCards;
+    fc.add({ z: 120, w: 700, y0: GROUND, y1: 160, color: scaleRGB(LIN.fog, 0.9), alpha: 0.22, scale: 0.012, seed: 1, high: 60 });
+    fc.add({ z: -60, w: 1400, y0: GROUND, y1: 300, color: mixRGB(LIN.fog, LIN.smog, 0.35), alpha: 0.26, scale: 0.008, seed: 2, high: 120 });
+    fc.add({ z: -260, w: 2200, y0: GROUND, y1: 500, color: mixRGB(LIN.fog, LIN.smog, 0.7), alpha: 0.3, scale: 0.005, seed: 3, high: 220 });
+    fc.add({ z: -520, w: 2800, y0: GROUND, y1: 700, color: scaleRGB(LIN.smog, 0.8), alpha: 0.34, scale: 0.0035, seed: 4, high: 330 });
+    fc.add({ z: -950, w: 3600, y0: GROUND, y1: 1000, color: mixRGB(LIN.smog, LIN.smog2, 0.4), alpha: 0.38, scale: 0.0025, seed: 5, high: 480 });
+    fc.add({ z: -1650, w: 5000, y0: GROUND, y1: 1300, color: scaleRGB(LIN.smog2, 0.9), alpha: 0.42, scale: 0.0018, seed: 6, high: 700 });
+    // light through gaps in the smog
+    const sh = this.shafts, sc = mixRGB(LIN.smog2, LIN.paper, 0.2);
+    sh.add({ top: [-340, 900, -700], dir: [0.34, -1, 0.22], length: 1200, width: 30, spread: 1.6, color: sc, intensity: 0.2, seed: 1 });
+    sh.add({ top: [-120, 900, -1100], dir: [0.3, -1, 0.3], length: 1250, width: 45, spread: 1.4, color: sc, intensity: 0.16, seed: 2 });
+    sh.add({ top: [180, 850, -560], dir: [0.26, -1, 0.35], length: 1000, width: 18, spread: 2.0, color: sc, intensity: 0.22, seed: 3 });
+    sh.add({ top: [420, 950, -1400], dir: [0.3, -1, 0.2], length: 1300, width: 60, spread: 1.2, color: sc, intensity: 0.14, seed: 4 });
+    // the flying car's searchlight (moved every frame)
+    sh.add({ top: [0, 0, 0], dir: [0.12, -1, 0.08], length: 150, width: 1.6, spread: 5, color: mixRGB(LIN.concrete, LIN.paper, 0.6), intensity: 0.35, seed: 5, fog: 0.001 });
   }
-  posts: V3[] = [];
-  street: V3[] = [];
 
   page = new ContentsPage(this);
 
@@ -126,32 +170,40 @@ export default class Book extends CityScene {
   B = (k: number) => this.au.timeOfBeat(k);
 
   render(f: Frame, out: THREE.WebGLRenderTarget) {
-    const { renderer } = this.ctx;
     const t = f.t, B = this.B;
     this.begin();
-    const tShot2 = B(5), tZoom0 = B(8) - 0.45, tZoom1 = B(8) + 0.45;
-    const post = { ...POST_BASE };
+    const tShot2 = B(6), tZoom0 = B(9) - 0.45, tZoom1 = B(9) + 0.45;
     if (t < tZoom1) this.renderCity(f, out, t < tShot2 ? 1 : 2);
     // the page (from the zoom on): drawn over the city shot, which darkens away
     const pageK = prog(t, tZoom0, tZoom1, ease.inOutCubic);
     if (pageK > 0) this.page.render(f, out, pageK);
-    return post;
+    return { ...POST_BASE };
   }
+
+  /** The flying car: crosses the canyon slowly, high up, the whole wide shot. */
+  carPos(t: number): V3 { return [lerp(-420, 300, t / this.B(6)), 112 + Math.sin(t * 0.7) * 1.5, -250]; }
 
   // ------------------------------------------------------------------ shots 1 and 2: the city, the overhang
   camFor(t: number, shot: 1 | 2) {
     const cam = this.cam, B = this.B;
     const C = v(CHILD);
     if (shot === 1) {
-      const k = prog(t, 0, B(5), (x) => ease.inOutCubic(x) * 0.75 + x * 0.25);
-      cam.position.set(lerp(-44, 4.4, k), lerp(60, 44.4, ease.outQuad(k)), lerp(215, 17, k));
-      cam.lookAt(lerp(-4, 5.6, k), lerp(50, 42.9, k), lerp(-150, -1, k));
-      cam.fov = lerp(40, 31, k);
+      // a crane up out of the street and a dolly in over the bridge: the deck sweeps down through frame
+      const k = prog(t, 0, B(6), (x) => ease.inOutQuad(x) * 0.8 + x * 0.2);
+      const y = keys(k, [[0, -44], [0.45, 6, ease.inOutQuad], [0.78, 39, ease.inOutQuad], [1, 43.5, ease.outQuad]]);
+      const z = keys(k, [[0, 260], [0.5, 110], [0.8, 40], [1, 17]]);
+      const x = keys(k, [[0, -18], [0.6, 0], [1, 4.4]]);
+      cam.position.set(x, y, z);
+      const pitch = keys(k, [[0, 0.2], [0.45, 0.16], [0.8, 0.04], [1, -0.06]]);
+      const yaw = keys(k, [[0, 0.07], [0.6, -0.03], [1, -0.07]]);
+      cam.lookAt(x + Math.sin(yaw) * 100, y + Math.tan(pitch) * 100, z - Math.cos(yaw) * 100);
+      cam.fov = lerp(46, 32, ease.inOutQuad(k));
     } else {
-      const k = prog(t, B(5), B(8) + 0.45);
-      cam.position.copy(C).add(new THREE.Vector3(0, 1.95 - 0.1 * k, 1.05 - 0.15 * k));
-      cam.lookAt(C.clone().add(new THREE.Vector3(-0.1, 0.1, -2.8)));
-      cam.fov = 58;
+      // behind and above the child, looking over the shoulder at the book and out to the city
+      const k = prog(t, B(6), B(9) + 0.45);
+      cam.position.copy(C).add(new THREE.Vector3(-0.3 + 0.1 * k, 1.75 - 0.08 * k, 1.3 - 0.15 * k));
+      cam.lookAt(C.clone().add(new THREE.Vector3(0.2, 0.9, -3)));
+      cam.fov = 50;
     }
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
@@ -164,94 +216,152 @@ export default class Book extends CityScene {
     const C = v(CHILD);
     this.camFor(t, shot);
     const sky = smogSky(0);
-    this.sky.render(renderer, out, { top: sky.top, horizon: sky.horizon, low: scaleRGB(LIN.smog, 0.18), horizonY: shot === 1 ? 0.5 : 0.12, t, haze: 1.1, shafts: 0.8 });
+    this.sky.render(renderer, out, { top: sky.top, horizon: sky.horizon, low: scaleRGB(LIN.smog, 0.3), horizonY: shot === 1 ? 0.5 : 0.25, t, haze: 1.1, shafts: 0.6 });
+    // reflections in the wet street (under the translucent ground)
+    for (const sg of this.signs) sg.update(t);
+    renderer.setRenderTarget(out); renderer.clearDepth(); renderer.render(this.reflScene, cam);
+    const gr = this.glowRefl; gr.clear();
+    const cp = cam.position;
+    for (const p of this.street) {
+      if (p[2] < -700) continue;
+      const fk = Math.exp(-Math.hypot(p[0] - cp.x, p[1] - cp.y, p[2] - cp.z) * 0.0012);
+      gr.add(p[0], 2 * GROUND - p[1] + 1, p[2], 1.4, 6, LIN.sodium, 0.55 * fk, 2.5);
+    }
+    for (const sg of this.signs) sg.glow(gr);
+    gr.render(renderer, out, cam);
     this.drawThree(out);
-    this.city.edges.emit(this.lines3D, cam, { base: 0.32, fog: 0.0035, alpha: 0.55 });
-    this.near.emit(this.lines3D, cam, { base: 0.55, fog: 0.008 });
+    this.city.edges.emit(this.lines3D, cam, { base: 0.3, fog: 0.003, alpha: 0.5 });
+    this.near.emit(this.lines3D, cam, { base: 0.55, fog: 0.006 });
     this.lines3D.render(renderer, out, cam);
-    this.city.emitWindows(this.glow3D, cam, t, { density: 0.0008, gain: 1.6 });
-    for (const p of this.street) this.glow3D.add(p[0], p[1], p[2], 1.6, 1.6, LIN.sodium, 1.4 * Math.exp(-Math.hypot(p[0] - cam.position.x, p[1] - cam.position.y, p[2] - cam.position.z) * 0.0016), 3);
-    for (const p of this.posts) this.glow3D.add(p[0], p[1], p[2], 0.35, 0.35, LIN.sodium, 2.2, 4);
-    this.glow3D.render(renderer, out, cam);
+    // lights: thousands of windows, the megastructures' spines, streetlamps, cars, the flying car
+    const g = this.glow3D;
+    this.city.emitWindows(g, cam, t, { density: 0.0006, gain: 1.7 });
+    this.city.emitStrips(g, cam, t, { density: 0.0005, gain: 1.2 });
+    for (const p of this.street) g.add(p[0], p[1], p[2], 1.3, 1.3, LIN.sodium, 1.6 * Math.exp(-Math.hypot(p[0] - cp.x, p[1] - cp.y, p[2] - cp.z) * 0.0012), 3);
+    for (const p of this.posts) g.add(p[0], p[1], p[2], 0.35, 0.35, LIN.sodium, 2.2, 4);
+    for (let i = 0; i < 14; i++) {
+      // traffic on the canyon street: sodium heads towards us, dim neon tails away
+      const lane = i % 2, sp = 26 + 9 * hash(i, 4);
+      const z = ((hash(i, 2) * 1900 + t * sp * (lane ? 1 : -1)) % 1900 + 1900) % 1900 - 1600;
+      const x = lane ? 18 : 2;
+      const fk = Math.exp(-Math.hypot(x - cp.x, GROUND - cp.y, z - cp.z) * 0.0012);
+      for (const dx of [-0.8, 0.8]) g.add(x + dx, GROUND + 0.8, z, 0.5, 0.35, lane ? mixRGB(LIN.lamp, LIN.paper, 0.5) : LIN.neon, (lane ? 2.4 : 1.2) * fk, 4);
+    }
+    for (const sg of this.signs) sg.glow(g, 0.6);
+    if (shot === 1) {
+      const [vx, vy, vz] = this.carPos(t);
+      g.add(vx + 3, vy, vz, 0.9, 0.5, mixRGB(LIN.paper, LIN.concrete, 0.2), 3.5, 4);
+      g.add(vx + 3, vy - 0.4, vz + 1.2, 0.9, 0.5, mixRGB(LIN.paper, LIN.concrete, 0.2), 3.5, 4);
+      g.add(vx, vy - 0.6, vz, 4, 0.5, LIN.sodium, 1.2, 3);
+      if ((t % 0.9) < 0.12) g.add(vx - 3, vy + 0.4, vz, 1.2, 1.2, LIN.neon, 3, 4);
+      const sm = this.shafts.mats[4]!;
+      (sm.uniforms.top!.value as THREE.Vector3).set(vx + 1, vy - 0.8, vz);
+    }
+    g.render(renderer, out, cam);
+    // haze layers over everything behind them, then the light through the smog
+    this.fogCards.render(renderer, out, cam, t, shot === 1 ? 1 : 0.7);
+    this.shafts.render(renderer, out, cam, t, shot === 1 ? 1 : 0.5);
 
     const w = this.world.ctx;
-    const wake = B(5) + 0.35;
+    const wake = B(6) + 0.3;
     let droneXY = { x: 0, y: 0 }, droneR = 2, lampOn = 0, look: [number, number] = [0, 1];
+    const u = this.ui.ctx;
     if (shot === 1) {
-      // the child on the bridge, the drone asleep beside her
+      // the child on the bridge, the drone asleep at her shoulder
       const pf = project(cam, C.x, C.y, C.z), ph = project(cam, C.x, C.y + 1.12, C.z);
       const hPx = Math.max(2, pf.y - ph.y);
       drawChild(w, pf.x, pf.y, hPx, { pose: 'sit', t, shade: 0.1 });
-      const pd = project(cam, C.x + 0.5, C.y + 0.1, C.z);
-      droneXY = pd; droneR = Math.max(1, hPx * 0.07);
-      drawDrone(w, pd.x, pd.y, droneR, { t, lamp: 0, dark: 0.6, tilt: 0 });
+      const pd = project(cam, C.x + 0.42, C.y + 0.62, C.z);
+      droneXY = pd; droneR = Math.max(1.5, hPx * 0.12);
+      drawDrone(w, pd.x, pd.y, droneR, { t, lamp: 0.35, dark: 0.2, tilt: 0 });
+      lampOn = 0.3; look = [0.2, 0.5];
+      // the drone's callouts: what the viewer is looking at
+      const CO = { size: 20, plate: 0.62 } as const;
+      const mg = project(cam, MEGA.x + 60, 330, MEGA.z + MEGA.d / 2);
+      drawCallout(u, t, { ...CO, ax: mg.x, ay: mg.y, lx: clamp(mg.x + 140, SAFE, W - SAFE - 470), ly: clamp(mg.y - 110, SAFE + 40, H - SAFE), text: ['MEGABLOCK 7 · 41 000 RESIDENTS'], at: 0.8, out: 4.1 });
+      const sp = project(cam, this.curfew.pos.x + this.curfew.w * 0.3, this.curfew.pos.y - this.curfew.h * 0.5, this.curfew.pos.z);
+      drawCallout(u, t, { ...CO, ax: sp.x, ay: sp.y, lx: clamp(sp.x + 150, SAFE, W - SAFE - 200), ly: clamp(sp.y + 110, SAFE + 40, H - SAFE - 40), text: 'CURFEW SIGN', at: 1.7, out: 3.9 });
+      if (!ph.behind) {
+        drawCallout(u, t, { ...CO, ax: ph.x - hPx * 0.1, ay: ph.y + hPx * 0.3, lx: ph.x - 170, ly: ph.y - 110, side: -1, text: 'YOU', at: 3.3, color: 'coat' });
+        drawCallout(u, t, { ...CO, ax: pd.x, ay: pd.y, lx: pd.x + 180, ly: pd.y - 150, text: ['GUIDE DRONE · BATTERY 64%'], at: 3.85 });
+      }
     } else {
-      // over the shoulder: the hood and sleeves at the bottom, the open handbook in the lap
-      this.drawBook2(w, t, prog(t, wake, wake + 0.3));
-      const hands: [{ x: number; y: number }, { x: number; y: number }] = [{ x: 770, y: 760 }, { x: 1150, y: 760 }];
-      lampOn = clamp(prog(t, wake, wake + 0.12)) * flicker(t, t < wake + 0.45 ? 0.9 : 0.04, 3);
-      drawChildOver(w, 960, 1030, 215, { hands, t, lit: lampOn, litSide: -1 });
-      const rise = prog(t, wake + 0.1, wake + 1.1, ease.inOutCubic);
-      const bob = rise * Math.sin(t * 1.9) * 6;
-      droneXY = { x: lerp(672, 600, rise) + Math.sin(t * 0.9) * 4 * rise, y: lerp(880, 410, rise) + bob };
-      droneR = lerp(30, 34, rise);
-      look = [960 - droneXY.x, 640 - droneXY.y];
-      drawBeam2D(w, droneXY.x, droneXY.y, 1000, 650, 0.3, lampOn * 0.55);
-      drawDrone(w, droneXY.x, droneXY.y, droneR, { t, lamp: lampOn, look, dark: lampOn > 0 ? 0 : 0.5, tilt: rise > 0 && rise < 1 ? Math.sin(t * 6) * 0.25 * (1 - rise) : undefined });
+      // behind the child: the hood, the shoulders, two hands holding the open handbook in the lamp
+      const lampT = prog(t, wake, wake + 0.12) * flicker(t, t < wake + 0.45 ? 0.9 : 0.04, 3);
+      lampOn = clamp(lampT);
+      const hood = { x: 800, y: 770, s: 100 };
+      this.drawBook2(w, t, lampOn);
+      const hands: [{ x: number; y: number }, { x: number; y: number }] = [{ x: 740, y: 652 }, { x: 1070, y: 640 }];
+      // the drone: asleep on the left shoulder, wakes with a click, rises to hover at the shoulder
+      const rise = prog(t, wake + 0.1, wake + 0.9, ease.inOutCubic);
+      droneXY = { x: lerp(640, 560, rise) + Math.sin(t * 0.9) * 5 * rise, y: lerp(815, 560, rise) + rise * Math.sin(t * 1.9) * 7 };
+      droneR = 42;
+      look = [905 - droneXY.x, 590 - droneXY.y];
+      drawChildBack(w, hood.x, hood.y, hood.s, { hands, t, lit: lampOn, litFrom: droneXY, shade: 0.2 });
+      drawBeam2D(w, droneXY.x, droneXY.y, 910, 590, 0.26, lampOn * 0.5);
+      drawDrone(w, droneXY.x, droneXY.y, droneR, { t, lamp: 0.08 + lampOn * 0.92, look, dark: lampOn > 0 ? 0 : 0.35, tilt: rise > 0 && rise < 1 ? Math.sin(t * 6) * 0.25 * (1 - rise) : undefined });
       if (t > wake - 0.05 && t < wake + 0.6) {
         const k = prog(t, wake - 0.05, wake + 0.6, ease.outCubic);
         w.strokeStyle = rgba('lamp', 0.7 * (1 - k));
         w.lineWidth = 2;
         w.beginPath(); w.arc(droneXY.x, droneXY.y, droneR * (1.2 + k * 3.5), 0, Math.PI * 2); w.stroke();
       }
+      drawCallout(u, t, { ax: 1092, ay: 676, lx: 1230, ly: 790, side: 1, text: ['HANDBOOK · CHILDREN’S SAFETY', 'PRINTED ON PAPER'], at: B(7), size: 20, plate: 0.6 });
+      drawCallout(u, t, { ax: 780, ay: 515, lx: 560, ly: 370, side: -1, text: ['INTRODUCTION · P. 12', 'PRINTED: ВВЕДЕНИЕ'], at: B(7) + 0.5, size: 20, plate: 0.6 });
     }
     this.composite2D(this.world, out);
     droneGlow(this.glow2D, droneXY.x, droneXY.y, droneR, lampOn, look);
     this.glow2D.render(renderer, out);
     rain(this.lines2D, t, {
-      count: shot === 1 ? 1200 : 700, alpha: shot === 1 ? 0.12 : 0.16, speed: shot === 1 ? 1300 : 1900, angle: 0.1, seed: shot,
+      count: shot === 1 ? 1300 : 700, alpha: shot === 1 ? 0.13 : 0.16, speed: shot === 1 ? 1300 : 1900, angle: 0.1, seed: shot,
       // in shot 2 the canopy keeps the rain off the child: it falls beyond the railing only
-      y1: shot === 1 ? undefined : 420,
+      y1: shot === 1 ? undefined : 380,
       lit: shot === 2 && lampOn > 0 ? (x, y) => clamp(1 - Math.hypot(x - droneXY.x, y - droneXY.y) / 300) * lampOn * 0.5 : undefined,
     });
     this.lines2D.render(renderer, out);
-    this.fogSheet.render(renderer, out, { color: scaleRGB(LIN.smog2, 0.5), alpha: shot === 1 ? 0.2 : 0.1, y0: 0.35, y1: 1, t, scale: 0.9 });
-
-    const u = this.ui.ctx;
-    if (shot === 2) {
-      drawCallout(u, t, { ax: 1085, ay: 560, lx: 1300, ly: 400, side: 1, text: ['HANDBOOK · CHILDREN’S SAFETY', 'PRINTED ON PAPER'], at: B(6), size: 19, plate: 0.55 });
-    }
+    this.fogSheet.render(renderer, out, { color: scaleRGB(LIN.smog2, 0.5), alpha: shot === 1 ? 0.1 : 0.08, y0: 0.45, y1: 1, t, scale: 0.9 });
     this.composite2D(this.ui, out);
   }
 
-  /** The open handbook in the lap, seen over the shoulder (screen px; the page zoom starts from its right page). */
+  /** The open handbook held up in two hands, seen over the shoulder (screen px). Left page: the
+   *  introduction (p. 12); right page: the contents, which the page zoom grows out of. */
   drawBook2(c: CanvasRenderingContext2D, t: number, lamp: number) {
-    const bl = { x: 735, y: 760 }, br = { x: 1185, y: 760 }, tl = { x: 805, y: 525 }, tr = { x: 1115, y: 525 };
-    const sb = { x: 960, y: 772 }, st = { x: 960, y: 530 };
+    const bl = { x: 716, y: 684 }, br = { x: 1090, y: 672 }, tl = { x: 752, y: 496 }, tr = { x: 1050, y: 488 };
+    const sb = { x: 903, y: 690 }, st = { x: 901, y: 498 };
     c.save();
-    // cover edge
-    c.fillStyle = rgba('red', 0.55);
-    c.beginPath(); c.moveTo(bl.x - 8, bl.y + 8); c.lineTo(br.x + 8, br.y + 8); c.lineTo(tr.x + 6, tr.y - 2); c.lineTo(tl.x - 6, tl.y - 2); c.closePath(); c.fill();
+    // cover edge (the handbook's red)
+    c.fillStyle = mixRgba('red', 'shadow', 0.35);
+    c.beginPath(); c.moveTo(bl.x - 9, bl.y + 9); c.lineTo(br.x + 9, br.y + 9); c.lineTo(tr.x + 7, tr.y - 3); c.lineTo(tl.x - 7, tl.y - 3); c.closePath(); c.fill();
     const pageFill = (a: typeof bl, b: typeof bl, cc: typeof bl, d: typeof bl) => {
-      const g = c.createLinearGradient(640, 420, 1100, 760);
+      const g = c.createLinearGradient(600, 420, 1050, 660);
       g.addColorStop(0, mixRgba('paper', 'lamp', 0.3 * lamp));
-      g.addColorStop(1, mixRgba('paper', 'shadow', 0.62 - 0.35 * lamp));
+      g.addColorStop(1, mixRgba('paper', 'shadow', 0.6 - 0.38 * lamp));
       c.fillStyle = g;
       c.beginPath(); c.moveTo(a.x, a.y); c.quadraticCurveTo((a.x + b.x) / 2, a.y - 8, b.x, b.y); c.lineTo(cc.x, cc.y); c.quadraticCurveTo((cc.x + d.x) / 2, cc.y - 6, d.x, d.y); c.closePath(); c.fill();
     };
     pageFill(bl, sb, st, tl);
     pageFill(sb, br, tr, st);
-    // left page: the title in the handbook's italic
+    // the gutter shadow
+    const gg = c.createLinearGradient(sb.x - 30, 0, sb.x + 30, 0);
+    gg.addColorStop(0, rgba('shadow', 0)); gg.addColorStop(0.5, rgba('shadow', 0.3)); gg.addColorStop(1, rgba('shadow', 0));
+    c.fillStyle = gg; c.fillRect(sb.x - 30, st.y, 60, sb.y - st.y);
     const P = (a: typeof bl, b: typeof bl, cc: typeof bl, d: typeof bl, u: number, vv: number) => ({ x: lerp(lerp(d.x, cc.x, u), lerp(a.x, b.x, u), vv), y: lerp(lerp(d.y, cc.y, u), lerp(a.y, b.y, u), vv) });
-    const tp = P(bl, sb, st, tl, 0.5, 0.35);
-    c.font = font(F.serif(600, true), 26);
-    c.fillStyle = rgba('ink', 0.75);
-    c.textAlign = 'center';
-    c.fillText('What to do if…', tp.x, tp.y);
-    c.textAlign = 'left';
+    // left page: INTRODUCTION, a few lines of body text (unreadable at this size), the page number 12
+    const hp = P(bl, sb, st, tl, 0.12, 0.14);
+    c.font = font(F.archivo(62, 900), 17);
+    c.fillStyle = rgba('ink', 0.8);
+    c.fillText('INTRODUCTION', hp.x, hp.y);
+    for (let i = 0; i < 9; i++) {
+      const vv = 0.26 + i * 0.07;
+      const a = P(bl, sb, st, tl, 0.12, vv), b = P(bl, sb, st, tl, 0.12 + 0.76 * (i === 8 ? 0.45 : 0.85 + 0.15 * hash(i, 5)), vv);
+      c.strokeStyle = rgba('ink', 0.32); c.lineWidth = 2.4;
+      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+    }
+    const np = P(bl, sb, st, tl, 0.12, 0.93);
+    drawPageNumber(c, '12', np.x + 18, np.y, 17, { alpha: 0.95 });
     // right page: the contents in miniature
-    for (let i = 0; i < 13; i++) {
-      const vv = 0.12 + i * 0.062;
+    for (let i = 0; i < 14; i++) {
+      const vv = 0.1 + i * 0.058 + (i > 0 ? 0.04 : 0);
       const a = P(sb, br, tr, st, 0.1, vv), b = P(sb, br, tr, st, 0.8, vv), n = P(sb, br, tr, st, 0.9, vv);
       c.strokeStyle = rgba('ink', 0.55);
       c.lineWidth = 2.2;
@@ -268,6 +378,7 @@ export default class Book extends CityScene {
 /** The contents page: typeset by us, lit by the lamp, held in two yellow sleeves. */
 class ContentsPage {
   lines: { y: number; num: { x: number; y: number } }[] = [];
+  intro = { x: 0, y: 0 };
   constructor(private s: Book) {}
   build() {}
 
@@ -276,9 +387,9 @@ class ContentsPage {
     const B = this.s.B;
     const s1 = 0.84;
     // the book's spot in shot 2 (approx.; the page grows out of it)
-    const x = lerp(1045, 960, k), y = lerp(640, 548, k);
-    const sc = lerp(0.19, s1, k) * (1 + 0.025 * prog(t, B(8), B(12)));
-    const rot = lerp(0, -1.2, k);
+    const x = lerp(990, 960, k), y = lerp(592, 548, k);
+    const sc = lerp(0.165, s1, k) * (1 + 0.025 * prog(t, B(9), B(12)));
+    const rot = lerp(-1.5, -1.2, k);
     let m = new DOMMatrix().translate(x, y).rotate(rot).scale(sc).translate(-PW_ / 2, -PH_ * 0.47);
     // the dive: zoom into the ink of the first entry's LOST
     const dive = prog(t, B(12), B(13));
@@ -342,21 +453,26 @@ class ContentsPage {
     c.save();
     c.clip(paper);
     // header (the handbook's own voice: thin caps, like the photographed page) + the footnote's star
+    // the introduction: the first row of the printed contents (this chapter's page, 12)
+    const introGeo = drawEntry(c, s.sctx.lyrics, s.sctx.audio, printedLine(INTRO.label), t, {
+      x: PAGE_X, y: INTRO_Y, width: PAGE_RIGHT - PAGE_X, size: PAGE_SIZE, theme: 'paper', printed: true, page: INTRO.page, noNumber: t >= lift, heading: false, leader: 1,
+    });
+    this.intro = { x: introGeo.numRight, y: introGeo.lastY };
     c.font = font(F.archivo(100, 300), 34);
     c.letterSpacing = '6px';
     c.fillStyle = rgba('ink', 0.78);
     c.textAlign = 'center';
-    c.fillText('WHAT TO DO IF…', PW_ / 2, 150);
+    c.fillText('WHAT TO DO IF…', PW_ / 2, HEAD_Y);
     c.textAlign = 'left';
     c.letterSpacing = '0px';
     c.fillStyle = rgba('red', 0.9);
     c.font = font(F.archivo(100, 500), 30);
-    c.fillText('*', PW_ / 2 + measure('WHAT TO DO IF…', F.archivo(100, 300), 34, 6) / 2 + 6, 138);
+    c.fillText('*', PW_ / 2 + measure('WHAT TO DO IF…', F.archivo(100, 300), 34, 6) / 2 + 6, HEAD_Y - 12);
     // the thirteen entries
     this.lines = [];
     CONTENTS.forEach((e, i) => {
       const y = PAGE_TOP + i * PAGE_STEP;
-      const flown = t >= lift + i * 0.025;
+      const flown = t >= lift + (i + 1) * 0.045;
       const geo = drawEntry(c, s.sctx.lyrics, s.sctx.audio, e.line, t, {
         x: PAGE_X, y, width: PAGE_RIGHT - PAGE_X, size: PAGE_SIZE, theme: 'paper', printed: true, noNumber: flown, numberClip: 'frame',
       });
@@ -364,7 +480,7 @@ class ContentsPage {
     });
     // footnote, typed in mono
     const note = '* they say if you remove the page numbers, it reads like a song.';
-    const nn = Math.floor(Math.max(0, t - B(9)) * 48);
+    const nn = Math.floor(Math.max(0, t - (B(10) - 0.2)) * 48);
     c.font = font(F.mono(400), 21);
     c.fillStyle = rgba('ink', 0.72);
     c.fillText(note.slice(0, nn), PAGE_X, PAGE_TOP + 13 * PAGE_STEP + 40);
@@ -386,12 +502,15 @@ class ContentsPage {
       drawDrone(c, dp.x, dp.y, 26, { t, lamp: 1, look: [-0.8, 0.5], alpha: pa });
     }
     // the translation note on the header
-    const hdr = m.transformPoint(new DOMPoint(PW_ / 2 + 170, 140));
-    drawCallout(c, t, { ax: hdr.x, ay: hdr.y, lx: hdr.x + 250, ly: hdr.y - 50, text: ['TITLE, TRANSLATED:', 'WHAT TO DO IF…'], at: B(8) + 0.25, out: B(11) - 0.4, size: 18, alpha: pa, plate: 0.5 });
+    const hdr = m.transformPoint(new DOMPoint(PW_ / 2 + 170, HEAD_Y - 10));
+    drawCallout(c, t, { ax: hdr.x, ay: hdr.y, lx: hdr.x + 240, ly: hdr.y + 30, text: ['TITLE, TRANSLATED:', 'WHAT TO DO IF…', 'PRINTED: ЧТО ДЕЛАТЬ, ЕСЛИ…'], at: B(9) + 0.3, out: B(11) - 0.3, size: 19, alpha: pa, plate: 0.6 });
+    const ip = m.transformPoint(new DOMPoint(PAGE_X + 20, INTRO_Y - PAGE_SIZE * 0.4));
+    drawCallout(c, t, { ax: ip.x, ay: ip.y, lx: ip.x - 90, ly: ip.y - 70, side: -1, text: ['THIS PAGE · P. 12'], at: B(9) + 0.7, out: B(11) - 0.3, size: 19, alpha: pa, plate: 0.6 });
 
     // the red numbers lift off and fly to the page counter
     const cnt = { x: W - SAFE, y: 70 + 124 * 0.74 };
-    this.lines.forEach((ln, i) => {
+    const flyers = [{ num: this.intro, page: INTRO.page }, ...this.lines.map((ln, i) => ({ num: ln.num, page: CONTENTS[i]!.page }))];
+    flyers.forEach((ln, i) => {
       const t0 = lift + i * 0.045, t1 = t0 + 0.42;
       if (t < t0 || t > t1 + 0.05) return;
       const p0 = m.transformPoint(new DOMPoint(ln.num.x, ln.num.y));
@@ -401,14 +520,14 @@ class ContentsPage {
       const y = (1 - u) ** 2 * p0.y + 2 * (1 - u) * u * ctrl.y + u * u * cnt.y;
       const ps = PAGE_SIZE * Math.hypot(m.a, m.b);
       const size = i === 0 ? lerp(ps, 124, u * u) : lerp(ps, ps * 0.6, u);
-      drawPageNumber(c, CONTENTS[i]!.page, x, y, size, { alpha: i === 0 ? 1 - smoothstep(0.9, 1, u) : 1 - smoothstep(0.55, 0.95, u), clip: 'frame' });
+      drawPageNumber(c, ln.page, x, y, size, { alpha: i === 0 ? 1 - smoothstep(0.9, 1, u) : 1 - smoothstep(0.55, 0.95, u), clip: 'frame' });
     });
     // the counter: it is born from the numbers
     if (t >= land - 0.1) {
-      drawPageCounter(c, s.sctx.lyrics, t, { page: '22', prev: null, since: land - 0.1 });
+      drawPageCounter(c, s.sctx.lyrics, t, { page: INTRO.page, prev: null, since: land - 0.1 });
     }
     // the dive ends in the ink
-    if (dive > 0.8) { c.fillStyle = rgba('ink', smoothstep(0.8, 0.98, dive)); c.fillRect(0, 0, W, H); drawPageCounter(c, s.sctx.lyrics, t, { page: '22', prev: null, since: land - 0.1 }); }
+    if (dive > 0.8) { c.fillStyle = rgba('ink', smoothstep(0.8, 0.98, dive)); c.fillRect(0, 0, W, H); drawPageCounter(c, s.sctx.lyrics, t, { page: INTRO.page, prev: null, since: land - 0.1 }); }
     s.composite2D(s.ui, out);
     s.glow2D.clear();
     if (pa > 0) { droneGlow(s.glow2D, dp.x, dp.y, 26, pa, [-0.8, 0.5]); }
