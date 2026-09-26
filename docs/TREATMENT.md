@@ -28,6 +28,10 @@ the answers stop fitting.
 Stage every chapter from the handbook's own heading (photo: `reference/handbook-contents-photo-2.png`),
 not from the English lyric's wording. The lyric is a loose translation; where they differ, the heading wins.
 Each chapter shows its original heading small under the sung line as the translation note, with its page.
+The song still sets the timing, and the picture stays roughly aligned with the words: each chapter plays
+while its line is sung, and the key action lands on the matching sung word (the doors shut on "closed",
+the cat appears on "cat", the needle slams on "hot"/"cold", the light dies on "dark"). The heading decides
+what the scene is; the lyric decides when things happen. No scene may contradict the line being sung.
 | page | heading (as printed) | what it means for the staging |
 |---|---|---|
 | 12 | ВВЕДЕНИЕ | the `book` intro is the handbook's introduction page |
