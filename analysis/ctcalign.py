@@ -18,7 +18,8 @@ import torchaudio
 from pron import pron
 
 FRAME = 0.02  # s per emission frame
-N_FRAMES = 7833
+# "What if" is 176.28s exactly (see analysis/README-whatif.md); 176.28 / 0.02 = 8814.
+N_FRAMES = 8814
 ALPHA = ["-"] + list("abcdefghijklmnopqrstuvwxyz'")
 AIDX = {c: i for i, c in enumerate(ALPHA)}
 

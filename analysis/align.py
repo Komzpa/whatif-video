@@ -1,15 +1,16 @@
 """Word-level lyric alignment -> data/lyrics.json
 
-Pipeline
-  1. ctc_emissions.py  : frame-wise CTC log-probs of the (time-corrected) vocal
-                         stem from two acoustic models (MMS_FA, wav2vec2 LV60K).
-  2. whisper_run.py    : mlx-whisper large-v3-turbo word timestamps (cross-check).
+Pipeline (forked from mexicat/pdoom-video's align.py; adapted for this song):
+  1. ctc_emissions.py  : frame-wise CTC log-probs of the Demucs vocal stem
+                         (mono sum + left/right channel) from two acoustic
+                         models (MMS_FA, wav2vec2 LV60K).
+  2. whisper_run.py    : whisper.cpp (large-v3) word timestamps on the vocal
+                         stem (cross-check; pdoom used mlx-whisper, macOS-only).
   3. vocal_feats.py    : vocal-stem RMS / pitch / onset features (5 ms hop).
   4. this script       : one global constrained CTC Viterbi pass over the whole
                          song on the fused emissions (garbage "star" token
-                         between lines), with manually verified anchors for hard
-                         spots, then signal-based refinement of word starts/ends,
-                         confidence scoring, QA plots.
+                         between lines), then signal-based refinement of word
+                         starts/ends, confidence scoring, QA plots.
 
 Run:  uv run python align.py [--plots]
 """
@@ -25,57 +26,69 @@ from ctcalign import FRAME, align, emissions, word_table
 from pron import pron
 
 # Primary emission set: mixture of both CTC models on the demucs vocal stem's
-# mono sum, left and right channel (choruses are double-tracked L/R).
+# mono sum, left and right channel (in case any line is double-tracked).
 PRIMARY = "fused6"
-# Independent-ish alternatives, used for agreement-based confidence.
-ALTS = ("mms", "lv60k", "fused_vocL", "fused_vocR", "fused_lead")
+# Independent-ish alternatives, used for agreement-based confidence. (pdoom also
+# had a "fused_lead" karaoke-stem alternative; we don't run that extra model here.)
+ALTS = ("mms", "lv60k", "fused_vocL", "fused_vocR")
 
-# Per-line time windows (seconds) where the automatic path is ambiguous.
-LINE_WINDOWS = {}
+# Per-line time windows (seconds) where the automatic path needs constraining,
+# established from the whisper.cpp mix reference (analysis/whisper-cpp-large-v3-
+# segments.json) and this song's own whisper.cpp vocal-stem cross-check
+# (analysis/work/whisper_words.json). Keeps the Viterbi path from drifting a
+# whole line into a neighbouring line's silence/backing-vocal region.
+LINE_WINDOWS = {
+    0: (0.0, 17.0),         # "You are lost."
+    1: (14.0, 24.0),        # "You missed the stop, the metro closed."
+    2: (20.0, 37.0),        # "You're home alone, the doorbell rings."
+    3: (34.0, 49.0),        # "Stray dogs cross your path at night."
+    4: (48.0, 62.0),        # "Your cat is stuck up in a tree."
+    5: (59.0, 70.0),        # "It's far too hot."
+    6: (68.0, 76.0),        # "It's far too cold."
+    7: (73.0, 89.0),        # "The weather turns, it feels unsafe."
+    8: (86.0, 110.0),       # "They tease you, laugh, they call your name."
+    9: (110.0, 122.0),      # "No one stays. No one's your friend."
+    10: (119.0, 136.0),     # "They hurt you more than words can say."
+    11: (133.0, 148.0),     # "A stranger won't leave you alone."
+    12: (145.0, 160.0),     # "You're scared of dark and things you can't see."
+}
 
-# ---------------------------------------------------------------------------
 # Manual anchors (seconds) for the CTC path, established by inspecting the QA
-# plots (spectrogram / pitch / envelopes).  Key: (line, token, subword) ->
+# plots (spectrogram / pitch / envelopes) and targeted whisper.cpp re-runs on
+# isolated clips (see README-whatif.md). Key: (line, token, subword) ->
 # (earliest allowed start, latest allowed end) of that subword's chars.
-ANCHORS = {}
+ANCHORS = {
+    # L8 "They tease you, laugh, they call your name.": the unconstrained global
+    # path pushed the whole "They tease you, laugh," half ~9s late (98.6-101.8s,
+    # an implausibly compressed 3.2s for 4 tokens+2 commas), apparently because
+    # the acoustic models found a stronger (wrong) match for "they" near the
+    # second "they call" at ~101s. Two independent whisper.cpp re-runs on
+    # isolated clips (83-102s and 88-113s) both place the FIRST "they" at
+    # 88-94s, not 98.6s, and "laugh," ending by ~100-102s (before the second
+    # "they call your name" phrase, which the unconstrained path already placed
+    # correctly at ~102-111s matching analysis/whisper-cpp-large-v3-segments.json's
+    # mix-based "101.76 111.54 They call your name"). Anchor just the outer
+    # edges of the first half; let CTC/signal refinement place the interior.
+    (8, 0, 0): (88.0, 95.0),   # "they" (first)
+    (8, 3, 0): (None, 102.0),  # "laugh," ends before the second "they call"
+}
 
 # Final manual corrections of word boundaries after refinement, only where the
-# plots clearly show the automatic result is wrong.  (line, token) ->
-# dict(start=..., end=...)
+# plots/listening clearly show the automatic result is wrong. (line, token) ->
+# dict(start=..., end=..., conf=...)
 FIX = {
-    # L5 "don't eat me alive": long legato vowels, CTC places eat/alive late /
-    # early.  /i:/ of "eat" starts right after the t-release at 20.26; "alive"
-    # starts with the pitch drop to the schwa at 21.35 ("-live" at 21.85).
-    (5, 3): dict(start=20.27),
-    (5, 5): dict(start=21.35),
-    # L11 "shinigami eyes": shi-ni-ga-mi then /a/ of "eyes" at 34.73
-    (11, 3): dict(start=34.73),
-    # L40 final chorus "I'm upping my P(doom)": lead is buried under a
-    # sustained backing "ah" pad (122.8-125.8); CTC finds nothing.  Placed from
-    # the median-filtered spectrogram + karaoke-lead stem ("doom" /d/ at
-    # 125.66 seen by both CTC models on the lead stem), rhythm identical to
-    # chorus 3 (95.46 / 95.70 / 96.10 / 96.32).
-    (40, 3): dict(start=125.40, syl=[125.66], conf=0.45),
-    (40, 0): dict(start=124.52, conf=0.35),
-    (40, 1): dict(start=124.78, conf=0.35),
-    (40, 2): dict(start=125.20, conf=0.4),
-    # Chorus pickups "I'm": strong vocal onset 2.5 beats before the DOOM
-    # downbeat in every chorus (the CTC path smears "I'm" over backing vocals).
-    (6, 0): dict(start=22.76, conf=0.7),
-    (17, 0): dict(start=59.13, conf=0.7),
-    (17, 1): dict(start=59.36),
-    (28, 0): dict(start=95.47, conf=0.75),
-    # "lies," voiced /l/ onset (lv60k / L / R channels agree, onset peak 31.16)
-    (10, 4): dict(start=31.14, conf=0.7),
-    # "We" / "don't": rest-onset rule fired on reverb tail / breath noise.
-    (12, 0): dict(start=38.62),
-    (27, 2): dict(start=92.46),
-    # "you are" is one long note; vowel change /u/ -> /a/ (spectral centroid
-    # 1020 -> 1180 Hz) at 83.93.  CTC models disagree (83.94 mms / 84.58 lv).
-    (25, 6): dict(start=83.93, conf=0.5),
-    # held notes whose automatic end ran into the next (unlisted) vocal
-    (33, 2): dict(end=108.45),
-    (45, 4): dict(end=140.55),
+    # L8 "They" (first): the vocal-activity signal (RMS) never drops between
+    # "they" and "tease" (continuous sustained/legato singing, or a long held
+    # note + reverb), so refine()'s end-detection stretches "they" all the way
+    # to "tease"'s onset at 98.6s (an implausible 8.6s single-syllable word).
+    # Independent onset+sibilance evidence pins "tease"'s /t/-/z/ onset firmly
+    # at 98.3-99.5s (see README-whatif.md), so that part is solid; "they"
+    # itself, per two isolated whisper.cpp re-transcriptions of this stretch,
+    # is articulated around 89.6-92s, with the 92-98.6s remainder most likely
+    # an unlexicalised held/ad-lib tail -> reported separately as an "extra",
+    # not attached to the word "they". Low confidence: exact cutoff between
+    # "they" and the held tail is a judgement call, not a clean signal boundary.
+    (8, 0): dict(end=92.0, conf=0.4),
 }
 
 # ---------------------------------------------------------------------------
@@ -109,12 +122,12 @@ FRIC_END = re.compile(r"(s|z|f|x|ce|se|ze|sh|ch)$")
 
 
 def refine(words, f, fix=None):
-    """Signal-based refinement of CTC boundaries, per sub-word unit (a word, or
-    one spelled letter / syllable of an acronym like "ay gee eye").
+    """Signal-based refinement of CTC boundaries, per sub-word unit (here every
+    word is its own unit; the song has no spelled acronyms).
 
     1. rest-onset : a rest (>=50 ms silence) precedes the unit and the voice
                     re-enters >40 ms before the first CTC char -> start there
-                    (CTC fires late on held vowels, e.g. the opening "I").
+                    (CTC fires late on held vowels).
     2. onset-snap : otherwise snap to the strongest vocal onset (spectral flux)
                     in a window just before the CTC start (legato word starts
                     with glottal/vowel onsets that CTC places late).
@@ -240,21 +253,13 @@ def refine(words, f, fix=None):
     return words
 
 
-EXTRA_DESC = [
-    # (t0, t1, description) -- identified from QA plots, the karaoke lead stem
-    # and Whisper / greedy CTC transcripts of the vocal stem.
-    (34.9, 38.3, "backing-vocal tail / 'ah' ad-lib after 'eyes' over the break (chorus 1 end)"),
-    (108.5, 110.15, "lead-in before 'Just transformers': Whisper hears a stuttered 'Just, just, just' (low confidence)"),
-    (122.4, 125.9, "sustained backing 'ah' pad under 'I'm upping my P(doom)' (final chorus) - lead is buried here"),
-    (140.6, 153.5, "outro chant: repeated 'oh' / 'oh-oh' vocal hook (Whisper: 'Oh, oh, oh...') until the drums stop at ~153"),
-]
-
-
 def detect_extras(words, f):
-    """Vocal activity (vocal stem) not covered by any lyric word."""
+    """Vocal activity (vocal stem) not covered by any lyric word: instrumental
+    gaps, breaths, or (per the treatment's "tease"/"name" repeats) ad-libbed
+    repeats. Reported in data/lyrics.json['extras'] and README-whatif.md."""
+    from scipy.ndimage import median_filter
     hop = f["hop"]
-    r = median_filter_1d(f["rms_db"], 9)
-    loc = np.maximum.accumulate(r)  # unused guard
+    r = median_filter(f["rms_db"], 9)
     act = r > -36
     cover = np.zeros_like(act)
     for w in words:
@@ -267,27 +272,13 @@ def detect_extras(words, f):
         else:
             out.append([a * hop, b * hop])
     out = [x for x in out if x[1] - x[0] >= 0.5]
-    ext = []
-    for a, b in out:
-        desc = next((d for (t0, t1, d) in EXTRA_DESC if a < t1 and b > t0), None)
-        ext.append(dict(start=round(a, 2), end=round(b, 2),
-                        desc=desc or "unlisted vocal (backing vocal / ad-lib / breath)"))
-    # also list known extras that overlap lyric words (e.g. backing pads)
-    for (t0, t1, d) in EXTRA_DESC:
-        if not any(e["desc"] == d for e in ext):
-            ext.append(dict(start=t0, end=t1, desc=d))
-    ext.sort(key=lambda e: e["start"])
-    return ext
-
-
-def median_filter_1d(x, n):
-    from scipy.ndimage import median_filter
-    return median_filter(x, n)
+    return [dict(start=round(a, 2), end=round(b, 2), desc="unlisted vocal activity "
+                 "(backing vocal / ad-lib / breath / held note tail)") for a, b in out]
 
 
 def whisper_words():
-    W = json.loads((common.WORK / "whisper_turbo_prompt.json").read_text())
-    return [(w["word"].strip(), w["start"], w["end"]) for s in W["segments"] for w in s.get("words", [])]
+    W = json.loads((common.WORK / "whisper_words.json").read_text())
+    return [(w["word"].strip(), w["start"], w["end"]) for w in W]
 
 
 def norm(t):
@@ -308,10 +299,10 @@ def map_whisper(words, ww):
         elif tag == "replace" and (i2 - i1) == (j2 - j1):
             for d in range(i2 - i1):
                 m[i1 + d] = ww[j1 + d]
-    # replace blocks of unequal length: map by time proximity later (skip)
     for i, w in enumerate(words):
         x = m.get(i)
-        # reject mapping if wildly off in time (fuzzy false matches)
+        # reject mapping if wildly off in time (fuzzy false matches, e.g. against
+        # a hallucinated repeat elsewhere in the whisper transcript)
         if x is not None and abs(x[1] - w["start"]) > 1.5:
             x = None
         w["whisper"] = None if x is None else (round(x[1], 3), round(x[2], 3))
@@ -320,7 +311,7 @@ def map_whisper(words, ww):
 
 def confidence(words, alt):
     for i, w in enumerate(words):
-        ds = [abs(a[i]["start"] - w["ctc_start"]) for k, a in alt.items() if k != "fused_lead"]
+        ds = [abs(a[i]["start"] - w["ctc_start"]) for k, a in alt.items()]
         agree = np.mean([d <= 0.06 for d in ds])
         p = min(1.0, w["conf"] / 0.5)
         wh = w.get("whisper")
@@ -395,35 +386,22 @@ def make_plots(words, alt, L):
 
 
 NOTES = (
-    "Timeline = gapless mp3 decode (same as data/audio.json); Demucs stems shifted -23 ms "
-    "(LAME encoder delay). Method: (1) CTC emissions (20 ms frames) of the Demucs vocal stem "
-    "from two acoustic models, torchaudio MMS_FA and wav2vec2-large-lv60k-960h, each on the "
-    "mono sum and on the left and right channels (choruses are double-tracked L/R), fused as a "
-    "probability mixture; (2) one global constrained Viterbi forced alignment of all 46 lines "
-    "over the whole song with a garbage 'star' token between lines to absorb ad-libs; "
-    "acronyms/odd words aligned with phonetic spellings (AGI='ay gee i', P(doom)='pee doom', "
-    "ChatGPT='chat gee pee tee', NVDA='en vee dee ay', MLP='em el pee', CDR='see dee are', "
-    "PTO='pee tee oh', GPU='gee pee you', RLHF='are el aitch eff', One E thirty='one ee thirty', "
-    "Neumann's='noymans'); (3) signal refinement per syllable unit on the vocal stem: start moved "
-    "to the voice re-entry after a rest, snapped to the nearest spectral-flux onset, or moved back "
-    "to the start of s/sh/ch/f/th frication; ends = next word start when legato, else when the "
-    "voice drops 15 dB below the word level (held notes keep their full length); (4) "
-    "cross-check against mlx-whisper large-v3-turbo word timestamps and the individual "
-    "models/channels, plus a mel-roformer karaoke lead-vocal stem for the final chorus; "
-    "(5) manual verification of every line on zoomed spectrogram/pitch/onset plots "
-    "(analysis/qa/zl_*.png) with ~20 manual corrections (align.py FIX). "
-    "conf: 0.35 + agreement of the independent alignments (<=60 ms) + CTC posterior + "
-    "Whisper agreement; manual fixes carry their own conf. 'syl' = start/end of each spelled "
-    "letter or compound part (AGI, ChatGPT, P(doom), NVDA, MLP, CDR, PTO, GPU, RLHF, "
-    "Killswitch, Post-Chinchilla, super-dense, pre-training, self-upgrade). "
-    "NVDA pronunciation is ambiguous: 'Nvidia' scores slightly better acoustically than "
-    "'en-vee-dee-ay', but the word timing is the same either way (62.54-63.36), so syl uses "
-    "the letter split. "
-    "Uncertain words: final-chorus 'I'm upping my' (124.5-125.4, buried under a backing pad, "
-    "placed by rhythm of the other choruses, +-100 ms); 'are' (83.93, could be 84.58); "
-    "'me' (57.14); 'alive' (21.35); 'eat' (20.27); 'Just transformers' region (108.5-110.2 lead-in); "
-    "chorus 'I'm' pickups (22.76, 59.13, 95.47) +-50 ms; 'lies,' 31.14. Everything else "
-    "is expected within ~30-50 ms at word starts."
+    "Method (forked from mexicat/pdoom-video's analysis/ pipeline; adapted for this "
+    "song, see analysis/README-whatif.md): (1) CTC emissions (20 ms frames) of the "
+    "Demucs vocal stem from two acoustic models, torchaudio MMS_FA and "
+    "wav2vec2-large-lv60k-960h, each on the mono sum and on the left and right "
+    "channels, fused as a probability mixture; (2) one global constrained Viterbi "
+    "forced alignment of all 13 lines over the whole song with a garbage 'star' "
+    "token between lines to absorb instrumental gaps and backing vocals, "
+    "constrained per line to a rough time window from the whisper.cpp mix "
+    "reference; (3) signal refinement per word on the vocal stem: start moved to "
+    "the voice re-entry after a rest, snapped to the nearest spectral-flux onset, "
+    "or moved back to the start of s/sh/ch/f/th frication; ends = next word start "
+    "when legato, else when the voice drops 15 dB below the word level; (4) "
+    "cross-check against whisper.cpp (large-v3) word timestamps on the vocal stem "
+    "and the individual models/channels. "
+    "conf: 0.35 + agreement of the independent alignments (<=60 ms) + CTC "
+    "posterior + whisper agreement; manual fixes carry their own conf."
 )
 
 if __name__ == "__main__":

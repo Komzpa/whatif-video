@@ -67,8 +67,9 @@ def plot(t0, t1, tracks, out, title="", marks=None):
             for a_ in axes[:2]:
                 a_.axvline(s, color=c, lw=0.9, alpha=0.8, ls="-" if k == 0 else "--")
         ax3.text(t0, yk - 0.3, name, fontsize=8, color=c)
-    # 8th-note grid (132 BPM) -- beats solid, off-beats dotted
-    P, OFF = 60 / 132, 0.708
+    # 8th-note grid (this song's fitted tempo/phase, see analyze.py) -- beats
+    # solid, off-beats dotted
+    P, OFF = 60 / 73.981, 0.2739
     n0, n1 = int(np.floor((t0 - OFF) / P * 2)), int(np.ceil((t1 - OFF) / P * 2))
     for n in range(n0, n1 + 1):
         tb = OFF + n * P / 2

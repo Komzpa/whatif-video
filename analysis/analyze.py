@@ -1,13 +1,15 @@
-"""Music analysis -> data/audio.json
+"""Music analysis -> data/audio.json (forked from mexicat/pdoom-video's
+analyze.py; adapted for this song, see analysis/README-whatif.md).
 
   * constant-tempo beat grid (tempo + phase fitted to drum / mix onsets, phase
-    refined on kick attacks), downbeats (bar phase from snare-on-2&4 and the
-    2-bar chord changes), sections on downbeats,
+    refined on kick attacks), downbeats (bar phase from beat-synchronous
+    chroma novelty: chord changes land on the downbeat), sections on downbeats,
   * 100 fps normalized envelopes (mix rms / low / mid / high, stem rms),
   * kick / snare / hat onsets from the drums stem, vocal note onsets.
 
-All times are in the gapless-mp3 timeline (Demucs stems are shifted by
-common.STEM_OFFSET_SEC, see common.py).
+All times are in the gapless-mp3 timeline; unlike pdoom, our Demucs stems were
+separated directly from a gapless-decoded WAV (see common.py), so no stem-time
+offset correction is needed.
 
 Run:  uv run python analyze.py [--plots]
 """
@@ -24,27 +26,39 @@ from scipy.signal import butter, find_peaks, sosfiltfilt
 SR = 44100
 FPS = 100
 
-# Section map in bars (bar k starts at downbeat k; bar 0 = first downbeat).
-# Rule: a section starts on the downbeat of the bar in which its first lyric
-# line starts, unless that line starts with a short (< 2 beat) pickup, in which
-# case the pickup stays in the previous section.  The choruses all start with
-# a ~3-beat pickup "I'm upping my P-" over a bass stop, landing "DOOM" on the
-# next downbeat, so the chorus section starts at the pickup bar.
-SECTION_BARS = [
-    ("intro", None, 1),      # 0 .. bar 1 (1-bar synth intro, pickup "I" at 1.41)
-    ("verse1", 1, 9),        # Eb Bb Cm Ab x1 (2 bars each), no drums until bar 7
-    ("pre1", 9, 12),         # F F Ab  "ChatGPT, please don't eat me alive"
-    ("chorus1", 12, 20),     # pickup/stop bar 12, "DOOM" on bar 13
-    ("break1", 20, 21),      # 1-bar turnaround (tail of held "eyes")
-    ("verse2", 21, 29),
-    ("pre2", 29, 32),        # "Sydney, please let me free" (bass out)
-    ("chorus2", 32, 41),     # incl. bar 40 (held "reckoned", pickup "Forward")
-    ("verse3", 41, 49),
-    ("pre3", 49, 52),        # breakdown: drums + bass out, "Gato, please don't let me go"
-    ("chorus3", 52, 60),     # quiet chorus: light drums, no bass
-    ("bridge", 60, 68),      # "Just transformers ..." (full band from bar 61)
-    ("chorus4", 68, 77),     # final chorus, bar 76 = stop bar ("all for show?")
-    ("outro", 77, None),     # full band + "oh" vocals to bar 84 (152.98), then decay
+# Tempo search range. pdoom's script hardcoded 125-138 BPM (its own producer
+# knew the DAW tempo); we don't have that, so this was found empirically (see
+# README-whatif.md "Tempo"): a full 50-200 BPM onset-alignment search finds
+# strong candidates at 74 and its octaves 37/148/222 (the classic tempo-
+# tracking octave ambiguity). 74 BPM is confirmed by (a) low jitter (~18 ms)
+# fitting the sparse kick onsets to a 74 BPM/0.811 s-period grid, (b) 148 and
+# 222 BPM scored lower once the "sparser grid scores higher" bias is accounted
+# for, and (c) it matches the treatment's "slow and spacious" description
+# (148 BPM would read as a moderately fast pop tempo, not a ballad).
+BPM_LO, BPM_HI = 60.0, 90.0
+
+# This song has no repeating chorus with a known chord chart (pdoom's had
+# "DOOM" landing on a bar-13/33/53/69 downbeat by construction); chapters are
+# each a single short phrase, not a bar-numbered verse/chorus form. Sections
+# are therefore built at runtime from the lyric lines' CTC-aligned start
+# times, snapped back to the nearest downbeat (see `build_sections`), rather
+# than a hand-authored bar-number table.
+CHAPTERS = [
+    # (name, index of this chapter's first data/lyrics.json line, or None for
+    # the instrumental intro/outro that carry no lyric line of their own)
+    ("book", None),
+    ("lost", 0),
+    ("door", 2),
+    ("dogs", 3),
+    ("cat", 4),
+    ("temp", 5),
+    ("storm", 7),
+    ("tease", 8),
+    ("alone", 9),
+    ("words", 10),
+    ("stranger", 11),
+    ("dark", 12),
+    ("close", None),  # outro; ends at duration
 ]
 
 
@@ -86,11 +100,10 @@ def norm01(x, pct=99.0):
 
 
 # ---------------------------------------------------------------------------
-def fit_grid(drums, mix, sr, duration):
+def fit_grid(drums, mix, sr, duration, bpm_lo=BPM_LO, bpm_hi=BPM_HI):
     """Constant-tempo grid: coarse tempo/phase search on spectral-flux onset
     envelopes, then phase refinement on kick attack times."""
     hop = 64
-    fps = sr / hop
     od = librosa.onset.onset_strength(y=librosa.resample(drums, orig_sr=sr, target_sr=22050),
                                       sr=22050, hop_length=hop // 2, lag=1, max_size=1)
     om = librosa.onset.onset_strength(y=librosa.resample(mix, orig_sr=sr, target_sr=22050),
@@ -105,7 +118,7 @@ def fit_grid(drums, mix, sr, duration):
         return np.maximum.reduce([o[idx - 1], o[idx], o[idx + 1]]).mean()
 
     best = (0, None, None)
-    for bpm in np.arange(125.0, 138.0, 0.02):
+    for bpm in np.arange(bpm_lo, bpm_hi, 0.02):
         P = 60 / bpm
         for off in np.arange(0, P, 0.004):
             s = score(P, off)
@@ -129,6 +142,24 @@ def fit_grid(drums, mix, sr, duration):
     # first beat >= 0
     off = off - P * math.floor(off / P)
     return bpm, P, off, res
+
+
+def pick_downbeat_phase(harm, sr, beats):
+    """Bar phase (which of every 4 beats is a downbeat): beat-synchronous
+    chroma novelty on the harmonic stems (bass+other) -- chord changes land on
+    downbeats. Returns the beat-array phase (0-3) with the highest average
+    novelty (pdoom instead knew its chord chart by construction)."""
+    chroma = librosa.feature.chroma_cqt(y=harm, sr=sr, hop_length=2048)
+    times = librosa.frames_to_time(np.arange(chroma.shape[1]), sr=sr, hop_length=2048)
+    bsync = []
+    for i in range(len(beats) - 1):
+        m = (times >= beats[i]) & (times < beats[i + 1])
+        bsync.append(chroma[:, m].mean(axis=1) if m.sum() else (bsync[-1] if bsync else chroma[:, 0]))
+    bsync = np.array(bsync)
+    bsync = bsync / (np.linalg.norm(bsync, axis=1, keepdims=True) + 1e-9)
+    novelty = 1 - np.sum(bsync[1:] * bsync[:-1], axis=1)
+    scores = [novelty[phase::4].mean() for phase in range(4)]
+    return int(np.argmax(scores)), scores
 
 
 def band_onsets(x, sr, lo, hi, win=0.010, hop_s=0.002, min_gap=0.08, rel_db=10.0,
@@ -162,14 +193,14 @@ def band_onsets(x, sr, lo, hi, win=0.010, hop_s=0.002, min_gap=0.08, rel_db=10.0
 
 
 def drum_onsets(d, sr, grid_P, grid_off):
-    """Kick / snare / hat onsets from the drums stem."""
+    """Kick / snare / hat onsets from the drums stem. This song's drums are
+    silent for the first ~80s (see README-whatif.md "Structure"); thresholds
+    are otherwise the same band/attack heuristics as pdoom's script."""
     # KICK: <120 Hz
     kt, kdb = band_onsets(d, sr, None, 120, win=0.012, min_gap=0.15, rel_db=12)
-    # SNARE (and the clap-like snare of the quiet chorus): candidates are
-    # 1.5-5 kHz attacks; a snare has a long noisy 0.5-5 kHz tail 40-120 ms after
-    # the attack.  Keep candidates whose tail is within 8 dB of the loudest tail
-    # in +-2.5 s and within 25 dB of the song-wide level (rejects stem bleed).
-    # Kick-only beats / hats have tails 12-30 dB lower.
+    # SNARE: 1.5-5 kHz attacks with a noisy 0.5-5 kHz tail 40-120 ms later
+    # within 8 dB of the loudest tail in +-2.5 s and within 25 dB of the
+    # song-wide level (rejects stem bleed / kick-only beats / hats).
     st, sdb = band_onsets(d, sr, 1500, 5000, win=0.010, min_gap=0.15, rel_db=10)
     xb = sosfiltfilt(band_sos(500, 5000, sr), d)
     e = np.sqrt(np.convolve(xb.astype(np.float64) ** 2, np.ones(441) / 441, mode="same"))
@@ -178,10 +209,9 @@ def drum_onsets(d, sr, grid_P, grid_off):
     thr = np.percentile(tail, 95) - 25
     keep = (rel > -8) & (tail > thr)
     st, sdb, stail = st[keep], sdb[keep], tail[keep]
-    # HAT: >7 kHz, short; drop those coinciding with snares (snare noise also
-    # reaches 7k+)
+    # HAT: >7 kHz, short; drop those coinciding with snares/kicks (their
+    # transients also reach 7k+)
     ht, hdb = band_onsets(d, sr, 7000, None, win=0.006, min_gap=0.06, rel_db=9)
-    # (and those within 30 ms of a kick: the kick's beater click reaches 10 kHz)
     for other, gap in ((st, 0.04), (kt, 0.03)):
         if len(other) and len(ht):
             dist = np.min(np.abs(ht[:, None] - other[None, :]), axis=1)
@@ -221,7 +251,6 @@ def vocal_onsets(v, sr):
         a, b = med[i - w], med[i + w]
         if a > 0 and b > 0 and abs(b - a) > 0.8 and active[i]:
             jumps.append(i)
-    # collapse runs
     t_pitch, last = [], -1e9
     for i in jumps:
         if i - last > int(0.1 / hop):
@@ -236,6 +265,39 @@ def vocal_onsets(v, sr):
     return [(float(t), float(min(1.0, max(0.1, s)))) for t, s in ts]
 
 
+def build_sections(downbeats, duration):
+    """Each named chapter starts at the downbeat at-or-before its first lyric
+    line's CTC-aligned start (this naturally folds in a short instrumental
+    pickup/lead-in, matching the acceptance rule "sections ... including
+    instrumental gaps between lines"); book/close bookend the instrumental
+    intro/outro. Sections are forced contiguous (each ends where the next
+    starts) so they cover [0, duration) with no gaps."""
+    lyr = json.loads((common.DATA / "lyrics.json").read_text())
+    lines = lyr["lines"]
+
+    def db_before(t):
+        idx = np.searchsorted(downbeats, t, side="right") - 1
+        return float(downbeats[max(idx, 0)])
+
+    def db_after(t):
+        idx = np.searchsorted(downbeats, t, side="left")
+        return float(downbeats[min(idx, len(downbeats) - 1)])
+
+    starts = []
+    for name, li in CHAPTERS:
+        if name == "book":
+            starts.append((name, 0.0))
+        elif name == "close":
+            starts.append((name, db_after(lines[-1]["end"])))
+        else:
+            starts.append((name, db_before(lines[li]["start"])))
+    sections = []
+    for i, (name, s) in enumerate(starts):
+        e = starts[i + 1][1] if i + 1 < len(starts) else duration
+        sections.append(dict(name=name, start=round(s, 3), end=round(e, 3)))
+    return sections
+
+
 # ---------------------------------------------------------------------------
 def main(plots=False):
     mix, _ = common.load_mix(SR)
@@ -248,10 +310,10 @@ def main(plots=False):
     bpm, P, off, kick_res = fit_grid(stems["drums"], mix, SR, duration)
     print(f"tempo {bpm:.3f} BPM  period {P:.5f}s  first beat {off:.4f}s  kick residual sd {kick_res.std()*1000:.1f} ms")
     beats = off + P * np.arange(int((duration - off) / P) + 1)
-    # bar phase: beat index 0 is a downbeat (see NOTES / qa/drums_pattern.png)
-    beat_in_bar = np.arange(len(beats)) % 4
-    downbeats = beats[beat_in_bar == 0]
-    bar_t = lambda k: float(off + 4 * P * k)
+    phase, phase_scores = pick_downbeat_phase(stems["bass"] + stems["other"], SR, beats)
+    print(f"downbeat phase {phase} (chroma novelty by phase: {[round(s,3) for s in phase_scores]})")
+    downbeats = beats[phase::4]
+    bar_t = lambda k: float(downbeats[0] + 4 * P * k)
 
     # envelopes -------------------------------------------------------------
     n = int(math.ceil(duration * FPS))
@@ -274,22 +336,9 @@ def main(plots=False):
         "hat": [[round(float(t), 3), round(float(s), 3)] for t, s in zip(ht, strength01(hdb))],
         "vocal": [[round(t, 3), round(s, 3)] for t, s in vocal_onsets(stems["vocals"], SR)],
     }
-    # snare / kick position statistics -> bar phase evidence
-    def pos_hist(ts):
-        ph = np.round((np.asarray(ts) - off) / (P / 2)).astype(int) % 8
-        return np.bincount(ph, minlength=8).tolist()
-    print("kick   8th-positions in bar:", pos_hist(kt))
-    print("snare  8th-positions in bar:", pos_hist(st))
-    print("hat    8th-positions in bar:", pos_hist(ht))
 
     # sections -------------------------------------------------------------------
-    sections = []
-    for name, a, b in SECTION_BARS:
-        s = 0.0 if a is None else bar_t(a)
-        e = duration if b is None else bar_t(b)
-        sections.append(dict(name=name, start=round(s, 3), end=round(e, 3), bars=[a if a is not None else -1, b]))
-    for s in sections:
-        s.pop("bars")
+    sections = build_sections(downbeats, duration)
 
     doc = dict(
         duration=round(duration, 3),
@@ -303,7 +352,6 @@ def main(plots=False):
         **env,
         onsets=onsets,
         notes=NOTES.format(bpm=bpm, off=off, P=P, first_db=float(downbeats[0]),
-                           b61=bar_t(61), b76=bar_t(76), b77=bar_t(77), b84=bar_t(84),
                            sn=len(st), kk=len(kt), hh=len(ht)),
     )
     (common.DATA / "audio.json").write_text(json.dumps(doc, separators=(",", ":")))
@@ -315,33 +363,34 @@ def main(plots=False):
 
 
 NOTES = (
-    "Timeline = gapless mp3 decode (ffmpeg/libsndfile/browsers); Demucs stems were "
-    "shifted -23.0 ms (LAME encoder delay) to match. "
-    "Tempo is constant: {bpm:.3f} BPM (period {P:.5f} s), fitted over the whole song on "
-    "drum+mix onset envelopes (no drift: per-15 s phase deviation <= 2 ms), phase refined "
-    "on kick attack times; first beat {off:.3f} s. The grid is extrapolated through the "
-    "drum-less intro/verse1/pre3 and the fade. "
-    "Bar phase: the drums play four-on-the-floor kick with snare on beats 2 and 4 "
-    "(broadband snare bursts on odd beat indices) and 8th-note off-beat hats, which fixes "
-    "the phase up to half a bar; the half-bar ambiguity is resolved by the harmony: the "
-    "progression Eb-Bb-Cm-Ab (2 bars per chord, F-F-Ab in the pre-choruses) changes chord "
-    "exactly on beat indices = 0 mod 8, and every chorus lands 'DOOM' of 'P(doom)' on a "
-    "downbeat (bars 13/33/53/69). First downbeat {first_db:.3f} s; bar k starts "
-    "at first_downbeat + k*4*period. "
-    "Sections start on downbeats; choruses include their 3-beat pickup bar "
-    "('I'm upping my P-' over a bass stop). pre3 (89.3-94.8) is a breakdown with no drums "
-    "or bass; chorus3 (94.8-109.3) is a quiet chorus with light drums and no bass; the "
-    "full band returns in bar 61 ({b61:.2f} s). chorus4 ends with a stop bar ({b76:.2f}-{b77:.2f} s, "
-    "'all for show?'), outro is loud until {b84:.2f} s (drums stop) then decays to silence ~155.5 s. "
-    "Envelopes: 100 fps, frame i centred at i/100 s, 46 ms RMS window, one-pole smoothing "
-    "(10 ms attack / 90 ms release), each divided by its own 99th percentile and clipped "
-    "to 0..1 (linear amplitude). low <150 Hz, mid 150-2000 Hz, high >4 kHz of the full mix; "
-    "vocal/drums/bass/other = stem RMS. "
-    "Onsets [time, strength 0-1] from the drums stem: kick = attack (steepest rise) of the "
-    "<120 Hz band ({kk}); snare = 1.5-5 kHz attacks whose 0.5-5 kHz noise tail 40-120 ms later is in the "
-    "loudest local class ({sn}; kick-only in pre1/pre2); hat = >7 kHz attacks not within 40 ms of a snare or 30 ms of a kick ({hh}; mostly 8th off-beats). vocal = note "
-    "onsets from the vocal stem (log-mel flux peaks + legato pitch jumps > 0.8 semitone), "
-    "including backing vocals / ad-libs."
+    "Method (forked from mexicat/pdoom-video's analysis/analyze.py; adapted for "
+    "this song, see analysis/README-whatif.md): tempo is constant, {bpm:.3f} BPM "
+    "(period {P:.5f} s), fitted on drum+mix onset envelopes over a 60-90 BPM search "
+    "(pdoom's script instead searched a known 125-138 BPM DAW-tempo range), phase "
+    "refined on kick attack times (first beat {off:.3f} s); the drums stem is silent "
+    "until ~80s and after ~155s (this song's drums only play under 'storm'..'dark'), "
+    "but the mix onset envelope carries the beat through the drum-less sections. "
+    "Bar phase (downbeat = every 4th beat) was picked automatically from "
+    "beat-synchronous chroma novelty on the bass+other stems (chord changes land on "
+    "downbeats): first downbeat {first_db:.3f} s; pdoom instead hand-verified bar "
+    "phase from a known chord chart. "
+    "Sections: this song has no verse/chorus form with a bar-numbered chord chart "
+    "like pdoom's, so each chapter (data/lyrics.json line groups, matching "
+    "docs/TREATMENT.md's chapter table) starts at the downbeat at or before its "
+    "first line's CTC-aligned start (folding in a short instrumental pickup), and "
+    "runs to the next chapter's start; 'book' (0 -> first chapter) and 'close' "
+    "(last chapter's end -> duration) are the instrumental intro/outro. "
+    "Envelopes: 100 fps, frame i centred at i/100 s, 46 ms RMS window, one-pole "
+    "smoothing (10 ms attack / 90 ms release), each divided by its own 99th "
+    "percentile and clipped to 0..1 (linear amplitude). low <150 Hz, mid 150-2000 Hz, "
+    "high >4 kHz of the full mix; vocal/drums/bass/other = stem RMS. "
+    "Onsets [time, strength 0-1] from the drums stem: kick = attack (steepest rise) "
+    "of the <120 Hz band ({kk}); snare = 1.5-5 kHz attacks whose 0.5-5 kHz noise tail "
+    "40-120 ms later is in the loudest local class ({sn}); hat = >7 kHz attacks not "
+    "within 40 ms of a snare or 30 ms of a kick ({hh}). All three are sparse and only "
+    "present from ~80s to ~155s (see above). vocal = note onsets from the vocal stem "
+    "(log-mel flux peaks + legato pitch jumps > 0.8 semitone), including backing "
+    "vocals / held-note re-articulations."
 )
 
 
@@ -349,8 +398,8 @@ def make_plots(doc, stems):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    wins = [(0, 12), (14, 26), (28, 36), (56, 64), (86, 98), (106, 114), (136, 146), (148, 156.6)]
     t = np.arange(len(doc["rms"])) / FPS
+    wins = [(s["start"], s["end"]) for s in doc["sections"]]
     for (t0, t1) in wins:
         fig, ax = plt.subplots(3, 1, figsize=(22, 11), sharex=True,
                                gridspec_kw=dict(height_ratios=[2, 1.6, 1.4]))
@@ -388,11 +437,9 @@ def make_plots(doc, stems):
                 for a_ in ax:
                     a_.axvline(s["start"], color="tab:red", lw=2.5)
         ax[2].set_xlim(t0, t1)
-        ax[2].set_xticks(np.arange(np.ceil(t0), t1, 0.5))
         fig.tight_layout()
-        fig.savefig(common.QA / f"audio_{int(t0):03d}.png", dpi=65)
+        fig.savefig(common.QA / f"audio_{s['name'] if False else int(t0):03d}.png", dpi=65)
         plt.close(fig)
-    # overview
     fig, ax = plt.subplots(2, 1, figsize=(24, 7), sharex=True)
     for k, c in [("rms", "k"), ("low", "tab:red"), ("high", "tab:blue")]:
         ax[0].plot(t, doc[k], color=c, lw=0.6, label=k)
@@ -404,7 +451,7 @@ def make_plots(doc, stems):
         ax[0].text(s["start"] + 0.2, 1.03, s["name"], fontsize=10, color="tab:red")
     for a_ in ax:
         a_.legend(loc="upper right", fontsize=8)
-    ax[1].set_xticks(np.arange(0, 157, 5))
+    ax[1].set_xticks(np.arange(0, 177, 5))
     fig.tight_layout()
     fig.savefig(common.QA / "audio_overview.png", dpi=65)
     plt.close(fig)

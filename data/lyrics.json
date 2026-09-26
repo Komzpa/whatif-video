@@ -1,0 +1,614 @@
+{
+  "lines": [
+    {
+      "i": 0,
+      "text": "You are lost.",
+      "start": 13.41,
+      "end": 15.605,
+      "words": [
+        {
+          "w": "You",
+          "start": 13.41,
+          "end": 13.86,
+          "conf": 0.92
+        },
+        {
+          "w": "are",
+          "start": 13.86,
+          "end": 14.12,
+          "conf": 0.85
+        },
+        {
+          "w": "lost.",
+          "start": 14.12,
+          "end": 15.605,
+          "conf": 0.81
+        }
+      ]
+    },
+    {
+      "i": 1,
+      "text": "You missed the stop, the metro closed.",
+      "start": 15.68,
+      "end": 21.835,
+      "words": [
+        {
+          "w": "You",
+          "start": 15.68,
+          "end": 15.94,
+          "conf": 1.0
+        },
+        {
+          "w": "missed",
+          "start": 15.94,
+          "end": 16.34,
+          "conf": 0.82
+        },
+        {
+          "w": "the",
+          "start": 16.34,
+          "end": 16.453,
+          "conf": 0.85
+        },
+        {
+          "w": "stop,",
+          "start": 16.453,
+          "end": 17.216,
+          "conf": 0.85
+        },
+        {
+          "w": "the",
+          "start": 19.04,
+          "end": 19.32,
+          "conf": 0.92
+        },
+        {
+          "w": "metro",
+          "start": 19.32,
+          "end": 20.453,
+          "conf": 0.85
+        },
+        {
+          "w": "closed.",
+          "start": 20.453,
+          "end": 21.835,
+          "conf": 0.82
+        }
+      ]
+    },
+    {
+      "i": 2,
+      "text": "You’re home alone, the doorbell rings.",
+      "start": 26.38,
+      "end": 35.055,
+      "words": [
+        {
+          "w": "You’re",
+          "start": 26.38,
+          "end": 26.729,
+          "conf": 0.88
+        },
+        {
+          "w": "home",
+          "start": 26.729,
+          "end": 28.186,
+          "conf": 0.84
+        },
+        {
+          "w": "alone,",
+          "start": 28.186,
+          "end": 29.638,
+          "conf": 0.87
+        },
+        {
+          "w": "the",
+          "start": 29.638,
+          "end": 29.88,
+          "conf": 0.85
+        },
+        {
+          "w": "doorbell",
+          "start": 29.88,
+          "end": 33.96,
+          "conf": 0.77
+        },
+        {
+          "w": "rings.",
+          "start": 33.96,
+          "end": 35.055,
+          "conf": 0.74
+        }
+      ]
+    },
+    {
+      "i": 3,
+      "text": "Stray dogs cross your path at night.",
+      "start": 39.76,
+      "end": 47.756,
+      "words": [
+        {
+          "w": "Stray",
+          "start": 39.76,
+          "end": 42.14,
+          "conf": 0.92
+        },
+        {
+          "w": "dogs",
+          "start": 42.14,
+          "end": 42.613,
+          "conf": 0.92
+        },
+        {
+          "w": "cross",
+          "start": 42.613,
+          "end": 43.247,
+          "conf": 1.0
+        },
+        {
+          "w": "your",
+          "start": 43.247,
+          "end": 43.636,
+          "conf": 1.0
+        },
+        {
+          "w": "path",
+          "start": 43.7,
+          "end": 46.3,
+          "conf": 0.85
+        },
+        {
+          "w": "at",
+          "start": 46.41,
+          "end": 46.609,
+          "conf": 0.87
+        },
+        {
+          "w": "night.",
+          "start": 46.609,
+          "end": 47.756,
+          "conf": 0.83
+        }
+      ]
+    },
+    {
+      "i": 4,
+      "text": "Your cat is stuck up in a tree.",
+      "start": 52.81,
+      "end": 63.052,
+      "words": [
+        {
+          "w": "Your",
+          "start": 52.81,
+          "end": 53.134,
+          "conf": 0.85
+        },
+        {
+          "w": "cat",
+          "start": 53.22,
+          "end": 55.399,
+          "conf": 0.85
+        },
+        {
+          "w": "is",
+          "start": 55.399,
+          "end": 55.579,
+          "conf": 0.75
+        },
+        {
+          "w": "stuck",
+          "start": 55.579,
+          "end": 56.76,
+          "conf": 0.85
+        },
+        {
+          "w": "up",
+          "start": 56.76,
+          "end": 56.97,
+          "conf": 0.77
+        },
+        {
+          "w": "in",
+          "start": 56.97,
+          "end": 59.6,
+          "conf": 0.74
+        },
+        {
+          "w": "a",
+          "start": 59.6,
+          "end": 59.74,
+          "conf": 0.83
+        },
+        {
+          "w": "tree.",
+          "start": 59.74,
+          "end": 63.052,
+          "conf": 0.82
+        }
+      ]
+    },
+    {
+      "i": 5,
+      "text": "It’s far too hot.",
+      "start": 66.12,
+      "end": 69.736,
+      "words": [
+        {
+          "w": "It’s",
+          "start": 66.12,
+          "end": 66.279,
+          "conf": 0.92
+        },
+        {
+          "w": "far",
+          "start": 66.279,
+          "end": 68.56,
+          "conf": 0.87
+        },
+        {
+          "w": "too",
+          "start": 68.56,
+          "end": 68.859,
+          "conf": 0.92
+        },
+        {
+          "w": "hot.",
+          "start": 68.859,
+          "end": 69.736,
+          "conf": 0.79
+        }
+      ]
+    },
+    {
+      "i": 6,
+      "text": "It’s far too cold.",
+      "start": 69.736,
+      "end": 74.236,
+      "words": [
+        {
+          "w": "It’s",
+          "start": 69.736,
+          "end": 69.956,
+          "conf": 0.85
+        },
+        {
+          "w": "far",
+          "start": 69.956,
+          "end": 72.58,
+          "conf": 0.82
+        },
+        {
+          "w": "too",
+          "start": 72.58,
+          "end": 72.9,
+          "conf": 0.85
+        },
+        {
+          "w": "cold.",
+          "start": 72.9,
+          "end": 74.236,
+          "conf": 0.93
+        }
+      ]
+    },
+    {
+      "i": 7,
+      "text": "The weather turns, it feels unsafe.",
+      "start": 79.395,
+      "end": 89.621,
+      "words": [
+        {
+          "w": "The",
+          "start": 79.395,
+          "end": 79.72,
+          "conf": 0.92
+        },
+        {
+          "w": "weather",
+          "start": 79.72,
+          "end": 81.96,
+          "conf": 0.88
+        },
+        {
+          "w": "turns,",
+          "start": 81.96,
+          "end": 83.046,
+          "conf": 0.98
+        },
+        {
+          "w": "it",
+          "start": 83.046,
+          "end": 83.206,
+          "conf": 0.92
+        },
+        {
+          "w": "feels",
+          "start": 83.206,
+          "end": 85.73,
+          "conf": 0.82
+        },
+        {
+          "w": "unsafe.",
+          "start": 85.73,
+          "end": 89.621,
+          "conf": 0.82
+        }
+      ]
+    },
+    {
+      "i": 8,
+      "text": "They tease you, laugh, they call your name.",
+      "start": 89.621,
+      "end": 111.636,
+      "words": [
+        {
+          "w": "They",
+          "start": 89.621,
+          "end": 92.0,
+          "conf": 0.4
+        },
+        {
+          "w": "tease",
+          "start": 98.626,
+          "end": 100.462,
+          "conf": 0.9
+        },
+        {
+          "w": "you,",
+          "start": 100.462,
+          "end": 100.84,
+          "conf": 1.0
+        },
+        {
+          "w": "laugh,",
+          "start": 100.84,
+          "end": 101.819,
+          "conf": 0.92
+        },
+        {
+          "w": "they",
+          "start": 102.068,
+          "end": 102.38,
+          "conf": 0.85
+        },
+        {
+          "w": "call",
+          "start": 102.38,
+          "end": 105.171,
+          "conf": 0.91
+        },
+        {
+          "w": "your",
+          "start": 105.171,
+          "end": 106.06,
+          "conf": 0.84
+        },
+        {
+          "w": "name.",
+          "start": 106.06,
+          "end": 111.636,
+          "conf": 0.55
+        }
+      ]
+    },
+    {
+      "i": 9,
+      "text": "No one stays. No one’s your friend.",
+      "start": 112.07,
+      "end": 120.531,
+      "words": [
+        {
+          "w": "No",
+          "start": 112.07,
+          "end": 114.1,
+          "conf": 0.95
+        },
+        {
+          "w": "one",
+          "start": 114.1,
+          "end": 114.36,
+          "conf": 0.77
+        },
+        {
+          "w": "stays.",
+          "start": 114.36,
+          "end": 115.6,
+          "conf": 0.85
+        },
+        {
+          "w": "No",
+          "start": 115.6,
+          "end": 115.78,
+          "conf": 1.0
+        },
+        {
+          "w": "one’s",
+          "start": 115.78,
+          "end": 118.18,
+          "conf": 0.47
+        },
+        {
+          "w": "your",
+          "start": 118.18,
+          "end": 118.396,
+          "conf": 0.85
+        },
+        {
+          "w": "friend.",
+          "start": 118.396,
+          "end": 120.531,
+          "conf": 0.8
+        }
+      ]
+    },
+    {
+      "i": 10,
+      "text": "They hurt you more than words can say.",
+      "start": 124.542,
+      "end": 137.093,
+      "words": [
+        {
+          "w": "They",
+          "start": 124.542,
+          "end": 124.816,
+          "conf": 0.9
+        },
+        {
+          "w": "hurt",
+          "start": 124.816,
+          "end": 127.26,
+          "conf": 0.81
+        },
+        {
+          "w": "you",
+          "start": 127.26,
+          "end": 127.63,
+          "conf": 0.91
+        },
+        {
+          "w": "more",
+          "start": 127.63,
+          "end": 128.278,
+          "conf": 0.83
+        },
+        {
+          "w": "than",
+          "start": 128.278,
+          "end": 128.78,
+          "conf": 0.94
+        },
+        {
+          "w": "words",
+          "start": 128.78,
+          "end": 131.107,
+          "conf": 0.75
+        },
+        {
+          "w": "can",
+          "start": 131.107,
+          "end": 131.381,
+          "conf": 0.85
+        },
+        {
+          "w": "say.",
+          "start": 131.381,
+          "end": 137.093,
+          "conf": 0.77
+        }
+      ]
+    },
+    {
+      "i": 11,
+      "text": "A stranger won’t leave you alone.",
+      "start": 137.662,
+      "end": 146.452,
+      "words": [
+        {
+          "w": "A",
+          "start": 137.662,
+          "end": 137.762,
+          "conf": 0.9
+        },
+        {
+          "w": "stranger",
+          "start": 137.762,
+          "end": 140.46,
+          "conf": 0.86
+        },
+        {
+          "w": "won’t",
+          "start": 140.46,
+          "end": 141.2,
+          "conf": 0.53
+        },
+        {
+          "w": "leave",
+          "start": 141.2,
+          "end": 141.613,
+          "conf": 0.8
+        },
+        {
+          "w": "you",
+          "start": 141.613,
+          "end": 144.26,
+          "conf": 0.78
+        },
+        {
+          "w": "alone.",
+          "start": 144.26,
+          "end": 146.452,
+          "conf": 0.72
+        }
+      ]
+    },
+    {
+      "i": 12,
+      "text": "You’re scared of dark and things you can’t see.",
+      "start": 150.62,
+      "end": 158.729,
+      "words": [
+        {
+          "w": "You’re",
+          "start": 150.62,
+          "end": 150.847,
+          "conf": 0.91
+        },
+        {
+          "w": "scared",
+          "start": 150.847,
+          "end": 153.117,
+          "conf": 0.88
+        },
+        {
+          "w": "of",
+          "start": 153.117,
+          "end": 153.272,
+          "conf": 0.92
+        },
+        {
+          "w": "dark",
+          "start": 153.5,
+          "end": 154.09,
+          "conf": 0.85
+        },
+        {
+          "w": "and",
+          "start": 155.14,
+          "end": 155.397,
+          "conf": 0.84
+        },
+        {
+          "w": "things",
+          "start": 155.397,
+          "end": 156.82,
+          "conf": 0.82
+        },
+        {
+          "w": "you",
+          "start": 156.82,
+          "end": 157.08,
+          "conf": 1.0
+        },
+        {
+          "w": "can’t",
+          "start": 157.08,
+          "end": 157.826,
+          "conf": 0.82
+        },
+        {
+          "w": "see.",
+          "start": 157.826,
+          "end": 158.729,
+          "conf": 0.77
+        }
+      ]
+    }
+  ],
+  "extras": [
+    {
+      "start": 92.1,
+      "end": 98.33,
+      "desc": "unlisted vocal activity (backing vocal / ad-lib / breath / held note tail)"
+    }
+  ],
+  "notes": "Method (forked from mexicat/pdoom-video's analysis/ pipeline; adapted for this song, see analysis/README-whatif.md): (1) CTC emissions (20 ms frames) of the Demucs vocal stem from two acoustic models, torchaudio MMS_FA and wav2vec2-large-lv60k-960h, each on the mono sum and on the left and right channels, fused as a probability mixture; (2) one global constrained Viterbi forced alignment of all 13 lines over the whole song with a garbage 'star' token between lines to absorb instrumental gaps and backing vocals, constrained per line to a rough time window from the whisper.cpp mix reference; (3) signal refinement per word on the vocal stem: start moved to the voice re-entry after a rest, snapped to the nearest spectral-flux onset, or moved back to the start of s/sh/ch/f/th frication; ends = next word start when legato, else when the voice drops 15 dB below the word level; (4) cross-check against whisper.cpp (large-v3) word timestamps on the vocal stem and the individual models/channels. conf: 0.35 + agreement of the independent alignments (<=60 ms) + CTC posterior + whisper agreement; manual fixes carry their own conf."
+}
