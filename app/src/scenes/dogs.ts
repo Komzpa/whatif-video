@@ -55,7 +55,7 @@ export default class Dogs extends LitScene {
     T.stray = w(/Stray/).start; T.dogs = w(/dogs/).start; T.cross = w(/cross/).start; T.path = w(/path/).start;
     T.night = w(/night/).start; T.at = w(/^at$/).start;
     T.lower = T.cross - 0.2; T.raise = T.night - 0.15;
-    T.ownerCall = T.path; T.signCall = T.night + 0.9;
+    T.ownerCall = T.path; T.signCall = T.night + 0.7;
     this.T = T;
     // shots: the lane from high behind, the child small with the torch sweeping; the eyes in the gap in first
     // person; beside the child as the first dog steps out; from above while the three cross and the torch is
