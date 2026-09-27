@@ -271,7 +271,7 @@ export default class Dogs extends LitScene {
     const on = 1;
     this.beam(out, t, pose, on * (PROOF ? 0 : 1), { density: 0.014, maxDist: aim ? clamp(aim.distanceTo(cam.position) - 0.6, 0.8, 7) : 7 }); // the haze stops short of what the torch is on (the march ignores depth)
     // ---- QA: the tin sign (mojibake) when readable
-    this.logPlane(this.sign, this.signText, 'garble', { frac: [0.08, 0.2, 0.92, 0.85], minPx: 14, letterFrac: 0.28, id: 'plane:dog-sign' });
+    this.logPlane(this.sign, this.signText, 'garble', { frac: [0.08, 0.2, 0.92, 0.85], minPx: 14, letterFrac: 0.28, id: 'scenery:dog-sign', scenery: true }); // glyph soup the child can't read: not a reading target
     // ---- hands and UI
     const u = this.ui.ctx;
     this.glow2D.clear();

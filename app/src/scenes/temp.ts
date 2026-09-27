@@ -126,7 +126,8 @@ export default class Temp extends LitScene {
     boxMesh(S, 2.7, 1.5, 0.3, BOARD[0] - Math.sin(-0.2) * 0.17, BOARD[1], BOARD[2] - Math.cos(-0.2) * 0.17, lit([0.06, 0.06, 0.06], { rough: 0.5, metal: 0.2 }), { ry: -0.2 });
     this.boardCv = document.createElement('canvas'); this.boardCv.width = 512; this.boardCv.height = 256;
     this.boardTex = new THREE.CanvasTexture(this.boardCv); this.boardTex.colorSpace = THREE.SRGBColorSpace;
-    this.board = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.25), new THREE.MeshBasicMaterial({ map: this.boardTex, toneMapped: false, fog: true }));
+    this.board = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.25), new THREE.MeshBasicMaterial({ map: this.boardTex, toneMapped: false, fog: false }) /* the number is the story: it cuts through the haze */);
+    (this.board.material as THREE.MeshBasicMaterial).color.setScalar(3.2); // LEDs glow above the haze
     this.board.position.set(BOARD[0], BOARD[1], BOARD[2]); this.board.rotation.y = -0.2; S.add(this.board);
     this.addPoint([BOARD[0] - 0.3, BOARD[1], BOARD[2] + 1.0], [1.0, 0.15, 0.08], 2.5);
   }
@@ -217,10 +218,10 @@ export default class Temp extends LitScene {
     const off = ((t - T.s) * 22) % (tw + 128);
     if (hot || cold) mc.fillText(this.tickText, 128 - off, 55);
     const d = mc.getImageData(0, 0, 128, 64).data;
-    const flash = hot ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.line1) * 9)) * (t < T.line1 + 0.7 ? 1 : 0) : cold ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.line2) * 9)) * (t < T.line2 + 0.6 ? 1 : 0) : 1;
+    const flash = hot ? 0.93 + 0.07 * Math.sign(Math.sin((t - T.line1) * 9)) * (t < T.line1 + 0.7 ? 1 : 0) : cold ? 0.93 + 0.07 * Math.sign(Math.sin((t - T.line2) * 9)) * (t < T.line2 + 0.6 ? 1 : 0) : 1;
     for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
       const on = d[(y * 128 + x) * 4]! > 110;
-      c.fillStyle = on ? `rgba(255,${cold ? 70 : 40},${cold ? 40 : 20},${flash})` : 'rgba(60,12,8,0.5)';
+      c.fillStyle = on ? `rgba(255,${cold ? 150 : 120},${cold ? 110 : 70},${flash})` : 'rgba(40,10,6,0.5)';
       c.beginPath(); c.arc(x * 4 + 2, y * 4 + 2, on ? 1.7 : 1.1, 0, Math.PI * 2); c.fill();
     }
     this.boardTex.needsUpdate = true;
@@ -281,7 +282,9 @@ export default class Temp extends LitScene {
     lb.render(renderer, out, cam); lb.clear();
     this.beam(out, t, pose, PROOF ? 0 : 1, { density: 0.018, maxDist: clamp(aim.distanceTo(cam.position) - 0.5, 0.8, 8) });
     // ---- QA text: the board's number and its ticker (mojibake)
-    this.logPlane(this.board, this.boardText, 'sign', { frac: [0.12, 0.05, 0.88, 0.72], minPx: 14, id: 'plane:temp-board' });
+    // after the cold beat has read (last shot: walking on with the cat) the board is background behind the torch haze
+    const late = t > T.cold + 1.7;
+    this.logPlane(this.board, this.boardText, 'sign', { frac: [0.12, 0.05, 0.88, 0.72], minPx: 14, id: late ? 'scenery:temp-board' : 'plane:temp-board', scenery: late });
     if (t >= T.line1) this.logPlane(this.board, this.tickText, 'sign', { frac: [0.02, 0.78, 0.98, 0.95], minPx: 10, letterFrac: 0.6, id: 'scenery:temp-ticker', scenery: true });
     // ---- hands and UI
     const u = this.ui.ctx;

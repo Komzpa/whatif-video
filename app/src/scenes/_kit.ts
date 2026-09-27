@@ -455,7 +455,7 @@ export abstract class LitScene extends CityScene {
     es.forEach((e, i) => {
       const L = this.ly.get(e.line);
       const until = es[i + 1] ? this.ly.get(es[i + 1]!.line).words[0]!.start : f.end + 1;
-      drawHeading(c, L, e.heading, t, { x: hx, y: hy, width: hw, size: hs, until, plate: 0.85 });
+      drawHeading(c, L, e.heading, t, { x: hx, y: hy, width: hw, size: hs, until, plate: 0.93 }); // dense enough that glare behind the plate keeps A9 contrast
     });
   }
   labelBox(text: string | string[], size: number, lx: number, ly: number, side: 1 | -1): Box {
@@ -519,7 +519,7 @@ export abstract class LitScene extends CityScene {
     const o = this.pickLabel(text, S, at, out, anchor);
     const a = anchor(t);
     if (!a) return;
-    drawCallout(c, t, { ax: a.x, ay: a.y, ...this.placeLabel(text, S, a, o), text, at, cps: 150, out, size: S, plate: 0.75, ...extra });
+    drawCallout(c, t, { ax: a.x, ay: a.y, ...this.placeLabel(text, S, a, o), text, at, cps: 150, out, size: S, plate: 0.93, ...extra });
   }
   /** Screen point of a world point, or null when off screen / behind. */
   onScreen(x: number, y: number, z: number, m = 20) {

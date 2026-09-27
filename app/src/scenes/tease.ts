@@ -71,7 +71,7 @@ export default class Tease extends LitScene {
       [s, T.they + 2.0, { k: 'free', p: [0.9, 1.55, 9.4], p1: [0.7, 1.6, 8.0], look: [-0.4, 1.8, -8], look1: [-0.8, 1.9, -9], fov: PORTRAIT ? 74 : 58 }],
       [T.they + 6.4, T.tease + 0.9, { k: 'free', p: [7.5, 10, 2.5], p1: [6.2, 11, -0.5], look: [-1.8, 0.3, -7.0], look1: [-2.6, 0.6, -9.5], fov: PORTRAIT ? 78 : 58 }],
       [T.tease + 0.9, T.call - 0.3, { k: 'back', d: 1.5, h: 3.6, side: -1.7, ahead: 1, aimY: PORTRAIT ? 1.4 : 1.1 }],
-      [T.call + 2.6, T.name + 1.2, { k: 'back', d: 1.6, h: 3.6, side: 1, ahead: 1, aimY: PORTRAIT ? 0 : -0.3 }],
+      [T.call + 2.6, T.name + 1.2, { k: 'back', d: 1.6, h: 3.6, side: 1, ahead: 1, aimY: PORTRAIT ? 0 : 0.5 }],
       [T.name + 1.2, T.end + 1, { k: 'free', p: [2.1, 3.0, STOP_Z + 1.5], p1: [1.8, 2.7, STOP_Z + 1.15], look: [0.45, 0.3, STOP_Z - 0.6], fov: PORTRAIT ? 62 : 44 }],
     ];
     this.initKid(11);
@@ -119,7 +119,7 @@ export default class Tease extends LitScene {
       // the chalk layer on the door
       const cv = document.createElement('canvas'); cv.width = 640; cv.height = 520;
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.1), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.9, depthWrite: false, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.22 }));
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.1), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.9, depthWrite: false, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.85 })); // chalk that reads against the dark doors (A9)
       m.position.set(GX + 0.035, 1.08, z); m.rotation.y = Math.PI / 2; S.add(m);
       this.doors.push({ mesh: m, cv, tex, z });
     }
@@ -355,7 +355,7 @@ export default class Tease extends LitScene {
       if (first >= 0 && first < 4 && t >= this.scrawls[first]!.t + 0.45) {
         const s = this.scrawls[first]!;
         const many = this.scrawls.filter((q) => q.door === d && t >= q.t).length;
-        this.logPlane(this.doors[d]!.mesh, NAME, 'sign', { frac: [s.x / 640, (s.y - s.size * 0.8) / 520, Math.min(1, (s.x + s.size * 5.6) / 640), (s.y + s.size * 0.2) / 520], minPx: 14, id: many > 3 ? `scenery:tease-chalk-${d}` : `sign:tease-chalk-${d}`, scenery: many > 3 });
+        this.logPlane(this.doors[d]!.mesh, NAME, 'sign', { frac: [s.x / 640, (s.y - s.size * 0.8) / 520, Math.min(1, (s.x + s.size * 5.6) / 640), (s.y + s.size * 0.2) / 520], minPx: 14, id: many > 2 ? `scenery:tease-chalk-${d}` : `sign:tease-chalk-${d}`, scenery: many > 2 }); // once overwritten it is no longer meant to be read
       }
     }
     // ---- hands and UI

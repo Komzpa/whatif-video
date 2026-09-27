@@ -42,7 +42,7 @@ export function drawHeading(c: CanvasRenderingContext2D, L: Line, heading: strin
   const p = clamp((t - w0.start) / Math.max(0.3, w1.end - w0.start));
   const lit = p * total;
   // sung letters paper, the front letter red, the unsung rest a solid muted paper (A9: >= 4.5:1 on the plate)
-  const SUNG = rgba('paper', 1), FRONT = mixRgba('red', 'paper', 0.15), UNSUNG = mixRgba('paper', 'shadow', 0.32);
+  const SUNG = rgba('paper', 1), FRONT = mixRgba('red', 'paper', 0.28), UNSUNG = mixRgba('paper', 'shadow', 0.26);
   const ink: { box: { x: number; y: number; w: number; h: number }; fg: string; size: number }[] = [];
   let k = 0;
   rows.forEach((row, ri) => {
