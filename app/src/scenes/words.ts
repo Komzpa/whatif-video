@@ -36,7 +36,7 @@ export default class Words extends LitScene {
   glyphs: Glyph[] = [];
   heart: Glyph[] = [];
   screenBox!: THREE.Mesh;
-  scrLight!: THREE.PointLight;
+  scrLight!: THREE.SpotLight; scrSide: THREE.SpotLight[] = []; scrW = 10; scrH = 3;
   table!: THREE.Mesh; tableCv!: HTMLCanvasElement; tableTex!: THREE.CanvasTexture; tableText = '';
   bus!: THREE.Group; busSign = ''; busSignMesh!: THREE.Mesh; busLights: THREE.Light[] = [];
   panes!: WindowPanes;
@@ -150,7 +150,19 @@ export default class Words extends LitScene {
     const perRow = Math.max(...rows.map((q) => q.length));
     const wTot = (perRow + 2.6) * GW, hTot = rows.length * (GH + 0.2) + 0.8;
     this.screenBox = boxMesh(S, wTot + 0.8, hTot, 0.3, 0, SY, FZ + 0.1, lit([0.03, 0.03, 0.03], { rough: 0.5, metal: 0.2 }));
-    this.scrLight = this.addPoint([0, SY - 2, FZ + 5], [1.0, 0.6, 0.2], 120, 45);
+    // a physical LED panel: a steel frame round the black box; its light spills down the facade from under the
+    // bottom edge (a spot aimed down: the top of the spill is the panel's own edge, no soft oval over the wall)
+    const frameM = lit([0.32, 0.31, 0.3], { rough: 0.45, metal: 0.6 });
+    const fw = wTot + 1.0, fh = hTot + 0.2;
+    boxMesh(S, fw, 0.14, 0.4, 0, SY + fh / 2, FZ + 0.12, frameM); boxMesh(S, fw, 0.14, 0.4, 0, SY - fh / 2, FZ + 0.12, frameM);
+    boxMesh(S, 0.14, fh, 0.4, -fw / 2, SY, FZ + 0.12, frameM); boxMesh(S, 0.14, fh, 0.4, fw / 2, SY, FZ + 0.12, frameM);
+    for (const sx of [-0.3, 0.3]) boxMesh(S, 0.12, 1.6, 0.12, sx * wTot, SY + fh / 2 + 0.8, FZ + 0.2, frameM); // roof brackets
+    this.scrW = wTot; this.scrH = hTot;
+    this.scrLight = this.addLamp([0, SY - hTot / 2 - 0.35, FZ + 1.6], { color: [1.0, 0.6, 0.2], k: 120, angle: 0.75, penumbra: 0.25, target: [0, SY - 8, FZ], dist: 16 });
+    this.scrSide = [-1, 1].map((sx) => this.addLamp([sx * wTot / 3, SY - hTot / 2 - 0.35, FZ + 1.6], { color: [1.0, 0.6, 0.2], k: 0, angle: 0.75, penumbra: 0.25, target: [sx * wTot / 3, SY - 8, FZ], dist: 16 }));
+    // the panel's backplate: dark, with the faint warm sheen of the LED rows so the rectangle reads behind the letters
+    (this.screenBox.material as THREE.MeshStandardMaterial).color.setRGB(0.07, 0.065, 0.06, THREE.LinearSRGBColorSpace);
+    (this.screenBox.material as THREE.MeshStandardMaterial).emissive.setRGB(0.035, 0.015, 0.005, THREE.LinearSRGBColorSpace);
     // the fall order: shuffled, on beats from «words», faster towards «say»
     const beats: number[] = [];
     for (let k = 0; ; k++) { const b = this.au.timeOfBeat(Math.ceil(this.au.beatAt(T.more)) + k); if (b > T.say + 1.2) break; beats.push(b); }
@@ -309,7 +321,7 @@ export default class Words extends LitScene {
     for (const g of this.glyphs) this.placeGlyph(g, t);
     for (const g of this.heart) this.placeGlyph(g, t);
     const lit0 = this.glyphs.filter((g) => t < g.tf).length / Math.max(1, this.glyphs.length);
-    this.scrLight.intensity = 60 * (0.25 + 0.75 * lit0);
+    this.scrLight.intensity = 60 * (0.25 + 0.75 * lit0); for (const L of this.scrSide) L.intensity = this.scrLight.intensity;
     this.drawTable(t);
     // the bus
     const bx = this.busX(t);
@@ -329,7 +341,7 @@ export default class Words extends LitScene {
     gb.add(this.lampP[0], this.lampP[1], this.lampP[2], 0.45, 0.35, LIN.sodium, 2.2, 4);
     for (const hp of (this as unknown as { lampsX?: V3[] }).lampsX ?? []) gb.add(hp[0], hp[1], hp[2], 0.45, 0.35, LIN.sodium, 2.2, 4);
     // the screen's halo while it talks; each falling letter trails a glow; sparks where they land
-    if (lit0 > 0) gb.add(0, SY, FZ + 3.5, 17 * (PORTRAIT ? 0.55 : 1), 4.5, [1.0, 0.6, 0.2], 0.12 * lit0, 1.6);
+    if (lit0 > 0) gb.add(0, SY, FZ + 0.45, this.scrW * 0.56, this.scrH * 0.64, [1.0, 0.6, 0.2], 0.03 * lit0, 8); // a tight halo round the panel
     for (const g of [...this.glyphs, ...this.heart]) {
       const d = t - g.tf;
       if (d > 0 && !g.land) gb.add(g.m.position.x, g.m.position.y, g.m.position.z, 0.9, 0.9, g.seed >= 89 ? [1, 0.2, 0.25] : [1, 0.6, 0.2], 0.25, 2);
