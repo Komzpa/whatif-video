@@ -57,6 +57,17 @@ export default class Dogs extends LitScene {
     T.lower = T.cross - 0.2; T.raise = T.night - 0.15;
     T.ownerCall = T.path; T.signCall = T.night + 0.9;
     this.T = T;
+    // shots: the lane from high behind, the child small with the torch sweeping; the eyes in the gap in first
+    // person; beside the child as the first dog steps out; from above while the three cross and the torch is
+    // lowered; over the shoulder towards the owner; the last dog's stare in first person; over the shoulder to the sign
+    this.shots = [
+      [T.s, T.s + 1.75, { k: 'wide', d: 0.9, h: 1.1, side: -0.6, ahead: 1.6 }],
+      [T.stray + 0.85, T.cross, { k: 'back', d: 1.1, side: 1, ahead: 0.9 }],
+      [T.cross, T.path + 0.95, { k: 'high', d: 0.35, d1: 0.45, h: 0.75, ahead: PORTRAIT ? -0.5 : 0.8, side: 0.4 }],
+      [T.path + 0.95, T.at, { k: 'ots', d: 2.2, h: 2.6, side: -1.4, yaw: PORTRAIT ? 0 : 0.3 }],
+      [T.night + 1.4, T.night + 5, { k: 'ots', d: 2.2, h: 2.4, side: -1.4, ahead: 0.6 }],
+    ];
+    this.initKid(3);
     this.buildLane();
     // three dogs: out of the gap on the left, across the lane, then away down its right side to the owner
     const gapZ = -4.2;
@@ -227,6 +238,7 @@ export default class Dogs extends LitScene {
     { const d2 = this.dogs[2]!; if (d2.g.visible) { const hp = d2.head.getWorldPosition(new THREE.Vector3()); aimFar.lerp(hp.setY(0.12), smoothstep(T.night - 0.3, T.night + 0.2, t) * (1 - smoothstep(T.night + 1.2, T.night + 1.8, t))); } }
     const aim = PROOF ? null : aimFar.clone().lerp(aimLow, lowered);
     const pose = this.torch(t, { raise: 1 - 0.3 * lowered, on: 1, walk: P.walk, aimAt: aim, aimK: PROOF ? 0 : 0.7, spot: 15 });
+    if (!PROOF) this.cut(t, P, pose, { speed: P.walk * 1.2, film: 0.85 - 0.5 * lowered });
     // eye shine for each dog
     const tdir = pose ? pose.target.clone().sub(pose.head).normalize() : null;
     if (!PROOF) this.dogs.forEach((d) => { if (!d.g.visible || !pose) return; const k = d.shine(pose.head, tdir, 0.95); d.setShine(0.03 + k * (1 - 0.5 * lowered), 2.2); });

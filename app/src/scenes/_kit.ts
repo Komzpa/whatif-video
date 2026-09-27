@@ -25,7 +25,7 @@ export interface Pov { p: V3; yaw: number; pitch: number; walk: number; roll?: n
  * `free` = an absolute camera (`p`, `look`). `d`, `h`, `side` scale the offsets; `d1` dollies d to d1 over the shot;
  * `ahead` = how far in front of the child the camera aims; `fov` overrides.
  */
-export interface Shot { k: 'wide' | 'ots' | 'low' | 'high' | 'side' | 'free'; d?: number; d1?: number; h?: number; side?: number; ahead?: number; fov?: number; p?: V3; p1?: V3; look?: V3; look1?: V3; aimY?: number }
+export interface Shot { k: 'wide' | 'ots' | 'low' | 'high' | 'side' | 'back' | 'free'; d?: number; d1?: number; h?: number; side?: number; ahead?: number; yaw?: number; fov?: number; p?: V3; p1?: V3; look?: V3; look1?: V3; aimY?: number }
 
 export const EYE = 1.12; // the child's eye height (m)
 export const lin = (hex: string): RGB => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }; // three parses hex as sRGB -> linear
@@ -270,7 +270,8 @@ export abstract class LitScene extends CityScene {
     const { s, u } = sh;
     const floor = o.floor ?? 0;
     const feet = new THREE.Vector3(P.p[0], floor, P.p[2]);
-    const f = new THREE.Vector3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)), r = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
+    const sy = P.yaw + (s.yaw ?? 0);
+    const f = new THREE.Vector3(-Math.sin(sy), 0, -Math.cos(sy)), r = new THREE.Vector3(Math.cos(sy), 0, -Math.sin(sy));
     const speed = o.speed ?? P.walk * 1.3;
     kid.pose({ pos: feet, heading: P.yaw + Math.PI / 2, t, speed, dist: o.dist ?? t * speed, film: o.film ?? (pose ? 0.85 : 0), phone: o.phone ?? 0, look: o.look ?? 0, headDown: o.headDown ?? -P.pitch * 0.5, sit: o.sit ?? 0, armL: o.armL ?? 0 });
     if (pose) { // the light leaves the figure's hand, along the same aim
@@ -287,6 +288,7 @@ export abstract class LitScene extends CityScene {
       case 'wide': cp = feet.clone().addScaledVector(f, -7 * d).addScaledVector(r, 1.2 * sd).add(new THREE.Vector3(0, 2.6 * h, 0)); look = feet.clone().addScaledVector(f, 5 * ahead).add(new THREE.Vector3(0, 1.0 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 64 : 46; break;
       case 'ots': cp = eye.clone().addScaledVector(f, -0.95 * d).addScaledVector(r, 0.42 * sd).add(new THREE.Vector3(0, 0.22 * h, 0)); look = eye.clone().addScaledVector(f, 6 * ahead).add(new THREE.Vector3(0, Math.tan(P.pitch) * 6 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 66 : 50; break;
       case 'low': cp = feet.clone().addScaledVector(f, 2.4 * d).addScaledVector(r, 1.5 * sd).add(new THREE.Vector3(0, 0.25 * h, 0)); look = eye.clone().add(new THREE.Vector3(0, 0.25 + (s.aimY ?? 0), 0)).addScaledVector(f, -0.6 * ahead); fov ??= PORTRAIT ? 72 : 56; break;
+      case 'back': cp = feet.clone().addScaledVector(f, -2.0 * d).addScaledVector(r, 0.55 * sd).add(new THREE.Vector3(0, 0.38 * h, 0)); look = eye.clone().addScaledVector(f, 5 * ahead).add(new THREE.Vector3(0, 0.3 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 70 : 54; break;
       case 'high': cp = feet.clone().addScaledVector(f, -3.2 * d).addScaledVector(r, 0.8 * sd).add(new THREE.Vector3(0, 7.5 * h, 0)); look = feet.clone().addScaledVector(f, 2.2 * ahead).add(new THREE.Vector3(0, s.aimY ?? 0, 0)); fov ??= PORTRAIT ? 64 : 48; break;
       case 'side': cp = feet.clone().addScaledVector(r, 3.6 * d * sd).addScaledVector(f, 0.6).add(new THREE.Vector3(0, 1.0 * h, 0)); look = feet.clone().addScaledVector(f, 1.2 * ahead).add(new THREE.Vector3(0, 0.75 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 66 : 50; break;
       default: {
@@ -368,18 +370,21 @@ export abstract class LitScene extends CityScene {
     const dx = e.x - s0.x, dy = e.y - s0.y, len = Math.hypot(dx, dy); if (len < 4) return;
     const nx = -dy / len, ny = dx / len;
     const dEnd = Math.max(0.3, e3.clone().applyMatrix4(this.cam.matrixWorldInverse).z * -1);
-    const w1 = Math.min(W * 0.4, (H / 2) / Math.tan((this.cam.fov * Math.PI) / 360) * (L * 0.2) / dEnd), w0 = 3;
-    const g = c.createLinearGradient(s0.x, s0.y, e.x, e.y);
-    const a0 = 0.11 * b.on * b.k;
-    g.addColorStop(0, `rgba(255,228,178,${a0})`); g.addColorStop(0.45, `rgba(255,228,178,${a0 * 0.35})`); g.addColorStop(1, 'rgba(255,228,178,0)');
-    c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = g;
-    c.beginPath(); c.moveTo(s0.x + nx * w0, s0.y + ny * w0); c.lineTo(e.x + nx * w1, e.y + ny * w1); c.lineTo(e.x - nx * w1, e.y - ny * w1); c.lineTo(s0.x - nx * w0, s0.y - ny * w0); c.closePath(); c.fill();
+    const w1 = Math.min(W * 0.25, (H / 2) / Math.tan((this.cam.fov * Math.PI) / 360) * (L * 0.13) / dEnd), w0 = 3;
+    const a0 = 0.03 * b.on * b.k;
+    c.save(); c.globalCompositeOperation = 'lighter';
+    for (const q of [1, 0.66, 0.36]) { // nested wedges: soft edges without a blur filter (which banded)
+      const g = c.createLinearGradient(s0.x, s0.y, e.x, e.y);
+      g.addColorStop(0, `rgba(255,228,178,${a0})`); g.addColorStop(0.45, `rgba(255,228,178,${a0 * 0.35})`); g.addColorStop(1, 'rgba(255,228,178,0)');
+      c.fillStyle = g; const w = w1 * q, v0 = w0 * q;
+      c.beginPath(); c.moveTo(s0.x + nx * v0, s0.y + ny * v0); c.lineTo(e.x + nx * w, e.y + ny * w); c.lineTo(e.x - nx * w, e.y - ny * w); c.lineTo(s0.x - nx * v0, s0.y - ny * v0); c.closePath(); c.fill();
+    }
     c.restore();
   }
   /** Draw the torch hand (and its lens glow). */
   torchHand(c: CanvasRenderingContext2D, pose: TorchPose | null, light: Light) {
     if (this.third) { // the torch in the child's hand, seen from outside: a small lens glow and the wedge
-      if (pose && this.beamReq && this.kid) { const q = this.torchL.position; const a = project(this.cam, q.x, q.y, q.z); if (!a.behind) { this.glow2D.add(a.x, a.y, 0, 18, 18, LIN.lamp, 0.7 * this.beamReq.on, 3); this.beamWedge(c, { x: a.x, y: a.y }); } }
+      if (pose && this.beamReq && this.kid) { const q = this.torchL.position; const a = project(this.cam, q.x, q.y, q.z); if (!a.behind) { const body = this.kid.g.position.clone().setY(this.kid.g.position.y + 0.7); const hid = this.cam.position.distanceTo(q) > this.cam.position.distanceTo(body) + 0.08; if (!hid) { this.glow2D.add(a.x, a.y, 0, 18, 18, LIN.lamp, 0.7 * this.beamReq.on, 3); this.beamWedge(c, { x: a.x, y: a.y }); } } }
       return null;
     }
     if (!pose) return null;

@@ -106,7 +106,10 @@ export class Figure {
     this.head.updateMatrix();
     const hm = this.head.matrix;
     B.ell(hm.clone(), v(u * 0.42, u * 0.5, u * 0.38), k * 0.3, skin);
-    B.ell(new THREE.Matrix4().makeTranslation(-u * 0.06, u * 0.08, 0).premultiply(hm), v(u * 0.44, u * 0.46, u * 0.41), k * 0.2, hair);
+    B.ell(new THREE.Matrix4().makeTranslation(-u * 0.07, u * 0.1, 0).premultiply(hm), v(u * 0.45, u * (kid ? 0.5 : 0.46), u * 0.42), k * 0.2, hair);
+    if (kid && !S.hood) { // the hood down: a bunched collar at the back of the neck, the raincoat's colour
+      B.ell(new THREE.Matrix4().makeTranslation(neck.x - u * 0.28, neck.y - u * 0.02, 0), v(u * 0.26, u * 0.2, u * 0.42), k * 0.4, coat);
+    }
     if (S.hat) {
       B.cap(v(-u * 0.02, u * 0.3, 0).applyMatrix4(hm), v(-u * 0.02, u * 0.62, 0).applyMatrix4(hm), u * 0.44, u * 0.38, k * 0.15, [0.03, 0.03, 0.035], [0.03, 0.03, 0.035]);
       B.ell(new THREE.Matrix4().makeTranslation(0, u * 0.3, 0).premultiply(hm), v(u * 0.8, u * 0.06, u * 0.75), k * 0.1, [0.03, 0.03, 0.035]);
