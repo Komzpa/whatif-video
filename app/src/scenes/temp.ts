@@ -50,6 +50,7 @@ export default class Temp extends LitScene {
     const far = all(/^far$/), too = all(/^too$/);
     T.far1 = far[0]!.start; T.too1 = too[0]!.start; T.hot = all(/^hot/)[0]!.start;
     T.far2 = far[1]!.start; T.too2 = too[1]!.start; T.cold = all(/^cold/)[0]!.start;
+    T.line1 = all(/^It/)[0]!.start; // the board reads +41° from the first sung word of «far too hot» (the clock only before it)
     T.line2 = all(/^It/)[1]!.start; // «It's far too cold»: the board flips as this line starts (the sung line must not sit under +41°)
     T.end = s + 13;
     this.T = T;
@@ -65,7 +66,7 @@ export default class Temp extends LitScene {
     this.initKid(9);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
-    this.tickText = garble('ОСТАВАЙТЕСЬ ДОМА');
+    this.tickText = 'ЖАРА · ОСТАВАЙТЕСЬ ДОМА · '; // plain: this street is near home (garble only in the unfamiliar district)
     this.buildFrost();
     const r = mulberry32(3);
     for (let i = 0; i < 1600; i++) this.snow.push({ x: (r() - 0.5) * 16, y: r() * 8, z: 4 - r() * 36, sp: 0.6 + r() * 0.6, ph: r() * 6.28 });
@@ -202,7 +203,7 @@ export default class Temp extends LitScene {
     const T = this.T, c = this.boardCv.getContext('2d')!;
     const w = 512, h = 256;
     c.fillStyle = '#070606'; c.fillRect(0, 0, w, h);
-    const hot = t >= T.hot - 0.02 && t < T.line2 - 0.02, cold = t >= T.line2 - 0.02;
+    const hot = t >= T.line1 - 0.05 && t < T.line2 - 0.02, cold = t >= T.line2 - 0.02;
     const main = cold ? '−27°' : hot ? '+41°' : '23:47';
     this.boardText = main;
     // LED dots: draw the text into a mask, then sample a dot grid
@@ -210,13 +211,13 @@ export default class Temp extends LitScene {
     const mc = m.getContext('2d')!;
     mc.fillStyle = '#000'; mc.fillRect(0, 0, 128, 64); mc.fillStyle = '#fff'; mc.font = font(F.metro(900), 38); mc.textAlign = 'center'; mc.textBaseline = 'middle';
     mc.fillText(main, 64, 26);
-    // the ticker line below in mojibake (scrolls)
+    // the ticker line below, plain (scrolls)
     mc.font = font(F.metro(900), 11); mc.textAlign = 'left';
     const tw = mc.measureText(this.tickText).width;
     const off = ((t - T.s) * 22) % (tw + 128);
     if (hot || cold) mc.fillText(this.tickText, 128 - off, 55);
     const d = mc.getImageData(0, 0, 128, 64).data;
-    const flash = hot ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.hot) * 9)) * (t < T.hot + 0.7 ? 1 : 0) : cold ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.line2) * 9)) * (t < T.line2 + 0.6 ? 1 : 0) : 1;
+    const flash = hot ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.line1) * 9)) * (t < T.line1 + 0.7 ? 1 : 0) : cold ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.line2) * 9)) * (t < T.line2 + 0.6 ? 1 : 0) : 1;
     for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
       const on = d[(y * 128 + x) * 4]! > 110;
       c.fillStyle = on ? `rgba(255,${cold ? 70 : 40},${cold ? 40 : 20},${flash})` : 'rgba(60,12,8,0.5)';
@@ -281,7 +282,7 @@ export default class Temp extends LitScene {
     this.beam(out, t, pose, PROOF ? 0 : 1, { density: 0.018, maxDist: clamp(aim.distanceTo(cam.position) - 0.5, 0.8, 8) });
     // ---- QA text: the board's number and its ticker (mojibake)
     this.logPlane(this.board, this.boardText, 'sign', { frac: [0.12, 0.05, 0.88, 0.72], minPx: 14, id: 'plane:temp-board' });
-    if (t >= T.hot) this.logPlane(this.board, this.tickText, 'garble', { frac: [0.02, 0.78, 0.98, 0.95], minPx: 10, letterFrac: 0.6, id: 'scenery:temp-ticker', scenery: true });
+    if (t >= T.line1) this.logPlane(this.board, this.tickText, 'sign', { frac: [0.02, 0.78, 0.98, 0.95], minPx: 10, letterFrac: 0.6, id: 'scenery:temp-ticker', scenery: true });
     // ---- hands and UI
     const u = this.ui.ctx;
     this.glow2D.clear();
