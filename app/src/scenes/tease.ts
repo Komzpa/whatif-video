@@ -49,6 +49,7 @@ export default class Tease extends LitScene {
   grain!: HTMLCanvasElement;
   bulbP: V3 = [0, 0, 0];
   lampP: V3 = [-11.4, 6.5, -13.5];
+  yardP: V3 = [0, 0, 0];
 
   override init() {
     this.initLit();
@@ -62,6 +63,18 @@ export default class Tease extends LitScene {
     T.end = this.ctx.end;
     this.T = T;
     this.posterText = garble('НЕДЕЛЯ ДОБРОТЫ');
+    // shots: out of the arch from behind, the child small against the yard; the poster in first person; the yard
+    // from above as the five screens light up on the garage roofs; over the child's shoulder into the phone
+    // torches; the first ПОТЕРЯШКА in first person; low behind the child facing the scrawled doors; from above the
+    // child and the cat pressed to its boots
+    this.shots = [
+      [s, T.they + 2.0, { k: 'free', p: [0.9, 1.55, 9.4], p1: [0.7, 1.6, 8.0], look: [-0.4, 1.8, -8], look1: [-0.8, 1.9, -9], fov: PORTRAIT ? 74 : 58 }],
+      [T.they + 6.4, T.tease + 0.9, { k: 'free', p: [7.5, 10, 2.5], p1: [6.2, 11, -0.5], look: [-1.8, 0.3, -7.0], look1: [-2.6, 0.6, -9.5], fov: PORTRAIT ? 78 : 58 }],
+      [T.tease + 0.9, T.call - 0.3, { k: 'back', d: 1.5, h: 3.6, side: -1.7, ahead: 1, aimY: PORTRAIT ? 1.4 : 1.1 }],
+      [T.call + 2.6, T.name + 1.2, { k: 'back', d: 1.6, h: 3.6, side: 1, ahead: 1, aimY: PORTRAIT ? 0 : -0.3 }],
+      [T.name + 1.2, T.end + 1, { k: 'free', p: [2.1, 3.0, STOP_Z + 1.5], p1: [1.8, 2.7, STOP_Z + 1.15], look: [0.45, 0.3, STOP_Z - 0.6], fov: PORTRAIT ? 62 : 44 }],
+    ];
+    this.initKid(11);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
     this.buildKids();
@@ -137,6 +150,10 @@ export default class Tease extends LitScene {
     const hp = streetLight(S, GX - 7, -13.5, { h: 6.5, arm: [1.2, 0, 0] });
     this.lampP = hp;
     this.addLamp(hp, { k: 70, angle: 1.2, shadow: true, target: [hp[0] + 4, 0, hp[2]] });
+    // a second lamp over the path through the yard: the pool the child walks through
+    const yp = streetLight(S, 3.6, -5.6, { h: 5.2, arm: [-1.1, 0, 0] });
+    this.yardP = yp;
+    this.addLamp(yp, { k: 75, angle: 0.95, shadow: true, target: [yp[0] - 0.8, 0, yp[2] - 1.2] });
     const steel = lit([0.25, 0.3, 0.32], { rough: 0.5, metal: 0.3 });
     const SX = 6.5, SZ = -13;
     for (const dz of [-1.1, 1.1]) { cyl(S, [SX - 0.9, 0, SZ + dz], [SX, 2.4, SZ + dz], 0.05, steel, { seg: 6 }); cyl(S, [SX + 0.9, 0, SZ + dz], [SX, 2.4, SZ + dz], 0.05, steel, { seg: 6 }); }
@@ -165,12 +182,14 @@ export default class Tease extends LitScene {
     ];
     const T = this.T;
     specs.forEach(([sp, p, sit, point], i) => {
+      // silhouettes: faces in shadow (dark skin value, no face lit), dark clothes against the lit windows
+      sp.skin = [0.05, 0.036, 0.028]; sp.coat = [sp.coat[0] * 0.55, sp.coat[1] * 0.55, sp.coat[2] * 0.55];
       const f = new Figure(this.three, sp, 64);
       const phone = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.012), new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(0.5, 0.65, 0.85, THREE.LinearSRGBColorSpace) }));
       this.three.add(phone);
       const L = new THREE.SpotLight(0xe8f0ff, 0, 30, 0.22, 0.6, 2);
       this.three.add(L, L.target);
-      const glow = new THREE.PointLight(0xa8c4ff, 0, 3.5, 2); this.three.add(glow);
+      const glow = new THREE.PointLight(0xa8c4ff, 0, 0.7, 2); this.three.add(glow);
       // on «They» the screens light up one by one; REC before «tease»; the torches on «tease»
       const lt = T.they + 0.15 + i * 0.42, rt = T.they + 5.5 + i * 0.5, tt = T.tease - 0.05 + [0, 0.5, 0.25, 0.8, 1.1][i]!;
       const pos = new THREE.Vector3(...p);
@@ -235,7 +254,7 @@ export default class Tease extends LitScene {
   catAt(t: number) {
     const T = this.T, z = this.camZ(t);
     const side = new THREE.Vector3(PORTRAIT ? 0.55 : 0.75, 0, z - (PORTRAIT ? 2.9 : 2.5));
-    const feet = new THREE.Vector3(PORTRAIT ? -0.1 : 0.5, 0, STOP_Z - (PORTRAIT ? 1.7 : 1.9));
+    const feet = new THREE.Vector3(0.62, 0, STOP_Z - 0.42); // pressed to the child's boots
     const k0 = T.laugh - 0.2, k1 = k0 + 1.1;
     if (t < k0) {
       const w = this.walking(t);
@@ -255,7 +274,7 @@ export default class Tease extends LitScene {
     if (PROOF === 'kids') return { p: [-3.2, 2.2, -9], yaw: this.yawTo([-3.2, 2.2, -9], [GX - 0.5, 3, -13]), pitch: 0.12, walk: 0, fov: PORTRAIT ? 60 : 44 };
     if (PROOF === 'kid') { const k = this.kids[1]!; const p: V3 = [k.pos.x - 2.4, GY + 1.3, k.pos.z - 1.2]; return { p, yaw: this.yawTo(p, [k.pos.x + 3, GY - 0.5, k.pos.z + 1.2]), pitch: -0.12, walk: 0, fov: PORTRAIT ? 68 : 34 }; }
     if (PROOF === 'poster') return { p: [POSTER[0] + 0.3, 1.4, POSTER[2] + 2.2], yaw: 0.1, pitch: 0.02, walk: 0, fov: PORTRAIT ? 55 : 40 };
-    if (PROOF === 'chalk') return { p: [-5.5, 1.2, -9.3], yaw: this.yawTo([-5.5, 1.2, -9.3], [GX, 1.1, -9.3]) , pitch: 0, walk: 0, fov: PORTRAIT ? 64 : 50 };
+    if (PROOF === 'chalk') return { p: [-2.4, 1.2, -9.3], yaw: this.yawTo([-2.4, 1.2, -9.3], [GX, 1.1, -9.3]) , pitch: 0, walk: 0, fov: PORTRAIT ? 64 : 50 };
     if (PROOF === 'play') return { p: [1.5, 1.3, -6], yaw: this.yawTo([1.5, 1.3, -6], [8, 1.5, -18]), pitch: 0.1, walk: 0 };
     const z = this.camZ(t);
     const E = ease.inOutCubic;
@@ -292,31 +311,34 @@ export default class Tease extends LitScene {
       (k.phone.material as THREE.MeshBasicMaterial).color.setRGB(0.5 * scr + 0.02, 0.65 * scr + 0.02, 0.85 * scr + 0.02, THREE.LinearSRGBColorSpace);
       const tk = smoothstep(k.torch, k.torch + 0.12, t) * (1 - 0.6 * smoothstep(T.name + 2.2, T.name + 3.5, t));
       k.glow.position.copy(h).add(new THREE.Vector3(0.12, 0.05, 0)); k.L.position.copy(h); k.L.target.position.copy(camP).add(new THREE.Vector3(0, -0.4, 0)); k.L.target.updateMatrixWorld();
-      k.L.intensity = 16 * tk; k.glow.intensity = 0.5 * (t >= k.lit ? 1 : 0) + 1.5 * tk;
+      k.L.intensity = 16 * tk; k.glow.intensity = 0.12 * (t >= k.lit ? 1 : 0) + 0.25 * tk;
       (k as unknown as { tk: number }).tk = tk;
     }
     this.drawChalk(t);
     const P = this.pov(t);
     this.setCam(P, t, this.walking(t));
     const cam = this.cam;
-    const aimEnd = t > T.name + 1.6;
+    const aimEnd = t > T.name + 1.0;
     const aim = aimEnd ? c.pos.clone().add(new THREE.Vector3(0, 0.15, 0)) : new THREE.Vector3(0.2, 0.3, cam.position.z - 6).lerp(new THREE.Vector3(GX + 0.5, 1.2, -10.5), smoothstep(T.call, T.call + 1.0, t) * (1 - smoothstep(T.name + 1.2, T.name + 2.2, t)));
     const pose = this.torch(t, { raise: 1, on: PROOF ? 0 : 1, walk: this.walking(t), aimAt: PROOF ? null : aim, aimK: PROOF ? 0 : 0.85, spot: clamp(20 * (aim.distanceTo(cam.position) / 5) ** 2, 3, 30) });
+    if (!PROOF) this.cut(t, P, pose, { speed: this.walking(t) * 1.2 });
     const tdir = pose ? pose.target.clone().sub(pose.head).normalize() : null;
     this.cat.setShine(pose ? 0.02 + this.cat.shine(pose.head, tdir, 0.95) : 0.02, 2);
     // ---- world
     this.renderWorld(out, t, { sky: { top: [0.008, 0.01, 0.018], horizon: scaleRGB(LIN.smog, 0.12), low: scaleRGB(LIN.shadow, 0.8), horizonY: 0.52, haze: 1 } });
     const g = this.glow3D;
     g.add(this.lampP[0], this.lampP[1], this.lampP[2], 0.45, 0.35, LIN.sodium, 2.2, 4);
+    g.add(this.yardP[0], this.yardP[1], this.yardP[2], 0.35, 0.28, LIN.sodium, 1.8, 4);
     g.add(this.bulbP[0], this.bulbP[1], this.bulbP[2], 0.18, 0.18, [1.0, 0.8, 0.5], 1.5, 4);
     for (const z of [-4, -20, -36]) g.add(23.3, 2.9, z, 0.3, 0.3, lin('#ffb85c'), 1.2, 4);
     for (const k of this.kids) {
-      const h = k.phone.position;
-      if (t >= k.lit) g.add(h.x, h.y, h.z, 0.12, 0.12, [0.5, 0.65, 0.9], 0.6, 3);
+      // the lens sits on the phone's face toward the child: the glow in front of the hand, not behind it
+      const h = k.phone.position.clone().add(camP.clone().sub(k.phone.position).normalize().multiplyScalar(0.07));
+      if (t >= k.lit && t < k.torch) g.add(h.x, h.y, h.z, 0.06, 0.06, [0.5, 0.65, 0.9], 0.3, 3);
       // the REC dot: on the phone's back, facing the child, blinking
       if (t >= k.rec && Math.floor((t - k.rec) * 2) % 2 === 0) g.add(h.x + 0.02, h.y + 0.06, h.z, 0.05, 0.05, [1.0, 0.05, 0.03], 3.0, 3);
       const tk = (k as unknown as { tk: number }).tk ?? 0;
-      if (tk > 0) g.add(h.x, h.y, h.z, 0.14, 0.14, [0.9, 0.95, 1.0], 2.0 * tk, 3);
+      if (tk > 0) g.add(h.x, h.y, h.z, 0.1, 0.1, [0.9, 0.95, 1.0], 1.4 * tk, 3);
     }
     this.flushGlow(out);
     this.beam(out, t, pose, PROOF ? 0 : 1, { density: 0.02, maxDist: clamp(aim.distanceTo(cam.position) - 0.5, 0.8, 8) });
@@ -344,13 +366,13 @@ export default class Tease extends LitScene {
       const tk = (k as unknown as { tk: number }).tk ?? 0;
       if (tk <= 0.02 || PROOF) continue;
       const q = this.onScreen(k.phone.position.x, k.phone.position.y, k.phone.position.z, -50);
-      if (q) this.glow2D.add(q.x, q.y, 0, 34, 34, [0.9, 0.95, 1.0], 0.35 * tk, 2);
+      if (q) this.glow2D.add(q.x, q.y, 0, 22, 22, [0.9, 0.95, 1.0], 0.25 * tk, 2);
     }
     const light: Light = { amb: 0.18 + 0.12 * smoothstep(T.tease, T.tease + 1, t), warm: 0.15, torch: 1 };
     if (!PROOF) {
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
-      this.callout(u, t, homeLabel('tease'), T.s + 0.1, T.s + 2.0, () => this.onScreen(-14, 18, -46), { places: [city().home.name] });
+      this.callout(u, t, homeLabel('tease'), T.s + 0.1, T.s + 2.0, () => this.onScreen(-10, 4, -46), { places: [city().home.name] });
       this.callout(u, t, 'НЕДЕЛЯ ДОБРОТЫ', T.they + 3.4, T.they + 6.2, () => this.onScreen(POSTER[0] + 0.45, POSTER[1] + 0.5, POSTER[2]));
     }
     this.composite2D(this.ui, out);
