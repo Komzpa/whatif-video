@@ -80,6 +80,7 @@ export interface QuadSpec {
   tail: number; tailR: number; tailCurl: number; // tail length, base radius, curl (rad)
   back: RGB3; belly: RGB3; legs: RGB3; muzzleC: RGB3; eye: RGB3;
   gait: 'walk' | 'trot'; cycle: number; // metres of travel per gait cycle
+  stripes?: number; // tabby stripe frequency (per metre), 0 = none
 }
 
 export const DOG: QuadSpec = {
@@ -95,14 +96,14 @@ export const DOG: QuadSpec = {
   gait: 'trot', cycle: 1.35,
 };
 export const CAT: QuadSpec = {
-  withers: 0.25, hip: 0.25, len: 0.26,
-  chest: 0.065, chestW: 0.05, waist: 0.052, waistW: 0.045, rump: 0.058, rumpW: 0.05,
-  neckLen: 0.075, neckR: 0.034, neckRise: 0.7,
-  skull: [0.048, 0.042, 0.045], muzzle: [0.028, 0.02],
-  ear: [0.035, 0.018],
-  fore: [0.095, 0.09, 0.03], hind: [0.11, 0.11, 0.07],
-  legR: [0.025, 0.01],
-  tail: 0.3, tailR: 0.016, tailCurl: 0.9,
+  withers: 0.25, hip: 0.25, len: 0.25,
+  chest: 0.078, chestW: 0.058, waist: 0.066, waistW: 0.056, rump: 0.07, rumpW: 0.06,
+  neckLen: 0.06, neckR: 0.04, neckRise: 0.75,
+  skull: [0.055, 0.05, 0.053], muzzle: [0.022, 0.022],
+  ear: [0.04, 0.022],
+  fore: [0.08, 0.075, 0.028], hind: [0.095, 0.09, 0.06],
+  legR: [0.028, 0.011],
+  tail: 0.28, tailR: 0.015, tailCurl: 0.9,
   back: [0.2, 0.12, 0.06], belly: [0.55, 0.42, 0.28], legs: [0.45, 0.3, 0.15], muzzleC: [0.6, 0.5, 0.4], eye: [0.55, 0.9, 0.35],
   gait: 'walk', cycle: 0.55,
 };
@@ -200,6 +201,16 @@ export class SdfBody {
           this.blendIn(x + y * n + z * n * n, dn, k, r, g, b);
         } } }
   }
+  /** Recolour the cells near the surface: fn(x, y, z, rgb) scales the colour in place (fur markings). */
+  modulate(fn: (x: number, y: number, z: number) => number, band = 0.03) {
+    const n = this.n, lo = this.lo, st = this.step, d = this.d, c = this.col;
+    for (let z = 0; z < n; z++) for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const i = x + y * n + z * n * n;
+      if (Math.abs(d[i]!) > band) continue;
+      const k = fn(lo.x + x * st.x, lo.y + y * st.y, lo.z + z * st.z);
+      c[i * 3] *= k; c[i * 3 + 1] *= k; c[i * 3 + 2] *= k;
+    }
+  }
   end() {
     const f = this.mc.field, d = this.d;
     for (let i = 0; i < d.length; i++) f[i] = -d[i]!;
@@ -218,7 +229,7 @@ export class Quadruped {
     parent.add(this.g);
     const w = S.withers;
     // the box: long enough for the head stretched forward and the tail, tall enough for a raised head
-    this.sdf = new SdfBody(this.g, new THREE.Vector3(-w * 1.25, -0.01, -w * 0.55), new THREE.Vector3(w * 1.25, w * 1.55, w * 0.55), res, furMat());
+    this.sdf = new SdfBody(this.g, new THREE.Vector3(-w * 1.85, -0.01, -w * 0.6), new THREE.Vector3(w * 1.45, w * 1.6, w * 0.6), res, furMat());
     const nose = new THREE.Mesh(new THREE.SphereGeometry(S.muzzle[1] * 0.5, 10, 8), lit([0.015, 0.015, 0.015], { rough: 0.2 }));
     nose.position.set(S.skull[0] * 0.7 + S.muzzle[0] + S.muzzle[1] * 0.1, -S.skull[1] * 0.28, 0); this.head.add(nose);
     for (const side of [-1, 1]) {
@@ -406,7 +417,7 @@ export class Quadruped {
     let ang = Math.PI + 0.9 - tup * 1.6 + jump * 0.6 - sit * 0.3, x = tb.x, y = tb.y, z = 0;
     const n = 6, segL = S.tail / n;
     for (let k = 1; k <= n; k++) {
-      ang += (S.tailCurl * (tup - 0.3) * 0.5 + (sit ? -0.05 : 0.08)) * (k / n) + (sit > 0.5 ? 0.22 * sit : 0);
+      ang += (-S.tailCurl * (tup - 0.3) * 0.45 + (sit ? -0.05 : 0.08) * (1 - tup)) * (k / n) + (sit > 0.5 ? 0.22 * sit : 0);
       x += Math.cos(ang) * segL; y += Math.sin(ang) * segL; z += wag * segL * 0.9 * (k / n);
       if (sit > 0.2 && y < 0.02) y = 0.02;
       tp.push(new THREE.Vector3(x, y, z));
@@ -415,6 +426,15 @@ export class Quadruped {
     for (let k = 1; k < tp.length; k++) {
       const s0 = (k - 1) / (tp.length - 1), s1 = k / (tp.length - 1);
       B.cap(tp[k - 1]!, tp[k]!, Math.max(minR, lerp(S.tailR * 1.2, S.tailR * 0.45, s0)), Math.max(minR, lerp(S.tailR * 1.2, S.tailR * 0.45, s1)), k === 1 ? kb : kb * 0.3, S.back, mixc(S.back, S.belly, 0.3 * s1));
+    }
+    if (S.stripes) {
+      // tabby: dark bands across the back and flanks, fading on the belly; rings on the tail
+      const f = S.stripes, top = shY;
+      B.modulate((x, y, z) => {
+        const band = Math.sin(x * f + Math.sin(z * 31 + x * 7) * 0.9 + y * 11);
+        const onTop = smoothstep(top * 0.55, top * 1.05, y);
+        return 1 - 0.55 * smoothstep(0.35, 0.8, band) * onTop;
+      }, this.sdf.step.y * 2.5);
     }
     B.end();
   }
