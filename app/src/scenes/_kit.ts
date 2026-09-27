@@ -279,7 +279,7 @@ export abstract class LitScene extends CityScene {
   beam(out: THREE.WebGLRenderTarget, t: number, pose: TorchPose | null, on: number, o: { density?: number; maxDist?: number; floorY?: number; half?: number } = {}) {
     if (!pose || on <= 0.01) return;
     const lamp = makeLamp(pose.head, pose.target, o.half ?? 11, 12, 1.25 * on);
-    this.cone.render(this.ctx.renderer, out, this.cam, lamp, t, { density: o.density ?? 0.03, floorY: o.floorY ?? 0, maxDist: o.maxDist ?? 9 });
+    this.cone.render(this.ctx.renderer, out, this.cam, lamp, t, { density: o.density ?? 0.03, floorY: o.floorY ?? 0, maxDist: o.maxDist ?? 9, pool: 0 }); // the SpotLight already lights the floor (with shadows)
   }
   /** Draw the torch hand (and its lens glow). */
   torchHand(c: CanvasRenderingContext2D, pose: TorchPose | null, light: Light) {

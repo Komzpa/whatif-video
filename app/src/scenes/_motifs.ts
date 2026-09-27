@@ -650,7 +650,7 @@ export function lampLight(l: Lamp, x: number, y: number, z: number) {
 export class LampCone {
   pass = new FSPass(/* glsl */ `
     uniform mat4 invProj, camWorld; uniform vec3 camPos;
-    uniform vec3 lPos, lDir, lCol; uniform float cosO, cosI, range, inten, density, floorY, time, maxDist;
+    uniform vec3 lPos, lDir, lCol; uniform float cosO, cosI, range, inten, density, floorY, time, maxDist, pool;
     float spot(vec3 p) {
       vec3 d = p - lPos; float L = length(d) + 1e-4;
       float c = dot(d / L, lDir);
@@ -677,17 +677,17 @@ export class LampCone {
       // the pool on the floor
       if (rd.y < -1e-4 && tMax < maxDist) {
         vec3 hp = camPos + rd * tMax;
-        col += lCol * spot(hp) * inten * 0.55;
+        col += lCol * spot(hp) * inten * 0.55 * pool;
       }
       fragColor = vec4(col, 1.0);
     }`, {
     invProj: { value: new THREE.Matrix4() }, camWorld: { value: new THREE.Matrix4() }, camPos: { value: new THREE.Vector3() },
     lPos: { value: new THREE.Vector3() }, lDir: { value: new THREE.Vector3() }, lCol: { value: new THREE.Vector3(...LIN.lamp) },
     cosO: { value: 0.9 }, cosI: { value: 0.95 }, range: { value: 10 }, inten: { value: 1 }, density: { value: 0.12 },
-    floorY: { value: 0 }, time: { value: 0 }, maxDist: { value: 60 },
+    floorY: { value: 0 }, time: { value: 0 }, maxDist: { value: 60 }, pool: { value: 1 },
   }, { blending: THREE.AdditiveBlending, transparent: true });
 
-  render(renderer: THREE.WebGLRenderer, out: THREE.WebGLRenderTarget, cam: THREE.PerspectiveCamera, l: Lamp, t: number, o: { density?: number; floorY?: number; color?: RGB; maxDist?: number } = {}) {
+  render(renderer: THREE.WebGLRenderer, out: THREE.WebGLRenderTarget, cam: THREE.PerspectiveCamera, l: Lamp, t: number, o: { density?: number; floorY?: number; color?: RGB; maxDist?: number; pool?: number } = {}) {
     if (l.intensity <= 0.002) return;
     const u = this.pass.u;
     cam.updateMatrixWorld();
@@ -698,7 +698,7 @@ export class LampCone {
     (u.lDir!.value as THREE.Vector3).copy(l.dir);
     (u.lCol!.value as THREE.Vector3).set(...(o.color ?? LIN.lamp));
     u.cosO!.value = l.cosOuter; u.cosI!.value = l.cosInner; u.range!.value = l.range; u.inten!.value = l.intensity;
-    u.density!.value = o.density ?? 0.12; u.floorY!.value = o.floorY ?? -1e4; u.time!.value = t; u.maxDist!.value = o.maxDist ?? 40;
+    u.density!.value = o.density ?? 0.12; u.floorY!.value = o.floorY ?? -1e4; u.time!.value = t; u.maxDist!.value = o.maxDist ?? 40; u.pool!.value = o.pool ?? 1;
     this.pass.render(renderer, out);
   }
 }
