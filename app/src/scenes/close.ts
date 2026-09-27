@@ -1,9 +1,11 @@
 // `close` — outro, ДОМ · 0,0 км (TREATMENT `close` read through r6 (no book) and r8 (no drone): the warm point is a
-// night-light the child switches on; a real window light at home replaces the torch). Instrumental. Two shots:
-//   (a) first person, home: the door of the child's room swings open on the dark; the city's few windows in the
-//       glass. The child crouches and clicks on the night-light by the skirting: warm light from the floor. The coat
-//       on the hook is only a coat now (the chalk monster tries to draw itself and fades: ПАЛЬТО). The child dials
-//       the rotary phone.
+// night-light the child switches on; a real window light at home replaces the torch). Instrumental. Shots:
+//   (a) from low in the dark room: the door swings open, the hall light floods in and throws the child's long
+//       shadow across the parquet towards us; the child comes in, black against the light.
+//   (b) first person: the child crouches and presses the night-light on by the skirting: warm light from the floor.
+//   (c) from the window corner, the child standing in the warm glow before the coat on the hook: only a coat now
+//       (the chalk monster tries to draw itself and fades: ПАЛЬТО).
+//   (d) first person: a finger in the rotary phone's dial.
 //   (b) outside, pulling back from the window: the child in silhouette at the glass with the handset, the room
 //       warm behind; back and up over the dark yard while a few windows light up one by one; last frame: one
 //       yellow window.
@@ -48,7 +50,7 @@ export default class Close extends LitScene {
   chapter = 'close';
   door!: THREE.Group;
   nlMat!: THREE.MeshStandardMaterial; nlLight!: THREE.PointLight;
-  hall!: THREE.SpotLight; lamp!: THREE.PointLight;
+  hall!: THREE.SpotLight; hallFill!: THREE.PointLight; lamp!: THREE.PointLight;
   dial!: THREE.Mesh; handset!: THREE.Group;
   kidW!: Figure;
   panes!: WindowPanes; lit0: number[] = [];
@@ -67,9 +69,14 @@ export default class Close extends LitScene {
     T.coat = T.click + 0.6; T.phone = T.coat + 2.3; T.dial1 = T.phone + 0.55; T.dial2 = T.dial1 + 0.8;
     T.cut = beat(s + 9.0); // outside
     this.T = T;
+    this.shots = [
+      [s, T.in1 + 0.1, { k: 'free', p: [0.05, FY + 0.3, -0.35], p1: [0.1, FY + 0.36, -0.7], look: [DOOR_X - 0.05, FY + 1.0, -RD], look1: [DOOR_X - 0.2, FY + 0.9, -RD + 0.6], fov: PORTRAIT ? 78 : 58 }],
+      [T.coat - 0.1, T.phone - 0.2, { k: 'free', p: [-1.3, FY + 0.7, -0.35], p1: [-1.25, FY + 0.75, -0.5], look: [HOOK[0] - 0.25, FY + 1.25, HOOK[2]], fov: PORTRAIT ? 78 : 60 }],
+    ];
+    this.initKid(31);
     this.build();
     this.buildRoom();
-    this.kidW = new Figure(this.three, { height: 1.24, kid: true, coat: [0.72, 0.5, 0.07], trousers: [0.06, 0.07, 0.12], hood: true, seed: 21 }, 64);
+    this.kidW = new Figure(this.three, { height: 1.24, kid: true, coat: [0.6, 0.47, 0.08], trousers: [0.06, 0.07, 0.12], hair: [0.05, 0.035, 0.025], pack: [0.16, 0.05, 0.04], seed: 21 }, 64);
     // the child's own shadow in the doorway light (a shape that only casts shadow)
     const inv = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
     this.shadowKid = new THREE.Group(); this.three.add(this.shadowKid);
@@ -103,7 +110,7 @@ export default class Close extends LitScene {
     wall.position.z = 0.3; wall.receiveShadow = true; S.add(wall);
     boxMesh(S, 48, PLINTH, 0.4, 0, PLINTH / 2, 0.2, lit([0.3, 0.3, 0.29], { map: concreteTex(214, [12, 1]), rough: 0.9 }));
     boxMesh(S, 48, 0.3, 12, 0, PLINTH + 5 * FLOOR_H + 0.15, -5.7, lit([0.2, 0.2, 0.2], { rough: 0.9 })); // roof
-    boxMesh(S, 48, PLINTH + 5 * FLOOR_H, 11.4, 0, (PLINTH + 5 * FLOOR_H) / 2, -6.0 - RD, lit([0.1, 0.1, 0.1], { rough: 0.9 }), { cast: false }); // the block's body behind the room
+    boxMesh(S, 48, PLINTH + 5 * FLOOR_H, 11.4, 0, (PLINTH + 5 * FLOOR_H) / 2, -9.0 - RD, lit([0.1, 0.1, 0.1], { rough: 0.9 }), { cast: false }); // the block's body behind the room
     for (const sx of [-1, 1]) boxMesh(S, 0.3, 5 * FLOOR_H, RD + 0.3, sx * 24, PLINTH + 2.5 * FLOOR_H, -RD / 2 + 0.15, lit([0.3, 0.3, 0.28], { rough: 0.9 }));
     // the reveal round our window (the wall's thickness) and the sill
     const rev = lit([0.55, 0.54, 0.5], { rough: 0.9 });
@@ -122,7 +129,7 @@ export default class Close extends LitScene {
     const r = mulberry32(215);
     for (let f = 0; f < 5; f++) for (let k = -7; k <= 7; k++) {
       if (f === 1 && k === 0) continue;
-      mine.push({ p: [k * PANEL_W, PLINTH + f * FLOOR_H + 1.575, 0.31], ry: 0, c: r() < 0.2 ? [0.55, 0.62, 0.8] : [1.0, 0.72, 0.42], k: 0.5 + r() * 0.6, tv: 0 });
+      mine.push({ p: [k * PANEL_W, PLINTH + f * FLOOR_H + 1.575, 0.31], ry: 0, c: r() < 0.6 ? [0.5, 0.58, 0.78] : [0.8, 0.66, 0.5], k: 0.3 + r() * 0.25, tv: 0 }); // the neighbours: dimmer, cooler than ours
     }
     const others = [
       ...panelBlock(S, { cx: 0, cz: 44, len: 60, floors: 5, ang: 0, seed: 216, litRate: 0.3 }),
@@ -168,9 +175,10 @@ export default class Close extends LitScene {
     const ih = new THREE.Path(); ih.moveTo(WIN.x0, WIN.y0); ih.lineTo(WIN.x0, WIN.y1); ih.lineTo(WIN.x1, WIN.y1); ih.lineTo(WIN.x1, WIN.y0); ih.closePath(); inner.holes.push(ih);
     const wpi = wp.clone(); wpi.repeat.set(1, 1); wpi.needsUpdate = true;
     const iw = new THREE.Mesh(new THREE.ShapeGeometry(inner), lit([0.8, 0.8, 0.8], { map: wpi, rough: 0.95 })); iw.rotation.y = Math.PI; iw.position.z = -0.001; iw.receiveShadow = true; S.add(iw);
-    const back = new THREE.Shape(); back.moveTo(-RW - 1, FY); back.lineTo(RW + 1, FY); back.lineTo(RW + 1, FY + RH); back.lineTo(-RW - 1, FY + RH); back.closePath();
-    const dh = new THREE.Path(); dh.moveTo(DOOR_X - 0.42, FY); dh.lineTo(DOOR_X - 0.42, FY + 2.05); dh.lineTo(DOOR_X + 0.42, FY + 2.05); dh.lineTo(DOOR_X + 0.42, FY); dh.closePath(); back.holes.push(dh);
-    const bw = new THREE.Mesh(new THREE.ShapeGeometry(back), lit([0.8, 0.8, 0.8], { map: wpi, rough: 0.95 })); (bw.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; bw.position.z = -RD; bw.receiveShadow = true; S.add(bw);
+    // the back wall in three pieces round the door (a hole touching the outline breaks the triangulation)
+    const bwM = lit([0.8, 0.8, 0.8], { map: wpi, rough: 0.95 }); bwM.side = THREE.DoubleSide;
+    const bwPiece = (x0: number, x1: number, y0: number, y1: number) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), bwM); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, -RD); const pa = m.geometry.attributes.position!, uv = m.geometry.attributes.uv!; for (let i = 0; i < pa.count; i++) uv.setXY(i, pa.getX(i) + (x0 + x1) / 2, pa.getY(i) + (y0 + y1) / 2); m.receiveShadow = true; m.castShadow = true; S.add(m); };
+    bwPiece(-RW - 1, DOOR_X - 0.42, FY, FY + RH); bwPiece(DOOR_X + 0.42, RW + 1, FY, FY + RH); bwPiece(DOOR_X - 0.42, DOOR_X + 0.42, FY + 2.05, FY + RH);
     // the hall behind the door: a short corridor lit warm
     boxMesh(S, 3, 0.02, 3, DOOR_X, FY - 0.01, -RD - 1.5, floorM, { cast: false });
     boxMesh(S, 0.05, RH, 3, DOOR_X - 0.9, FY + RH / 2, -RD - 1.5, wallM, { cast: false }); boxMesh(S, 0.05, RH, 3, DOOR_X + 0.9, FY + RH / 2, -RD - 1.5, wallM, { cast: false });
@@ -180,6 +188,8 @@ export default class Close extends LitScene {
     this.hall.position.set(DOOR_X - 0.2, FY + 2.3, -RD - 1.9); this.hall.target.position.set(DOOR_X - 0.5, FY, -1.2);
     this.hall.castShadow = true; this.hall.shadow.mapSize.set(1024, 1024); this.hall.shadow.bias = -0.0005; this.hall.shadow.camera.near = 0.2; this.hall.shadow.camera.far = 14;
     S.add(this.hall, this.hall.target);
+    // the hall itself glows behind the child (no shadows: it only fills the doorway)
+    this.hallFill = new THREE.PointLight(new THREE.Color().setRGB(1, 0.74, 0.45, THREE.LinearSRGBColorSpace), 0, 5, 2); this.hallFill.position.set(DOOR_X - 0.1, FY + 2.2, -RD - 2.2); S.add(this.hallFill);
     // the door leaf, hinged on its left edge, opening into the room
     this.door = new THREE.Group(); this.door.position.set(DOOR_X - 0.41, FY, -RD); S.add(this.door);
     const doorTex = canvasTex(128, 320, (c) => {
@@ -210,8 +220,10 @@ export default class Close extends LitScene {
     const cg = new THREE.Group(); cg.position.set(HOOK[0] - 0.13, HOOK[1], HOOK[2]); cg.rotation.y = Math.PI / 2; S.add(cg);
     const bodyG = new THREE.CylinderGeometry(0.18, 0.27, 0.9, 12, 1, true); bodyG.scale(1, 1, 0.45);
     const body = new THREE.Mesh(bodyG, new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.36, 0.3, 0.24, THREE.LinearSRGBColorSpace), roughness: 0.95, side: THREE.DoubleSide })); body.position.y = -0.52; body.castShadow = true; cg.add(body);
+    body.castShadow = false; // grazing hall light would throw its shadow down the whole wall
     boxMesh(cg, 0.4, 0.07, 0.14, 0, -0.08, 0, coat);
     for (const sx of [-1, 1]) cyl(cg, [sx * 0.19, -0.1, 0], [sx * 0.24, -0.72, 0.02], 0.055, coat, { r1: 0.065, seg: 8 });
+    cg.traverse((m) => { m.castShadow = false; });
     // the night-light: a socket plate and a little plastic moon
     boxMesh(S, 0.02, 0.09, 0.09, RW - 0.01, NL[1], NL[2], lit([0.85, 0.83, 0.78], { rough: 0.5 }));
     this.nlMat = new THREE.MeshStandardMaterial({ color: 0xf0e2c0, roughness: 0.4, emissive: new THREE.Color().setRGB(1, 0.72, 0.35, THREE.LinearSRGBColorSpace), emissiveIntensity: 0 });
@@ -269,9 +281,9 @@ export default class Close extends LitScene {
     }
     // outside: from the glass, back and up over the yard; the last frame holds our window
     const u = ease.inOutCubic(prog(t, T.cut, T.end - 0.4));
-    const p: V3 = [lerp(0.25, 3, u), lerp(WIN.y0 + 0.6, 9.5, u), lerp(1.5, 34, u)];
-    const target: V3 = [0, lerp(WIN.y0 + 0.55, 5.6, u), 0];
-    return { p, yaw: this.yawTo(p, target), pitch: this.pitchTo(p, target) + (P ? 0.04 : 0.02) * u, walk: 0, fov: lerp(P ? 64 : 48, P ? 60 : 40, u) };
+    const p: V3 = [lerp(0.25, 1.4, u), lerp(WIN.y0 + 0.6, 6.4, u), lerp(1.5, 15, u)];
+    const target: V3 = [0, lerp(WIN.y0 + 0.55, P ? 5.0 : 4.9, u), 0];
+    return { p, yaw: this.yawTo(p, target), pitch: this.pitchTo(p, target) + (P ? 0.04 : 0.02) * u, walk: 0, fov: lerp(P ? 64 : 48, P ? 52 : 34, u) };
   }
 
   render(f: Frame, out: THREE.WebGLRenderTarget) {
@@ -282,16 +294,17 @@ export default class Close extends LitScene {
     // the door, the hall light, the night-light, the lamp, the windows coming back
     this.door.rotation.y = -(0.42 + ease.inOutCubic(prog(t, T.open + 0.1, T.open + 1.0)) * 1.3);
     this.hall.intensity = t < T.cut ? 45 * smoothstep(T.open - 0.05, T.open + 0.35, t) : 0;
+    this.hallFill.intensity = this.hall.intensity * 0.3;
     const nl = PROOF ? 1 : smoothstep(T.click, T.click + 0.12, t) * (t < T.click + 0.3 ? (hash(Math.floor(t * 30), 4) < 0.7 ? 1 : 0.4) : 1);
     this.nlMat.emissiveIntensity = 2.2 * nl; this.nlLight.intensity = 2.4 * nl;
     const lampK = outside ? smoothstep(T.cut, T.cut + 0.4, t) : PROOF === 'facade' ? 1 : 0;
-    this.lamp.intensity = 11 * lampK; ((this as unknown as { shade: THREE.Mesh }).shade.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.2 * lampK;
+    this.lamp.intensity = 17 * lampK; ((this as unknown as { shade: THREE.Mesh }).shade.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.2 * lampK;
     const w0 = T.cut + 0.9, w1 = T.end - 1.2;
     const ou = outside ? smoothstep(T.cut, T.cut + 2.5, t) : PROOF === 'facade' ? 1 : 0;
     this.moon.intensity = 0.35 * ou; this.hemi.intensity = 0.05 + 0.12 * ou;
     const yk = outside ? smoothstep(T.cut + 2.6, T.cut + 2.75, t) * (t < T.cut + 3.1 ? (hash(Math.floor(t * 24), 7) < 0.6 ? 1 : 0.2) : 1) : PROOF === 'facade' ? 1 : 0;
     this.yard.intensity = 40 * yk;
-    this.panes.set((_, i) => { const a = this.lit0[i]!; if (a < 0) return 0; const tt = w0 + a * (w1 - w0); return 0.7 * smoothstep(tt, tt + 0.25, t) * (hash(i, 33) < 0.1 ? 0.8 + 0.2 * hash(Math.floor(t * 8), i) : 1); });
+    this.panes.set((_, i) => { const a = this.lit0[i]!; if (a < 0) return 0; const tt = w0 + a * (w1 - w0); return 0.42 * smoothstep(tt, tt + 0.25, t) * (hash(i, 33) < 0.1 ? 0.8 + 0.2 * hash(Math.floor(t * 8), i) : 1); });
     // dialing: the dial turns and springs back twice
     const d1 = prog(t, T.dial1, T.dial1 + 0.35) - prog(t, T.dial1 + 0.4, T.dial1 + 0.8), d2 = prog(t, T.dial2, T.dial2 + 0.3) - prog(t, T.dial2 + 0.35, T.dial2 + 0.7);
     this.dial.rotation.z = -(d1 * 2.2 + d2 * 1.4);
@@ -304,13 +317,19 @@ export default class Close extends LitScene {
     const P = this.pov(t);
     this.setCam(P, t, P.walk);
     const cam = this.cam;
-    this.shadowKid.visible = !outside && !PROOF;
+    this.shadowKid.visible = false;
     this.shadowKid.position.set(cam.position.x, FY, cam.position.z + 0.05); this.shadowKid.rotation.y = P.yaw;
     const pose = this.torch(t, { raise: outside || PROOF ? 0 : 1 - smoothstep(T.crouch, T.crouch + 0.5, t), on: 0, walk: P.walk });
+    if (!PROOF && !outside) this.cut(t, P, null, { floor: FY, speed: P.walk * 1.1, look: 0, headDown: 0 });
+    else if (this.kid) { this.kid.visible = false; this.third = false; }
+    // crouched at the night-light the standing shadow would swallow the wall: fold it away
+    const crouchK = ease.inOutCubic(prog(t, T.crouch - 0.2, T.crouch + 0.4)) * (1 - ease.inOutCubic(prog(t, T.coat + 0.2, T.coat + 0.8)));
+    this.shadowKid.scale.set(1, Math.max(0.05, 1 - crouchK), 1);
+    this.shadowKid.visible = !outside && !PROOF && !this.third && crouchK < 0.95;
     this.renderWorld(out, t, { sky: { top: [0.012, 0.014, 0.026], horizon: scaleRGB(LIN.smog, 0.1), low: scaleRGB(LIN.shadow, 0.6), horizonY: 0.5, haze: 1 } });
     const g = this.glow3D;
     if (nl > 0) { const dn = Math.hypot(cam.position.x - NL[0], cam.position.y - NL[1], cam.position.z - NL[2]); g.add(NL[0] - 0.08, NL[1], NL[2], 0.11, 0.11, [1, 0.7, 0.35], 0.8 * nl * clamp(dn / 2.2, 0.3, 1), 3); }
-    if (lampK > 0) g.add(0, (WIN.y0 + WIN.y1) / 2, 3.5, 0.9, 0.8, [1, 0.72, 0.38], 0.12 * lampK * clamp((cam.position.z - 8) / 8), 2.5);
+    if (lampK > 0) { const fz = clamp((cam.position.z - 6) / 10); g.add(0, (WIN.y0 + WIN.y1) / 2, 1.2, 1.3, 1.2, [1, 0.7, 0.34], 0.3 * lampK * fz, 2.5); g.add(0, (WIN.y0 + WIN.y1) / 2, 0.5, 3.2, 2.6, [1, 0.66, 0.3], 0.08 * lampK * fz, 1.6); }
     if (yk > 0) g.add(this.lampTip[0], this.lampTip[1] - 0.1, this.lampTip[2] + 0.5, 0.5, 0.35, [1, 0.62, 0.3], 0.7 * yk, 2.5);
     this.flushGlow(out);
     // ---- the chalk ghost tries to draw itself on the coat and fades in the light; hands; callouts
@@ -320,9 +339,8 @@ export default class Close extends LitScene {
     if (!PROOF && !outside) {
       const gk = prog(t, T.coat - 0.15, T.coat + 0.55, ease.outCubic) * 0.75, ga = (1 - smoothstep(T.coat + 0.5, T.coat + 1.2, t)) * 0.8;
       this.ghost(u, t, gk, ga);
-      this.torchHand(u, pose, light);
-      this.reach(u, t, light);
-      this.callout(u, t, homeLabel('close'), T.open + 0.25, T.open + 2.2, () => this.onScreen(0, WIN.y1 - 0.2, 0), { places: [city().home.name] });
+      if (!this.third) { this.torchHand(u, pose, light); this.reach(u, t, light); }
+      this.callout(u, t, homeLabel('close'), T.open + 0.3, T.open + 2.3, () => this.onScreen(DOOR_X - 0.45, FY + 1.75, -RD + 0.5), { places: [city().home.name] }); // over the doorway the child walks in through
       this.callout(u, t, 'ПАЛЬТО', T.coat + 0.35, T.phone - 0.1, () => this.onScreen(HOOK[0] - 0.13, HOOK[1] - 0.45, HOOK[2]));
     }
     this.composite2D(this.ui, out);
@@ -359,7 +377,7 @@ export default class Close extends LitScene {
       if (k <= 0.001) return;
       const q = project(this.cam, ...p);
       const tx = q.behind ? W * 0.5 : clamp(q.x + dx, s * 2, W - s * 2), ty = q.behind ? H * 0.6 : clamp(q.y, H * 0.2, H * 0.9);
-      drawOpenHand(c, { x: lerp(from.x + s, tx, k), y: lerp(H + s, ty, k) }, from, s, light, 'flat', { curl: 0.35 });
+      drawOpenHand(c, { x: lerp(from.x + s, tx, k), y: lerp(H + s, ty, k) }, from, s, light, 'point');
     };
     go(k1, [NL[0] - 0.04, NL[1] + 0.02, NL[2]]);
     const circ = (d: number) => [PHONE[0] + Math.cos(-1 - d) * 0.035, PHONE[1] + 0.09, PHONE[2] - 0.05 - Math.sin(-1 - d) * 0.02] as V3;
