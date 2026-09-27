@@ -145,7 +145,7 @@ export default class Close extends LitScene {
     const trunk = lit([0.12, 0.1, 0.08], { rough: 1 });
     for (const [x, z] of [[-9, 12], [7, 18], [-3, 26]] as const) { cyl(S, [x, 0, z], [x, 5, z], 0.14, trunk, { r1: 0.07, seg: 6 }); for (let b = 0; b < 5; b++) { const a = b * 1.3 + x; cyl(S, [x, 3 + b * 0.4, z], [x + Math.cos(a) * 1.6, 4.4 + b * 0.5, z + Math.sin(a) * 1.6], 0.04, trunk, { seg: 4, cast: false }); } }
     const lampTip = this.lampTip = streetLight(S, 4, 8, { h: 6, arm: [0, 0, -1.2] });
-    this.yard = this.addLamp(lampTip, { k: 0, angle: 0.95, penumbra: 0.7, shadow: true, target: [3, 0, 5] });
+    this.yard = this.addLamp(lampTip, { k: 0, color: [0.72, 0.82, 1], angle: 0.95, penumbra: 0.7, shadow: true, target: [3, 0, 5] });
     this.moon = new THREE.DirectionalLight(new THREE.Color().setRGB(0.55, 0.62, 0.85, THREE.LinearSRGBColorSpace), 0); this.moon.position.set(-20, 30, 40); S.add(this.moon);
     void W; void H;
   }
@@ -280,10 +280,10 @@ export default class Close extends LitScene {
       return { p: cam, yaw, pitch, walk, fov: P ? 76 : 60 };
     }
     // outside: from the glass, back and up over the yard; the last frame holds our window
-    const u = ease.inOutCubic(prog(t, T.cut, T.end - 0.4));
-    const p: V3 = [lerp(0.25, 1.4, u), lerp(WIN.y0 + 0.6, 6.4, u), lerp(1.5, 15, u)];
-    const target: V3 = [0, lerp(WIN.y0 + 0.55, P ? 5.0 : 4.9, u), 0];
-    return { p, yaw: this.yawTo(p, target), pitch: this.pitchTo(p, target) + (P ? 0.04 : 0.02) * u, walk: 0, fov: lerp(P ? 64 : 48, P ? 52 : 34, u) };
+    const u = ease.inOutCubic(prog(t, T.cut, T.end - 1.8)); // then hold on our window
+    const p: V3 = [lerp(0.25, -0.5, u), lerp(WIN.y0 + 0.6, 5.6, u), lerp(1.5, 9.5, u)];
+    const target: V3 = [0, lerp(WIN.y0 + 0.55, P ? 4.75 : 4.95, u), 0];
+    return { p, yaw: this.yawTo(p, target), pitch: this.pitchTo(p, target) + (P ? 0.04 : 0.02) * u, walk: 0, fov: lerp(P ? 64 : 48, P ? 44 : 26, u) };
   }
 
   render(f: Frame, out: THREE.WebGLRenderTarget) {
@@ -298,12 +298,12 @@ export default class Close extends LitScene {
     const nl = PROOF ? 1 : smoothstep(T.click, T.click + 0.12, t) * (t < T.click + 0.3 ? (hash(Math.floor(t * 30), 4) < 0.7 ? 1 : 0.4) : 1);
     this.nlMat.emissiveIntensity = 2.2 * nl; this.nlLight.intensity = 2.4 * nl;
     const lampK = outside ? smoothstep(T.cut, T.cut + 0.4, t) : PROOF === 'facade' ? 1 : 0;
-    this.lamp.intensity = 17 * lampK; ((this as unknown as { shade: THREE.Mesh }).shade.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.2 * lampK;
+    this.lamp.intensity = 24 * lampK; ((this as unknown as { shade: THREE.Mesh }).shade.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.2 * lampK;
     const w0 = T.cut + 0.9, w1 = T.end - 1.2;
     const ou = outside ? smoothstep(T.cut, T.cut + 2.5, t) : PROOF === 'facade' ? 1 : 0;
     this.moon.intensity = 0.35 * ou; this.hemi.intensity = 0.05 + 0.12 * ou;
     const yk = outside ? smoothstep(T.cut + 2.6, T.cut + 2.75, t) * (t < T.cut + 3.1 ? (hash(Math.floor(t * 24), 7) < 0.6 ? 1 : 0.2) : 1) : PROOF === 'facade' ? 1 : 0;
-    this.yard.intensity = 40 * yk;
+    this.yard.intensity = 12 * yk; // the yard lamp stays dimmer and cooler than our window
     this.panes.set((_, i) => { const a = this.lit0[i]!; if (a < 0) return 0; const tt = w0 + a * (w1 - w0); return 0.42 * smoothstep(tt, tt + 0.25, t) * (hash(i, 33) < 0.1 ? 0.8 + 0.2 * hash(Math.floor(t * 8), i) : 1); });
     // dialing: the dial turns and springs back twice
     const d1 = prog(t, T.dial1, T.dial1 + 0.35) - prog(t, T.dial1 + 0.4, T.dial1 + 0.8), d2 = prog(t, T.dial2, T.dial2 + 0.3) - prog(t, T.dial2 + 0.35, T.dial2 + 0.7);
@@ -330,7 +330,7 @@ export default class Close extends LitScene {
     const g = this.glow3D;
     if (nl > 0) { const dn = Math.hypot(cam.position.x - NL[0], cam.position.y - NL[1], cam.position.z - NL[2]); g.add(NL[0] - 0.08, NL[1], NL[2], 0.11, 0.11, [1, 0.7, 0.35], 0.8 * nl * clamp(dn / 2.2, 0.3, 1), 3); }
     if (lampK > 0) { const fz = clamp((cam.position.z - 6) / 10); g.add(0, (WIN.y0 + WIN.y1) / 2, 1.2, 1.3, 1.2, [1, 0.7, 0.34], 0.3 * lampK * fz, 2.5); g.add(0, (WIN.y0 + WIN.y1) / 2, 0.5, 3.2, 2.6, [1, 0.66, 0.3], 0.08 * lampK * fz, 1.6); }
-    if (yk > 0) g.add(this.lampTip[0], this.lampTip[1] - 0.1, this.lampTip[2] + 0.5, 0.5, 0.35, [1, 0.62, 0.3], 0.7 * yk, 2.5);
+    if (yk > 0) g.add(this.lampTip[0], this.lampTip[1] - 0.1, this.lampTip[2] + 0.5, 0.4, 0.28, [0.7, 0.8, 1], 0.18 * yk, 2.5);
     this.flushGlow(out);
     // ---- the chalk ghost tries to draw itself on the coat and fades in the light; hands; callouts
     const u = this.ui.ctx;
