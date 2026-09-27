@@ -297,7 +297,7 @@ export default class CatScene extends LitScene {
     // ---- hands and UI
     const u = this.ui.ctx;
     this.glow2D.clear();
-    const light: Light = { amb: 0.24, warm: 0.45, torch: 1 }; // the torch's own spill warms the skin (B1: skin, not a grey glove)
+    const light: Light = { amb: 0.34, warm: 0.62, torch: 1 }; // the torch's own spill warms the skin (B1: skin, not a grey glove)
     if (!PROOF) {
       this.torchHand(u, pose, light);
       if (!this.third) this.pet(u, t, light);
