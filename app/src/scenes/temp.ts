@@ -1,6 +1,6 @@
 // `temp` — «СЛИШКОМ ЖАРКО» / «СЛИШКОМ ХОЛОДНО» (TREATMENT p.52→62: the public thermometer, the needle slams right
 // then left; heat shimmer and orange smog, then frost growing across the frame as branching lines and blue-grey
-// haze; r5 item 9: the cat walks with the child, callout КОШКА · 1 · НЕ ТВОЯ). City stop: the heating main on the
+// haze; r5 item 9: the cat walks with the child, callout КОШКА · 1 — it is «твоя кошка» in the song). City stop: the heating main on the
 // way out of the promzona. First person, walking:
 //   (a) start      a road along the above-ground heating main (silver-clad pipes on concrete supports, the П-shaped
 //                  expansion loop over the road ahead); the cat trots along the top of the warm pipe.
@@ -50,8 +50,19 @@ export default class Temp extends LitScene {
     const far = all(/^far$/), too = all(/^too$/);
     T.far1 = far[0]!.start; T.too1 = too[0]!.start; T.hot = all(/^hot/)[0]!.start;
     T.far2 = far[1]!.start; T.too2 = too[1]!.start; T.cold = all(/^cold/)[0]!.start;
+    T.line2 = all(/^It/)[1]!.start; // «It's far too cold»: the board flips as this line starts (the sung line must not sit under +41°)
     T.end = s + 13;
     this.T = T;
+    // shots: the road along the main from high behind, the cat on the pipe; the board flipping to +41° and the
+    // steam jet in first person; low behind the child, the board high on its pole over the road as it slams to −27°;
+    // from above in the snow as the cat jumps down; over the shoulder walking on with the cat; the torch on the cat
+    this.shots = [
+      [T.s, T.too1 - 0.65, { k: 'wide', d: 1.0, h: 1.3, side: PORTRAIT ? -0.3 : -1.2, ahead: PORTRAIT ? 3 : 1.5, aimY: PORTRAIT ? 2.5 : 0.8, yaw: PORTRAIT ? 0.3 : 0 }],
+      [T.line2 - 0.15, T.cold - 0.45, { k: 'back', d: 1.3, h: 0.8, side: 1, ahead: 1, aimY: PORTRAIT ? 0.9 : 2.4, yaw: PORTRAIT ? 0.1 : 0.3 }],
+      [T.cold - 0.45, T.cold + 1.7, { k: 'high', d: 0.4, d1: 0.5, h: 0.6, side: -0.5, ahead: PORTRAIT ? 0 : 0.7 }],
+      [T.cold + 1.7, T.cold + 3.6, { k: 'ots', d: 2.0, h: 2.2, side: -1.3, ahead: 0.5, yaw: 0.2, aimY: PORTRAIT ? 0 : 1.6 }],
+    ];
+    this.initKid(9);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
     this.tickText = garble('ОСТАВАЙТЕСЬ ДОМА');
@@ -146,8 +157,8 @@ export default class Temp extends LitScene {
     this.frost = cv;
   }
 
-  heat(t: number) { const T = this.T; return smoothstep(T.too1, T.hot + 0.1, t) * (1 - smoothstep(T.too2 - 0.1, T.cold + 0.05, t)); }
-  cold(t: number) { const T = this.T; return smoothstep(T.too2, T.cold + 0.1, t); }
+  heat(t: number) { const T = this.T; return smoothstep(T.too1, T.hot + 0.1, t) * (1 - smoothstep(T.line2, T.line2 + 0.5, t)); }
+  cold(t: number) { const T = this.T; return 0.45 * smoothstep(T.line2, T.line2 + 0.5, t) + 0.55 * smoothstep(T.too2, T.cold + 0.1, t); }
 
   /** The camera walks along the road, stops under the steam, walks on in the cold. */
   camZ(t: number) { const T = this.T; const t1 = Math.min(t, T.cold); return 6 - 1.05 * (t1 - T.s) - 0.6 * Math.max(0, t - T.cold); }
@@ -191,7 +202,7 @@ export default class Temp extends LitScene {
     const T = this.T, c = this.boardCv.getContext('2d')!;
     const w = 512, h = 256;
     c.fillStyle = '#070606'; c.fillRect(0, 0, w, h);
-    const hot = t >= T.hot - 0.02 && t < T.cold - 0.02, cold = t >= T.cold - 0.02;
+    const hot = t >= T.hot - 0.02 && t < T.line2 - 0.02, cold = t >= T.line2 - 0.02;
     const main = cold ? '−27°' : hot ? '+41°' : '23:47';
     this.boardText = main;
     // LED dots: draw the text into a mask, then sample a dot grid
@@ -205,7 +216,7 @@ export default class Temp extends LitScene {
     const off = ((t - T.s) * 22) % (tw + 128);
     if (hot || cold) mc.fillText(this.tickText, 128 - off, 55);
     const d = mc.getImageData(0, 0, 128, 64).data;
-    const flash = hot ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.hot) * 9)) * (t < T.hot + 0.7 ? 1 : 0) : 1;
+    const flash = hot ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.hot) * 9)) * (t < T.hot + 0.7 ? 1 : 0) : cold ? 0.75 + 0.25 * Math.sign(Math.sin((t - T.line2) * 9)) * (t < T.line2 + 0.6 ? 1 : 0) : 1;
     for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
       const on = d[(y * 128 + x) * 4]! > 110;
       c.fillStyle = on ? `rgba(255,${cold ? 70 : 40},${cold ? 40 : 20},${flash})` : 'rgba(60,12,8,0.5)';
@@ -231,6 +242,7 @@ export default class Temp extends LitScene {
     // the torch: along the road ahead, onto the steam, onto the cat
     const aim = new THREE.Vector3(0.5, 0.6, cam.position.z - 6).lerp(new THREE.Vector3(PX - 0.8, 1.4, JET_Z), hk * 0.8).lerp(c.pos.clone().add(new THREE.Vector3(0, 0.15, 0)), smoothstep(T.cold + 0.8, T.cold + 1.4, t));
     const pose = this.torch(t, { raise: 1, on: 1, walk: 1, aimAt: PROOF ? null : aim, aimK: PROOF ? 0 : 0.8, spot: clamp(20 * (aim.distanceTo(cam.position) / 5) ** 2, 3, 28) });
+    if (!PROOF) this.cut(t, P, pose, { speed: t < T.cold ? 1.05 : 0.6, dist: 6 - this.camZ(t) });
     const tdir = pose ? pose.target.clone().sub(pose.head).normalize() : null;
     this.cat.setShine(pose ? 0.02 + this.cat.shine(pose.head, tdir, 0.95) : 0.02, 2);
     // ---- render
@@ -281,7 +293,7 @@ export default class Temp extends LitScene {
       this.heading(u, t, f);
       this.callout(u, t, homeLabel('temp'), T.s + 0.25, T.too1 - 0.4, () => this.onScreen(0, 8, cam.position.z - 60), { places: [city().home.name] });
       this.callout(u, t, 'ОСТАВАЙТЕСЬ ДОМА', T.hot + 0.5, T.far2 + 1.4, () => this.onScreen(BOARD[0] - 1.0, BOARD[1] - 0.45, BOARD[2] - 0.2));
-      this.callout(u, t, 'КОШКА · 1 · НЕ ТВОЯ', T.cold + 1.5, T.end + 1, () => { const h = this.cat.head.getWorldPosition(new THREE.Vector3()); return this.onScreen(h.x, h.y + 0.08, h.z); });
+      this.callout(u, t, 'КОШКА · 1', T.cold + 1.5, T.end + 1, () => { const h = this.cat.head.getWorldPosition(new THREE.Vector3()); return this.onScreen(h.x, h.y + 0.08, h.z); });
     }
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);
