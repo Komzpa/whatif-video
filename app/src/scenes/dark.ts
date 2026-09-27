@@ -230,7 +230,11 @@ export default class Dark extends LitScene {
     this.begin();
     const cl = this.cityLit(t);
     this.fogE.color.setRGB(0.012 + 0.012 * cl, 0.013 + 0.012 * cl, 0.02 + 0.012 * cl);
-    this.hemi.intensity = 0.06 + 0.06 * cl;
+    // scan pulses: in the black a slow cold pulse (the eye adjusting) brings the roofs, the crane and the yard's
+    // shapes up every 1.4 s, so no black stretch reads as a dropped frame
+    const ps = T.scared + 0.9, pp = 1.4, pu = t > ps ? (t - ps) % pp : 1e9;
+    const pulse = (1 - cl) * (t > ps ? Math.exp(-pu / 0.32) * smoothstep(0, 0.06, pu) : 0) * (1 - smoothstep(T.win - 0.3, T.win, t));
+    this.hemi.intensity = 0.06 + 0.06 * cl + 0.55 * pulse;
     const win = smoothstep(T.win, T.win + 0.35, t);
     this.panes.set((_, i) => (i === this.endWin ? Math.max(t < this.offAt[i]! ? 1 : 0, win * 1.6) : t < this.offAt[i]! ? 1 : lampDie(t, this.offAt[i]!, 0.18, i) * 0));
     for (const [i, l] of this.lamps.entries()) l.L.intensity = 45 * lampDie(t, i === 0 ? T.of : T.scared + 0.4, 0.5, 30 + i);
