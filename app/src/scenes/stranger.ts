@@ -1,6 +1,6 @@
 // `stranger` — «ПРИСТАЁТ НЕЗНАКОМЫЙ ЧЕЛОВЕК» (TREATMENT p.11·: being followed; cameras on every corner turn to
 // watch and not one does anything, «incident not detected»; the child runs to the one lit window). City stop: a
-// long street in Северо-Восточный (unfamiliar: the kiosk's sign is mojibake) along a tall concrete ПО-2 wall.
+// long street near home along a tall concrete ПО-2 wall (familiar ground: the kiosk's sign reads plainly).
 // First person:
 //   (a) start        walking along the wall; a man's shadow, huge, slides onto the wall ahead: behind the child a
 //                    car stands with its headlights on.
@@ -71,10 +71,22 @@ export default class Stranger extends LitScene {
     T.back2 = T.wont - 0.05; T.fwd2 = T.back2 + 2.05;
     T.run = T.alone + 0.05;
     this.T = T;
-    this.signText = garble('ПРОДУКТЫ');
+    this.signText = 'ПРОДУКТЫ';
     this.integrate();
     T.arrive = STOP_T(this); T.turn = T.arrive + 0.3; // he gives up and walks back to his car
     T.glance = Math.max(T.arrive + 0.5, T.end - 1.45); // the last look back: he is walking away
+    // shots: the first look back in first person (12 м); ahead of the child looking back up the street, both it and
+    // the man black against the headlights, the second look back; the CCTV's own view from the pole as the child
+    // passes under it (ИНЦИДЕНТ НЕ ОБНАРУЖЕН pinned to the child) and starts to run; low behind the running child to
+    // the lit kiosk; the hand on the counter in first person; from above the kiosk as the man walks back to his car
+    const cz = (t: number) => this.camZ(t);
+    this.shots = [
+      [T.fwd1, T.fwd2, { k: 'free', p: [-2.3, 1.45, cz(T.fwd2) - 6.2], p1: [-2.2, 1.4, cz(T.fwd2) - 5.6], look: [S_X + 0.6, 1.25, cz(T.fwd1) + 8], look1: [S_X + 0.6, 1.25, cz(T.fwd2) + 7], fov: PORTRAIT ? 70 : 50 }],
+      [T.fwd2, T.run + 1.0, { k: 'free', p: [POLE_B[0] + 0.15, POLE_B[1] + 0.2, POLE_B[2] + 0.35], look: [PATH_X, 0.4, cz(T.fwd2) - 0.5], look1: [PATH_X, 0.4, cz(T.run + 0.8) - 1.5], fov: PORTRAIT ? 72 : 54 }],
+      [T.run + 1.0, T.arrive - 0.2, { k: 'back', d: 1.6, h: 1.8, side: -0.8, ahead: 1, aimY: PORTRAIT ? -0.7 : 0.3, fov: PORTRAIT ? 76 : 58 }],
+      [T.glance + 0.4, T.end + 1, { k: 'free', p: [PORTRAIT ? 1.5 : 2.3, 2.9, KZ + 0.3], p1: [PORTRAIT ? 1.55 : 2.35, 3.0, KZ + 0.1], look: [PORTRAIT ? 0.9 : 1.0, 0.0, KZ + (PORTRAIT ? 6.5 : 5.2)], fov: PORTRAIT ? 80 : 62 }],
+    ];
+    this.initKid(23);
     this.build();
     this.buildCar();
     this.buildKiosk();
@@ -216,7 +228,7 @@ export default class Stranger extends LitScene {
     const bulb = new THREE.PointLight(new THREE.Color().setRGB(1, 0.72, 0.4, THREE.LinearSRGBColorSpace), 5, 7, 2); bulb.position.set(0.1, 2.05, 0.3); g.add(bulb);
     const spill = new THREE.SpotLight(new THREE.Color().setRGB(1, 0.72, 0.42, THREE.LinearSRGBColorSpace), 26, 12, 0.9, 0.8, 2);
     spill.position.set(0.4, 2.2, 0); spill.target.position.set(-3, 0, 0); g.add(spill, spill.target);
-    // the light-box sign on the roof, facing the street, in mojibake
+    // the light-box sign on the roof, facing the street
     const sc = document.createElement('canvas'); sc.width = 768; sc.height = 128;
     const s2 = sc.getContext('2d')!;
     s2.fillStyle = '#f2ead6'; s2.fillRect(0, 0, 768, 128);
@@ -317,6 +329,7 @@ export default class Stranger extends LitScene {
     const counter = new THREE.Vector3(KX - 0.8, 0, KZ + 0.9);
     const aim = ahead.lerp(between, Math.max(k1, k2)).lerp(counter, arr).lerp(new THREE.Vector3(cam.position.x - 0.4, 0, cam.position.z + 2.5), smoothstep(T.glance, T.glance + 0.5, t));
     const pose = this.torch(t, { raise: 1, on: PROOF ? 0 : 1, walk: P.walk, beat: this.running(t), aimAt: PROOF ? null : aim, aimK: PROOF ? 0 : 0.8, spot: clamp(20 * (aim.distanceTo(cam.position) / 5) ** 2, 3, 22) });
+    if (!PROOF) this.cut(t, P, pose, { speed: this.speed(t) * 1.0, dist: -this.camZ(t) });
     this.renderWorld(out, t, { sky: { top: [0.008, 0.01, 0.02], horizon: scaleRGB(LIN.smog, 0.12), low: scaleRGB(LIN.shadow, 0.8), horizonY: 0.5, haze: 1 } });
     const g = this.glow3D;
     for (const l of this.lamps) g.add(l[0], l[1], l[2], 0.45, 0.35, LIN.sodium, 2.2, 4);
@@ -333,21 +346,21 @@ export default class Stranger extends LitScene {
       this.cone.render(renderer, out, cam, L, t, { density: 0.008, floorY: 0, maxDist: 40, pool: 0, color: [1, 0.95, 0.85] });
     }
     this.beam(out, t, pose, PROOF ? 0 : 1, { density: 0.02, maxDist: clamp(aim.distanceTo(cam.position) - 0.5, 0.8, 8) });
-    this.logPlane(this.sign, this.signText, 'garble', { minPx: 10, id: 'scenery:stranger-kiosk', scenery: true });
+    this.logPlane(this.sign, this.signText, 'sign', { minPx: 10, id: 'scenery:stranger-kiosk', scenery: true });
     // ---- hands and UI
     const u = this.ui.ctx;
     this.glow2D.clear();
     const light: Light = { amb: 0.16 + 0.2 * arr, warm: 0.15 + 0.5 * arr, torch: 1 };
     if (!PROOF) {
-      this.handOnCounter(u, t, arr, light);
+      if (!this.third) this.handOnCounter(u, t, arr, light);
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
       const head = () => this.onScreen(S_X, 1.95, this.manZ(t));
       this.callout(u, t, `${this.dist1} м`, T.back1 + 0.3, T.fwd1 + 0.05, head);
       this.callout(u, t, `${this.dist2} м`, T.back2 + 0.2, T.fwd2 + 0.1, head);
       const cb = this.cams[2]!.p;
-      this.callout(u, t, 'ИНЦИДЕНТ НЕ ОБНАРУЖЕН', T.fwd2 + 0.2, T.fwd2 + 2.6, () => this.onScreen(cb.x, cb.y, cb.z));
-      this.callout(u, t, homeLabel('stranger'), T.fwd2 + 3.0, T.fwd2 + 5.1, () => this.onScreen(-0.6, 1.3, KZ - 0.6), { places: [city().home.name] });
+      this.callout(u, t, 'ИНЦИДЕНТ НЕ ОБНАРУЖЕН', T.fwd2 + 0.5, T.fwd2 + 2.95, () => (this.third ? this.onScreen(this.camX(t), 1.3, this.camZ(t)) : this.onScreen(cb.x, cb.y, cb.z)));
+      this.callout(u, t, homeLabel('stranger'), T.fwd2 + 3.35, T.fwd2 + 5.45, () => this.onScreen(-1.4, 0.8, KZ - 0.6), { places: [city().home.name] });
     }
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);
