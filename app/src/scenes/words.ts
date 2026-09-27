@@ -257,17 +257,21 @@ export default class Words extends LitScene {
     }
   }
 
+  firstBreak() { return Math.min(...this.glyphs.map((g) => g.tb)); }
+
   drawTable(t: number) {
     const T = this.T, c = this.tableCv.getContext('2d')!;
     c.fillStyle = '#e8efe6'; c.fillRect(0, 0, 256, 320);
     c.fillStyle = '#1d4a33'; c.fillRect(0, 0, 256, 44);
     const drain = smoothstep(T.words, T.say + 1, t);
-    c.fillStyle = '#fff'; c.font = font(F.metro(900), 24); c.textAlign = 'center'; c.fillText(this.tableText, 128, 30);
+    // plain Russian until the slogan starts breaking, then it breaks with it, top line first
+    const fb = this.firstBreak(), br = (i: number) => t >= fb + i * 0.07;
+    c.fillStyle = '#fff'; c.font = font(F.metro(900), 24); c.textAlign = 'center'; c.fillText(br(0) ? this.tableText : 'РАСПИСАНИЕ', 128, 30);
     c.font = font(F.metro(400), 18); c.textAlign = 'left';
     const r = mulberry32(161);
     for (let i = 0; i < 10; i++) {
       const y = 70 + i * 24;
-      const line = `${String(5 + Math.floor(r() * 18)).padStart(2, '0')}:${String(Math.floor(r() * 6) * 10).padStart(2, '0')}  ${garble(['ЦЕНТР', 'ВОКЗАЛ', 'ЗАВОД', 'КОЛЬЦЕВАЯ', 'ПАРК'][i % 5]!)}`;
+      const line = `${String(5 + Math.floor(r() * 18)).padStart(2, '0')}:${String(Math.floor(r() * 6) * 10).padStart(2, '0')}  ${((n: string) => (br(i + 1) ? garble(n) : n))(['ЦЕНТР', 'ВОКЗАЛ', 'ЗАВОД', 'КОЛЬЦЕВАЯ', 'ПАРК'][i % 5]!)}`;
       // the words drain into loose dots, line by line from the bottom
       const gone = drain * 12 - (9 - i);
       if (gone <= 0) { c.fillStyle = '#233'; c.fillText(line, 16, y); }
@@ -342,7 +346,8 @@ export default class Words extends LitScene {
       if (t >= lastOn && t < firstBreak) logText('sign', this.plain, inFrame && sb.h > 14, sb, { id: 'sign:words-screen' });
       else if (t >= firstBreak) logText('garble', this.text, inFrame && sb.h > 14, sb, { id: 'scenery:words-screen' });
     }
-    this.logPlane(this.table, this.tableText, 'garble', { frac: [0.05, 0.0, 0.95, 0.14], minPx: 10, id: 'scenery:words-table', scenery: true });
+    const tb0 = t >= this.firstBreak();
+    this.logPlane(this.table, tb0 ? this.tableText : 'РАСПИСАНИЕ', tb0 ? 'garble' : 'sign', { frac: [0.05, 0.0, 0.95, 0.14], minPx: 10, id: 'scenery:words-table', scenery: true });
     if (this.bus.visible) this.logPlane(this.busSignMesh, this.busSign, 'garble', { minPx: 10, id: 'scenery:words-bus', scenery: true });
     // ---- hands and UI
     const u = this.ui.ctx;
