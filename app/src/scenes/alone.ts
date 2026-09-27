@@ -49,6 +49,17 @@ export default class Alone extends LitScene {
     // the cat's moves
     T.jump = T.one - 0.1; T.top = T.jump + 0.42; T.drop = T.stays + 0.95; T.gone = T.drop + 0.4;
     this.T = T;
+    // shots: from high behind along the wall, the cat trotting ahead; its look back in first person; behind the
+    // child as the cat goes up and along the wall, the child's arm reaching after it; over the left shoulder at the
+    // empty wall top (КОШКА · 0), the arm still out; low behind the child, small under the block of lit windows;
+    // walking on in first person as they go dark
+    this.shots = [
+      [s, T.no1 + 0.2, { k: 'wide', d: 0.9, h: 1.0, side: 1.2, ahead: 1.2, aimY: 0.4 }],
+      [T.top + 0.1, T.gone + 0.1, { k: 'back', h: 2.8, side: -0.4, ahead: 0.6, yaw: 0.3, aimY: PORTRAIT ? -0.6 : 0.8, d: PORTRAIT ? 1.8 : 1.2 }],
+      [T.gone + 0.1, T.friend - 0.15, { k: 'back', h: 3.4, side: -1.6, ahead: 0.5, yaw: 0.1, aimY: PORTRAIT ? -0.6 : 0.7, d: PORTRAIT ? 2.2 : 1.6 }],
+      [T.friend - 0.15, T.friend + 3.6, { k: 'free', p: [-1.55, 2.2, 3.8], p1: [-1.55, 2.0, 3.0], look: [6, PORTRAIT ? -1.6 : 2.8, -6], look1: [7, PORTRAIT ? -1.2 : 3.2, -7], fov: PORTRAIT ? 80 : 64 }],
+    ];
+    this.initKid(17);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
   }
@@ -102,8 +113,9 @@ export default class Alone extends LitScene {
       const hp = streetLight(S, 14.2, z, { h: 8, arm: [-1.8, 0, 0] });
       this.lamps.push(hp); this.addLamp(hp, { k: 70, angle: 1.0, target: [hp[0] - 1.5, 0, hp[2]] });
     }
-    const hp = streetLight(S, 1.9, -9.5, { h: 7, arm: [-1.4, 0, 0] });
-    this.lamps.push(hp); this.addLamp(hp, { k: 55, angle: 1.05, shadow: true, target: [hp[0] - 2.2, 0, hp[2] + 1] });
+    // the light over the child's stop comes from a lamp on the wall side, out of frame (no pole in the shots)
+    const hp: V3 = [0.3, 5.6, -1.4];
+    this.addLamp(hp, { k: 55, angle: 1.05, shadow: true, target: [hp[0] + 0.3, 0, hp[2] + 1.3] });
     void glowMat; void canvasTex; void speckle;
   }
 
@@ -215,6 +227,8 @@ export default class Alone extends LitScene {
     const cam = this.cam;
     const aim = c.vis > 0 && t < T.friend - 0.5 ? c.pos.clone().add(new THREE.Vector3(0, 0.15, 0)) : t < T.friend ? new THREE.Vector3(WX + 0.2, WH - 0.35, CZ - 1.3) : new THREE.Vector3(1.0, 0.2, cam.position.z - 6);
     const pose = this.torch(t, { raise: 1, on: PROOF ? 0 : 1, walk: this.walking(t), aimAt: PROOF ? null : aim, aimK: PROOF ? 0 : 0.85, spot: clamp(20 * (aim.distanceTo(cam.position) / 5) ** 2, 3, 26) });
+    const reachK = prog(t, T.top + 0.1, T.drop + 0.4, ease.outCubic) * (1 - prog(t, T.friend - 0.6, T.friend + 0.4, ease.inCubic));
+    if (!PROOF) this.cut(t, P, pose, { speed: this.walking(t) * 1.2, armL: reachK });
     const tdir = pose ? pose.target.clone().sub(pose.head).normalize() : null;
     this.cat.setShine(pose ? 0.02 + this.cat.shine(pose.head, tdir, 0.95) : 0.02, 2);
     this.renderWorld(out, t, { sky: { top: [0.008, 0.01, 0.018], horizon: scaleRGB(LIN.smog, 0.1), low: scaleRGB(LIN.shadow, 0.8), horizonY: 0.5, haze: 1 } });
@@ -228,7 +242,7 @@ export default class Alone extends LitScene {
     this.glow2D.clear();
     const light: Light = { amb: 0.18, warm: 0.2, torch: 1 };
     if (!PROOF) {
-      this.reach(u, t, light);
+      if (!this.third) this.reach(u, t, light);
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
       this.callout(u, t, homeLabel('alone'), T.s + 0.1, T.s + 2.3, () => this.onScreen(WX, WH + 0.2, -7), { places: [city().home.name] });
