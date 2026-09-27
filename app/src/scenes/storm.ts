@@ -57,6 +57,16 @@ export default class Storm extends LitScene {
     T.the = w1(/^The$/); T.weather = w1(/^weather/); T.turns = w1(/^turns/); T.feels = w1(/^feels/); T.unsafe = w1(/^unsafe/);
     T.end = this.ctx.end;
     this.T = T;
+    // shots: the road to the overpass from high behind, the hook strike lighting the whole block; the pylon strike
+    // and the cat bolting in first person; low behind the child running through the gusting rain; the close strike
+    // and the torch's first stutter in first person; under the deck over the child's shoulder, the rain curtain,
+    // the road it came by and the cat at its feet
+    this.shots = [
+      [T.s, T.weather + 1.2, { k: 'wide', d: 1.1, h: 1.4, side: -0.8, ahead: 2, aimY: 2.2 }],
+      [T.turns + 0.85, T.unsafe - 0.15, { k: 'back', d: 1.5, h: 0.9, side: 1, ahead: 1.2, aimY: 1.0 }],
+      [T.unsafe + 1.15, T.end + 1, { k: 'ots', d: 1.7, h: 1.8, side: 1.1, ahead: 0.5, aimY: PORTRAIT ? -0.3 : -0.9, d1: PORTRAIT ? 2.4 : 1.7 }],
+    ];
+    this.initKid(13);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
     this.scrText = garble('ШТОРМОВОЕ ПРЕДУПРЕЖДЕНИЕ');
@@ -307,7 +317,7 @@ export default class Storm extends LitScene {
     const fl = this.flash(t), F1 = Math.min(fl.f, 2.2);
     const rk = this.rainK(t);
     // the lights: the dying lamp, the failing tube, the strike
-    for (const l of this.lamps) l.L.intensity = 55 * (l.dies ? lampDie(t, T.unsafe + 0.1, 0.9, 41) : 1);
+    for (const l of this.lamps) l.L.intensity = 55 * (l.dies ? lampDie(t, T.unsafe + 0.1, 0.9, 41) * (t > T.turns ? (hash(Math.floor(t * 14), 43) < 0.3 ? 0.25 : 1) : 1) : 1);
     const tubeK = flicker(t, 0.45, 7) * (hash(Math.floor(t * 3), 2) < 0.15 ? 0.2 : 1);
     this.tube.intensity = 6 * tubeK; (this.tubeMesh.material as THREE.MeshBasicMaterial).color.setScalar(2.2 * tubeK);
     const cam0 = this.camZ(t);
@@ -316,15 +326,15 @@ export default class Storm extends LitScene {
       this.flashL.position.set(0.2 + dir.x * 120, dir.y * 120, cam0 + dir.z * 120);
       this.flashL.target.position.set(0.2, 0, cam0 - 4); this.flashL.target.updateMatrixWorld();
     }
-    this.flashL.intensity = F1 * (1.4 + 2.2 * fl.near);
-    this.hemi.intensity = 0.16 + 0.5 * F1;
+    this.flashL.intensity = F1 * (3.2 + 2.6 * fl.near);
+    this.hemi.intensity = 0.16 + 1.1 * F1;
     this.hemi.color.setRGB(0.55 + 0.3 * F1, 0.62 + 0.3 * F1, 0.78 + 0.25 * F1);
     const fogC = mixRGB([0.02, 0.022, 0.028], [0.3, 0.33, 0.42], clamp(F1 * 0.35));
     this.fogE.color.setRGB(fogC[0], fogC[1], fogC[2]); this.fogE.density = 0.022 + 0.012 * rk;
     this.cloudMat.color.setRGB(0.05 + 0.9 * F1, 0.055 + 0.95 * F1, 0.07 + 1.1 * F1);
     this.panes.set((w, i) => (t > T.unsafe + 0.05 && hash(i, 9) < 0.35 ? lampDie(t, T.unsafe + 0.05 + hash(i, 3) * 0.3, 0.3, i) : 1));
     const c = this.catAt(PROOF === 'cat' ? T.end - 0.3 : t);
-    this.cat.pose({ pos: c.pos, heading: c.heading, dist: c.dist, speed: c.speed, t, sit: c.sit, look: c.look, lookK: c.look ? 0.8 : 0, tailUp: c.speed > 2 ? 0.4 : 0.7, tailWag: 0.05, earBack: 0.3 + 0.5 * this.running(t) });
+    this.cat.pose({ pos: c.pos, heading: c.heading, dist: c.dist, speed: c.speed, t, sit: c.sit, look: c.look, lookK: c.look ? 0.8 : 0, tailUp: c.speed > 2 ? 0.4 : 0.7, tailWag: 0.05, earBack: clamp(0.3 + 0.5 * this.running(t) + 0.8 * F1), crouch: clamp(0.9 * F1 * (c.speed < 2 ? 1 : 0.3)) });
     const P = this.pov(t);
     this.setCam(P, t, 1);
     const cam = this.cam;
@@ -336,6 +346,7 @@ export default class Storm extends LitScene {
     const ahead = new THREE.Vector3(0.4, 0.5, cam.position.z - 7.5);
     const aim = t > T.unsafe + 1.2 ? c.pos.clone().add(new THREE.Vector3(0, 0.7, 4.5)) : ahead; // past the cat into the rain: the cat in silhouette
     const pose = this.torch(t, { raise: 1, on, walk: 1, aimAt: PROOF ? null : aim, aimK: PROOF ? 0 : 0.85, spot: clamp(20 * (aim.distanceTo(cam.position) / 5) ** 2, 3, 30) });
+    if (!PROOF) this.cut(t, P, pose, { speed: 1.2 + 2.2 * this.running(t), dist: 40 - this.camZ(t) });
     const tdir = pose ? pose.target.clone().sub(pose.head).normalize() : null;
     this.cat.setShine(pose && on > 0.3 ? 0.02 + this.cat.shine(pose.head, tdir, 0.95) * on : 0.02, 2);
     // ---- world
@@ -360,7 +371,7 @@ export default class Storm extends LitScene {
     lb.render(renderer, out, cam); lb.clear();
     this.flushGlow(out);
     // rain: streaks in the world (none under the deck), a curtain pouring off the deck edge, splashes
-    const wind = 0.12;
+    const wind = 0.22 + 0.16 * Math.sin(t * 1.7) * Math.sin(t * 0.63 + 1) + 0.12 * this.running(t);
     for (const q of this.drops) {
       const span = 14;
       const y = span - ((((t * q.sp) + q.y) % span) + span) % span;
@@ -383,7 +394,7 @@ export default class Storm extends LitScene {
       const y0 = DY - 0.05 - ph * 3.4, y1 = y0 - 0.25 - hash(i, 5) * 0.7;
       const br = 0.5 + 0.5 * tubeK + 1.5 * F1;
       const zc = DZ0 + 0.02 + (i & 1) * 0.12;
-      lb.seg(x, y0, zc, x + 0.02, Math.max(0, y1), zc, 1.2 + hash(i, 4) * 1.2, 0.6 * br, 0.68 * br, 0.8 * br, (0.15 + 0.45 * hash(i, 3)) * curtK);
+      lb.seg(x + (DY - y0) * wind * 0.25, y0, zc, x + (DY - y1) * wind * 0.25, Math.max(0, y1), zc, 1.2 + hash(i, 4) * 1.2, 0.6 * br, 0.68 * br, 0.8 * br, (0.15 + 0.45 * hash(i, 3)) * curtK);
     }
     // splashes on the road
     const fi = Math.floor(t * 25);
@@ -398,7 +409,7 @@ export default class Storm extends LitScene {
     this.beam(out, t, pose, on, { density: 0.02 + 0.01 * rk, maxDist: clamp(aim.distanceTo(cam.position) - 0.5, 0.8, 8) });
     // near rain across the lens (screen space), lit where it crosses the beam; none once under the deck
     const nearA = rk * (1 - shel) * (1 - (P.yaw > 1.5 ? 0.6 : 0));
-    if (nearA > 0.02) rain(this.lines2D, t, { count: Math.round(900 * rk), alpha: 0.13 * nearA, speed: 2200, angle: 0.12, seed: 17, lit: beamLit(cam, pose, on) });
+    if (nearA > 0.02) rain(this.lines2D, t, { count: Math.round(900 * rk), alpha: 0.13 * nearA, speed: 2200, angle: 0.12 + wind * 0.9, seed: 17, lit: beamLit(cam, pose, on) });
     this.lines2D.render(renderer, out); this.lines2D.clear();
     // ---- QA text: the screen's mojibake
     if (scrAlive > 0.5) this.logPlane(this.screen, this.scrText, 'garble', { frac: [0.37, 0.1, 1.0, 0.85], minPx: 10, letterFrac: 0.3, id: 'scenery:storm-screen', scenery: true });
