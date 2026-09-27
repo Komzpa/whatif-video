@@ -84,6 +84,17 @@ export default class Dark extends LitScene {
     T.sit0 = T.see + 0.75; T.sit1 = T.sit0 + 0.7;
     T.win = T.end - 0.75; // the window across the yard
     this.T = T;
+    // shots: from high behind the child walking into the lit yard; the yard from above as block after block goes
+    // dark; the coat monster and the first flick in first person; over the shoulder as the boxes grow teeth and the
+    // second flick; low behind the child sitting on the kerb, the chalk giant on the crane over the roofs
+    const kz = this.camZ(T.end), dx = CRANE[0] - 0.3, dz = CRANE[2] - kz, dl = Math.hypot(dx, dz);
+    this.shots = [
+      [s, T.scared + 0.6, { k: 'wide', d: 0.55, h: 0.8, side: PORTRAIT ? 0.4 : -1.0, ahead: 2, aimY: PORTRAIT ? 2.4 : 0.8 }],
+      [T.scared + 0.6, T.dark - 0.2, { k: 'free', p: [10, 15, 13], p1: [9, 16, 11.5], look: [-2, 0, -7], look1: [-3, 0, -9], fov: PORTRAIT ? 78 : 60 }],
+      [T.flash1 + 0.7, T.flash2 + 0.4, { k: 'ots', d: 1.4, h: 1.4, side: 1.2, ahead: 0.6, aimY: 0.2 }],
+      [T.flash2 + 0.4, T.end + 1, { k: 'free', p: [0.3 - (dx / dl) * 2.0, 0.5, kz - (dz / dl) * 2.0], p1: [0.3 - (dx / dl) * 2.3, 0.45, kz - (dz / dl) * 2.3], look: [CRANE[0] + 4, PORTRAIT ? 16 : 20, CRANE[2]], fov: PORTRAIT ? 80 : 62 }],
+    ];
+    this.initKid(29);
     this.build();
   }
 
@@ -232,6 +243,7 @@ export default class Dark extends LitScene {
     const ahead = new THREE.Vector3(cam.position.x - 0.3, 0, cam.position.z - 5);
     const aim = ahead.lerp(aimCoat, smoothstep(T.dark - 0.5, T.dark, t)).lerp(aimBox, smoothstep(T.flash1 + 0.8, T.flash2 - 0.1, t));
     const pose = this.torch(t, { raise: 1, on, walk: P.walk, aimAt: PROOF ? null : aim, aimK: PROOF ? 0 : t > T.dark ? 1 : 0.85, spot: clamp(20 * (aim.distanceTo(cam.position) / 5) ** 2, 4, 24) * (t > T.dark ? 1.8 : 1) });
+    if (!PROOF) this.cut(t, P, pose, { speed: P.walk * 1.1, sit: smoothstep(T.sit0, T.sit1, t) });
     const sky = { top: [0.018, 0.02, 0.034] as [number, number, number], horizon: scaleRGB(LIN.smog, 0.09 + 0.05 * cl), low: scaleRGB(LIN.shadow, 0.5), horizonY: 0.5, haze: 1 };
     this.renderWorld(out, t, { sky });
     const g = this.glow3D;
@@ -255,7 +267,7 @@ export default class Dark extends LitScene {
     if (!PROOF) {
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
-      this.callout(u, t, homeLabel('dark'), T.s + 0.05, T.s + 2.1, () => this.onScreen(-10, 7, -34), { places: [city().home.name] });
+      this.callout(u, t, homeLabel('dark'), T.s + 0.05, T.s + (PORTRAIT ? 2.5 : 2.1), () => this.onScreen(-10, 7, -34), { places: [city().home.name] });
       // one callout on the coat that flips when the torch finds it: МОНСТР? -> ПАЛЬТО
       this.callout(u, t, t < T.flash1 + 0.3 ? 'МОНСТР?' : 'ПАЛЬТО', T.dark - 0.15, T.see - 0.55, () => this.onScreen(COAT[0] + 0.35, COAT[1] - 0.1, COAT[2]));
       const head3 = this.dpt([CRANE[0], MAST_H, CRANE[2]], 0, 3.2, 1);
