@@ -50,7 +50,7 @@ export default class Close extends LitScene {
   nlMat!: THREE.MeshStandardMaterial; nlLight!: THREE.PointLight;
   hall!: THREE.SpotLight; lamp!: THREE.PointLight;
   dial!: THREE.Mesh; handset!: THREE.Group;
-  kid!: Figure;
+  kidW!: Figure;
   panes!: WindowPanes; lit0: number[] = [];
   shadowKid!: THREE.Group; lampTip!: V3;
   moon!: THREE.DirectionalLight; yard!: THREE.SpotLight;
@@ -69,7 +69,7 @@ export default class Close extends LitScene {
     this.T = T;
     this.build();
     this.buildRoom();
-    this.kid = new Figure(this.three, { height: 1.24, kid: true, coat: [0.72, 0.5, 0.07], trousers: [0.06, 0.07, 0.12], hood: true, seed: 21 }, 64);
+    this.kidW = new Figure(this.three, { height: 1.24, kid: true, coat: [0.72, 0.5, 0.07], trousers: [0.06, 0.07, 0.12], hood: true, seed: 21 }, 64);
     // the child's own shadow in the doorway light (a shape that only casts shadow)
     const inv = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
     this.shadowKid = new THREE.Group(); this.three.add(this.shadowKid);
@@ -297,9 +297,9 @@ export default class Close extends LitScene {
     this.dial.rotation.z = -(d1 * 2.2 + d2 * 1.4);
     // the child at the window with the handset (outside shot), else hidden; the handset leaves its cradle
     const kidOn = outside || PROOF === 'kid';
-    this.kid.g.visible = kidOn;
-    if (kidOn) this.kid.pose({ pos: new THREE.Vector3(0.05, FY, -0.42), heading: -Math.PI / 2 + 0.15, t, phone: 1, headDown: -0.15, look: 0.1 });
-    if (kidOn) { this.handset.position.copy(this.kid.hR).add(new THREE.Vector3(0, 0.05, 0.02)); this.handset.rotation.set(0.4, 0, 1.2); }
+    this.kidW.g.visible = kidOn;
+    if (kidOn) this.kidW.pose({ pos: new THREE.Vector3(0.05, FY, -0.42), heading: -Math.PI / 2 + 0.15, t, phone: 1, headDown: -0.15, look: 0.1 });
+    if (kidOn) { this.handset.position.copy(this.kidW.hR).add(new THREE.Vector3(0, 0.05, 0.02)); this.handset.rotation.set(0.4, 0, 1.2); }
     else if (t > T.dial2 + 0.7) { const k = ease.inOutCubic(prog(t, T.dial2 + 0.7, Math.max(T.cut, T.dial2 + 1.2))); this.handset.position.set(PHONE[0] - 0.05 * k, PHONE[1] + 0.13 + 0.25 * k, PHONE[2] - 0.01 - 0.1 * k); this.handset.rotation.set(0, 0, 0.6 * k); }
     const P = this.pov(t);
     this.setCam(P, t, P.walk);

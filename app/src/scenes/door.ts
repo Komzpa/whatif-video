@@ -68,6 +68,15 @@ export default class Door extends LitScene {
     T.back0 = T.bell2 + 0.25; T.back1 = T.back0 + 0.55;
     T.leave0 = T.bell2 + 1.45; T.leave1 = T.leave0 + 1.0;
     this.T = T;
+    // shots: the lamp switch in first person; the booth from its high corner, the child small at the desk in the
+    // lamp light; over the shoulder when the bell rings and the child goes to the door; the button in first person;
+    // low by the window when the handle is tried, the child backing away from the shape on the glass
+    this.shots = [
+      [T.s + 1.35, T.bell1 + 0.05, { k: 'free', p: [0.75, 1.9, 1.15], p1: [0.6, 1.8, 0.95], look: [PORTRAIT ? 0.8 : -0.1, PORTRAIT ? 1.1 : 0.8, -1.3], look1: [PORTRAIT ? 0.9 : 0.0, PORTRAIT ? 1.1 : 0.8, -1.3], fov: PORTRAIT ? 90 : 72 }],
+      [T.bell1 + 0.05, T.walk1, { k: 'ots', d: 1.5, side: -1.2, h: 2.2, aimY: PORTRAIT ? -0.9 : 0 }],
+      [T.bell2, T.leave1 + 2, { k: 'free', p: [0.7, 1.55, 1.2], p1: [0.6, 1.5, 1.1], look: [WALL_X, 1.1, 0.1], look1: [WALL_X, 1.15, 0.05], fov: PORTRAIT ? 84 : 64 }],
+    ];
+    this.initKid(7);
     this.buildRoom();
     this.buildYard();
     this.obstacles = () => { const b = this.planeBox(this.scr); return b ? [b] : []; };
@@ -237,7 +246,7 @@ export default class Door extends LitScene {
     this.scr.rotation.y = Math.PI / 2; this.scr.position.set(...SCR); R.add(this.scr);
     for (let i = 0; i < 6; i++) boxMesh(R, 0.01, 0.006, 0.12, WALL_X + 0.035, SCR[1] - SCR_H / 2 - 0.035 - i * 0.012, SCR[2], lit([0.05, 0.05, 0.05]), { cast: false });
     this.screenL = new THREE.PointLight(0x9fc4d8, 0, 0, 2); this.screenL.position.set(WALL_X + 0.3, SCR[1], SCR[2]); R.add(this.screenL);
-    this.scrText = { title: garble('ЛИЦО НЕ РАСПОЗНАНО'), yes: garble('ОТКРЫТЬ'), no: garble('НЕТ') };
+    this.scrText = { title: 'ОТКРЫТЬ?', yes: 'ДА', no: 'НЕТ' }; // plain Russian: this is the child's own side of the city (B4)
     // the watchman's coat on a hook by the back wall (the dark will need it)
     const coatM = lit(lin('#2c2f2a'), { rough: 0.95 });
     const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.3, 1.1, 12, 1, true), coatM); coat.position.set(1.2, 1.25, BACK_Z - 0.18); coat.castShadow = true; coat.material.side = THREE.DoubleSide; R.add(coat);
@@ -400,6 +409,7 @@ export default class Door extends LitScene {
     this.begin();
     const P = this.pov(t);
     this.setCam(P, t, 0);
+    if (!PROOF) this.cut(t, P, null, { sit: 1 - prog(t, T.up, T.up + 0.5), speed: P.walk * 1.1, look: 0 });
     const cam = this.cam;
     // the desk lamp: comes on with a stutter
     const lamp = PROOF ? 1 : t < T.lampOn ? 0 : clamp((t - T.lampOn) / 0.06) * (t < T.lampOn + 0.25 ? (hash(frameIdx(t) >> 1, 3) > 0.35 ? 1 : 0.2) : 1);
@@ -447,12 +457,12 @@ export default class Door extends LitScene {
     lb.render(renderer, out, cam); lb.clear();
     // ---- QA: signs and screens in the world
     const scrTxt = [this.scrText.title, this.scrText.yes].join(' / ');
-    if (scrOn > 0.9 && this.uiOn(t) > 0.9) this.logPlane(this.scr, scrTxt, 'garble', { frac: [0.04, 0.02, 0.96, 0.98], minPx: 14, id: 'plane:intercom', letterFrac: 0.083 });
+    if (scrOn > 0.9 && this.uiOn(t) > 0.9) this.logPlane(this.scr, scrTxt, 'sign', { frac: [0.04, 0.02, 0.96, 0.98], minPx: 14, id: 'plane:intercom', letterFrac: 0.083 });
     // ---- the child's hands and the non-diegetic layer
     const u = this.ui.ctx;
     this.glow2D.clear();
     const light: Light = { amb: 0.12 + 0.3 * lamp, warm: 0.55 * lamp, torch: 0 };
-    if (!PROOF) this.drawHands(u, t, light, lamp);
+    if (!PROOF && !this.third) this.drawHands(u, t, light, lamp);
     if (!PROOF) this.drawUI(u, t, f);
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);
@@ -463,7 +473,6 @@ export default class Door extends LitScene {
     const T = this.T;
     this.heading(u, t, f);
     this.callout(u, t, homeLabel('door'), T.home, T.bell1 - 0.25, () => this.onScreen(25, 16, -88), { places: [city().home.name] });
-    this.callout(u, t, 'ОТКРЫТЬ ДВЕРЬ?', T.openCall, T.bell2 + 0.3, () => { const p = BTN.clone().applyMatrix4(this.scr.matrixWorld); return this.onScreen(p.x, p.y, p.z); }, { color: 'lamp' });
   }
 
   /** The left hand: presses the lamp switch; later reaches for the big button and stops short. */
@@ -476,7 +485,7 @@ export default class Door extends LitScene {
       const s = 0.055 * pxAt(cam, 0.5);
       const from = { x: W * fromX, y: H + s * 3 };
       const tip = { x: lerp(from.x + s, e.x, k), y: lerp(H + s, e.y, k) };
-      drawOpenHand(c, tip, from, s, light, 'flat', { curl });
+      drawOpenHand(c, tip, from, s, light, 'point', { curl });
     };
     // the lamp switch on the lamp's base
     const sw = prog(t, T.s, T.lampOn, ease.outCubic) * (1 - prog(t, T.lampOn + 0.35, T.lampOn + 0.9, ease.inOutCubic));

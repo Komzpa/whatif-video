@@ -265,12 +265,14 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
  * from (a point off the frame edge). `mode` 'grab' hooks the fingers over an edge; 'flat' presses the palm flat
  * (fingers straight, a little spread). `s` is the palm's width in px.
  */
-export function drawOpenHand(c: CanvasRenderingContext2D, tip: P2, from: P2, s: number, l: Light, mode: 'grab' | 'flat' = 'flat', o: { log?: boolean; curl?: number } = {}) {
+export function drawOpenHand(c: CanvasRenderingContext2D, tip: P2, from: P2, s: number, l: Light, mode: 'grab' | 'flat' | 'point' = 'flat', o: { log?: boolean; curl?: number } = {}) {
+  // 'point': the index finger straight out (pressing a switch, a finger in the phone's dial), the others curled in
   const q = s / 4;
   let fx = tip.x - from.x, fy = tip.y - from.y;
   const fl = Math.hypot(fx, fy) || 1;
   fx /= fl; fy /= fl;
   const handLen = q * (3.4 + (mode === 'grab' ? 2.2 : 3.2));
+  void 0;
   const wrist = { x: tip.x - fx * handLen, y: tip.y - fy * handLen };
   const cuff = { x: wrist.x - fx * q * 1.6, y: wrist.y - fy * q * 1.6 };
   const outline = drawSleeve(c, from, cuff, s * 2.6, s * 1.1, l, -1);
@@ -289,8 +291,9 @@ export function drawOpenHand(c: CanvasRenderingContext2D, tip: P2, from: P2, s: 
     { y: -0.48, L: 3.05, w: 0.92, a: -0.04 },
     { y: -1.38, L: 2.4, w: 0.8, a: -0.11 }, // little finger
   ];
-  for (const f of F) {
-    const Lf = f.L * lerp(1, 0.62, curl);
+  for (const [fi, f] of F.entries()) {
+    const cf = mode === 'point' ? (fi === 0 ? 0 : Math.max(curl, 0.92)) : curl;
+    const Lf = f.L * lerp(1, mode === 'point' && fi > 0 ? 0.42 : 0.62, cf);
     c.save();
     c.translate(3.2, f.y * 0.95); c.rotate(f.a * (mode === 'flat' ? 1.6 : 1));
     const p = new Path2D();
@@ -305,7 +308,7 @@ export function drawOpenHand(c: CanvasRenderingContext2D, tip: P2, from: P2, s: 
     c.fillStyle = g; c.fill(p);
     c.strokeStyle = skinDC(l); c.lineWidth = 0.06; c.globalAlpha = 0.75; c.stroke(p); c.globalAlpha = 1;
     // curled fingertips hook over the edge: the last segment darker (turned away)
-    if (curl > 0.05) { c.fillStyle = mixRgba('shadow', SKIN_D, 0.5, 0.55 * curl); c.fillRect(Lf - f.w * 0.9, -f.w * 0.44, f.w * 0.9, f.w * 0.88); }
+    if (cf > 0.05) { c.fillStyle = mixRgba('shadow', SKIN_D, 0.5, 0.55 * cf); c.fillRect(Lf - f.w * 0.9, -f.w * 0.44, f.w * 0.9, f.w * 0.88); }
     else {
       c.fillStyle = mixRgba('shadow', NAIL, clamp(0.35 + 0.6 * l.amb));
       c.beginPath(); c.roundRect(Lf - f.w * 0.78, -f.w * 0.27, f.w * 0.7, f.w * 0.54, f.w * 0.25); c.fill();
@@ -317,7 +320,7 @@ export function drawOpenHand(c: CanvasRenderingContext2D, tip: P2, from: P2, s: 
   }
   // thumb: from the side of the palm, angled out
   c.save();
-  c.translate(1.0, 1.55); c.rotate(mode === 'grab' ? 0.55 : 0.8);
+  c.translate(1.0, 1.55); c.rotate(mode === 'grab' ? 0.55 : mode === 'point' ? 0.3 : 0.8);
   const tp = new Path2D();
   tp.moveTo(0, -0.55); tp.lineTo(2.1, -0.46); tp.quadraticCurveTo(2.65, -0.4, 2.65, 0); tp.quadraticCurveTo(2.65, 0.45, 2.1, 0.5); tp.lineTo(0, 0.6); tp.closePath();
   const gt = c.createLinearGradient(0, -0.55, 0, 0.6);

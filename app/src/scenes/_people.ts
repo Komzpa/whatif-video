@@ -10,7 +10,7 @@ import { SdfBody, type RGB3 } from './_beasts';
 
 export interface FigureSpec {
   height: number; coat: RGB3; trousers?: RGB3; skin?: RGB3; hair?: RGB3; shoes?: RGB3;
-  hat?: boolean; hood?: boolean; beanie?: RGB3; kid?: boolean; longCoat?: boolean; bulk?: number; seed?: number;
+  hat?: boolean; hood?: boolean; pack?: RGB3; beanie?: RGB3; kid?: boolean; longCoat?: boolean; bulk?: number; seed?: number;
 }
 export interface FigurePose {
   pos: THREE.Vector3; heading: number; t: number;
@@ -94,6 +94,9 @@ export class Figure {
       const hemY = S.longCoat ? H * 0.3 : hipY - u * 0.45;
       B.cap(pelvis, v(pelvis.x - 0.02, hemY, 0), depth * 1.05, depth * 1.2, k * 0.5, coat, coat, { za: hipW * 1.2, zb: hipW * 1.45 });
     }
+    if (S.pack) { // a small backpack on the back (local -x), straps over the shoulders
+      B.cap(v(-depth * 1.1, chest.y - u * 0.12, 0), v(-depth * 1.1, chest.y - u * 0.85, 0), u * 0.13, u * 0.15, k * 0.3, S.pack, S.pack, { za: u * 0.3, zb: u * 0.33 });
+    }
     // head
     const neck = shoulder.clone().add(v(0, u * 0.12, 0));
     B.cap(neck.clone().add(v(0, -u * 0.1, 0)), neck.clone().add(v(0, u * 0.3, 0)), u * 0.17, u * 0.16, k * 0.5, S.hood ? coat : skin, skin);
@@ -109,7 +112,7 @@ export class Figure {
       B.ell(new THREE.Matrix4().makeTranslation(0, u * 0.3, 0).premultiply(hm), v(u * 0.8, u * 0.06, u * 0.75), k * 0.1, [0.03, 0.03, 0.035]);
     }
     if (S.beanie) B.ell(new THREE.Matrix4().makeTranslation(-u * 0.05, u * 0.2, 0).premultiply(hm), v(u * 0.46, u * 0.4, u * 0.43), k * 0.15, S.beanie);
-    if (S.hood) B.ell(new THREE.Matrix4().makeTranslation(-u * 0.1, u * 0.05, 0).premultiply(hm), v(u * 0.56, u * 0.62, u * 0.52), k * 0.4, coat);
+    if (S.hood) B.ell(new THREE.Matrix4().makeTranslation(-u * 0.1, u * 0.06, 0).premultiply(hm), v(u * 0.5, u * 0.55, u * 0.46), k * 0.4, coat);
     this.headW.copy(hc).add(v(0, u * 0.1, 0));
     // arms
     const upper = H * (kid ? 0.16 : 0.18), fore = H * (kid ? 0.15 : 0.17), ar = u * (kid ? 0.2 : 0.22) * bulk;

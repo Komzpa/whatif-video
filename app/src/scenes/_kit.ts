@@ -12,11 +12,20 @@ import { CityScene, LIN, POST_BASE, SAFE, scaleRGB, mixRGB, project, drawCallout
 import { drawHeading } from './_ru';
 import { torchPose, drawTorchHand, type Light, type TorchPose } from './_hands';
 import { entriesOf } from '../contents';
+import { Figure } from './_people';
 
 export type V3 = [number, number, number];
 export type RGB = [number, number, number];
 export type Box = { x: number; y: number; w: number; h: number };
 export interface Pov { p: V3; yaw: number; pitch: number; walk: number; roll?: number; fov?: number }
+/**
+ * A third-person shot of the child, relative to where the child is (the POV): `wide` = far behind and above, the
+ * child a small silhouette in the scene ahead; `ots` = over the right shoulder; `low` = low, in front and to the
+ * side, looking up past the child; `high` = high above and behind, looking down; `side` = beside the child;
+ * `free` = an absolute camera (`p`, `look`). `d`, `h`, `side` scale the offsets; `d1` dollies d to d1 over the shot;
+ * `ahead` = how far in front of the child the camera aims; `fov` overrides.
+ */
+export interface Shot { k: 'wide' | 'ots' | 'low' | 'high' | 'side' | 'free'; d?: number; d1?: number; h?: number; side?: number; ahead?: number; fov?: number; p?: V3; p1?: V3; look?: V3; look1?: V3; aimY?: number }
 
 export const EYE = 1.12; // the child's eye height (m)
 export const lin = (hex: string): RGB => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }; // three parses hex as sRGB -> linear
@@ -197,6 +206,14 @@ export abstract class LitScene extends CityScene {
   obstacles: (t: number) => Box[] = () => [];
   labelCache = new Map<string, { dx: number; dy: number; side: 1 | -1 }>();
 
+  /** The child seen from outside (TESTPLAN B2), used by the third-person shots. */
+  kid: Figure | null = null;
+  /** The third-person shots: [t0, t1, shot]; outside them the camera is the child's eyes. */
+  shots: [number, number, Shot][] = [];
+  /** True while a third-person shot is on (no first-person hands are drawn). */
+  third = false;
+  beamReq: { on: number; k: number; maxDist: number; pose: TorchPose } | null = null;
+
   B = (k: number) => this.au.timeOfBeat(this.base + k);
   /** Beat nearest to t. */
   nearBeat(t: number) { return this.au.timeOfBeat(Math.round(this.au.beatAt(t))); }
@@ -225,6 +242,62 @@ export abstract class LitScene extends CityScene {
   addPoint(p: V3, color: RGB, k: number, dist = 0) {
     const L = new THREE.PointLight(new THREE.Color().setRGB(color[0], color[1], color[2], THREE.LinearSRGBColorSpace), k, dist, 2);
     L.position.set(...p); this.three.add(L); return L;
+  }
+
+  // ---- third-person shots
+  /** The child in a yellow raincoat with the hood up (the sleeve of the first-person shots), about 4.5 heads tall. */
+  initKid(seed = 31, coat: RGB = [0.6, 0.47, 0.08]) {
+    // hood down (a hood up reads as a round ball on a round body: R2 «Kenny»), dark hair, a small backpack
+    this.kid = new Figure(this.three, { height: 1.24, kid: true, coat, trousers: [0.05, 0.055, 0.08], shoes: [0.03, 0.02, 0.02], hair: [0.03, 0.02, 0.015], pack: [0.16, 0.05, 0.04], seed }, 64);
+    this.kid.visible = false;
+    return this.kid;
+  }
+  shotAt(t: number): { s: Shot; u: number } | null {
+    for (const [a, b, s] of this.shots) if (t >= a && t < b) return { s, u: (t - a) / Math.max(b - a, 1e-3) };
+    return null;
+  }
+  /**
+   * Call after torch(): while a shot is on, the child's figure stands where the eyes were, the torch light moves to
+   * the figure's hand and the camera cuts outside. `floor` = the ground under the child, `speed` for the gait.
+   */
+  cut(t: number, P: Pov, pose: TorchPose | null, o: { floor?: number; speed?: number; dist?: number; look?: number; phone?: number; film?: number; headDown?: number; sit?: number; armL?: number; force?: { s: Shot; u: number } | null } = {}) {
+    const sh = o.force !== undefined ? o.force : this.shotAt(t);
+    this.third = !!sh;
+    if (!this.kid) { if (!sh) return; this.initKid(); }
+    const kid = this.kid!;
+    kid.visible = !!sh;
+    if (!sh) return;
+    const { s, u } = sh;
+    const floor = o.floor ?? 0;
+    const feet = new THREE.Vector3(P.p[0], floor, P.p[2]);
+    const f = new THREE.Vector3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)), r = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
+    const speed = o.speed ?? P.walk * 1.3;
+    kid.pose({ pos: feet, heading: P.yaw + Math.PI / 2, t, speed, dist: o.dist ?? t * speed, film: o.film ?? (pose ? 0.85 : 0), phone: o.phone ?? 0, look: o.look ?? 0, headDown: o.headDown ?? -P.pitch * 0.5, sit: o.sit ?? 0, armL: o.armL ?? 0 });
+    if (pose) { // the light leaves the figure's hand, along the same aim
+      const dir = pose.target.clone().sub(pose.head).normalize();
+      this.torchL.position.copy(kid.hR).addScaledVector(dir, 0.08);
+      this.torchL.target.position.copy(this.torchL.position).addScaledVector(dir, 7);
+      this.torchL.target.updateMatrixWorld();
+    }
+    const d = lerp(s.d ?? 1, s.d1 ?? s.d ?? 1, u), h = s.h ?? 1, sd = s.side ?? 1;
+    const eye = feet.clone().add(new THREE.Vector3(0, EYE, 0));
+    let cp: THREE.Vector3, look: THREE.Vector3, fov = s.fov;
+    const ahead = s.ahead ?? 1;
+    switch (s.k) {
+      case 'wide': cp = feet.clone().addScaledVector(f, -7 * d).addScaledVector(r, 1.2 * sd).add(new THREE.Vector3(0, 2.6 * h, 0)); look = feet.clone().addScaledVector(f, 5 * ahead).add(new THREE.Vector3(0, 1.0 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 64 : 46; break;
+      case 'ots': cp = eye.clone().addScaledVector(f, -0.95 * d).addScaledVector(r, 0.42 * sd).add(new THREE.Vector3(0, 0.22 * h, 0)); look = eye.clone().addScaledVector(f, 6 * ahead).add(new THREE.Vector3(0, Math.tan(P.pitch) * 6 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 66 : 50; break;
+      case 'low': cp = feet.clone().addScaledVector(f, 2.4 * d).addScaledVector(r, 1.5 * sd).add(new THREE.Vector3(0, 0.25 * h, 0)); look = eye.clone().add(new THREE.Vector3(0, 0.25 + (s.aimY ?? 0), 0)).addScaledVector(f, -0.6 * ahead); fov ??= PORTRAIT ? 72 : 56; break;
+      case 'high': cp = feet.clone().addScaledVector(f, -3.2 * d).addScaledVector(r, 0.8 * sd).add(new THREE.Vector3(0, 7.5 * h, 0)); look = feet.clone().addScaledVector(f, 2.2 * ahead).add(new THREE.Vector3(0, s.aimY ?? 0, 0)); fov ??= PORTRAIT ? 64 : 48; break;
+      case 'side': cp = feet.clone().addScaledVector(r, 3.6 * d * sd).addScaledVector(f, 0.6).add(new THREE.Vector3(0, 1.0 * h, 0)); look = feet.clone().addScaledVector(f, 1.2 * ahead).add(new THREE.Vector3(0, 0.75 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 66 : 50; break;
+      default: {
+        const a = new THREE.Vector3(...(s.p ?? [0, 2, 5])), b = new THREE.Vector3(...(s.p1 ?? s.p ?? [0, 2, 5]));
+        const la = new THREE.Vector3(...(s.look ?? [P.p[0], 0.8, P.p[2]])), lb = new THREE.Vector3(...(s.look1 ?? s.look ?? [P.p[0], 0.8, P.p[2]]));
+        const e = u * u * (3 - 2 * u);
+        cp = a.lerp(b, e); look = la.lerp(lb, e); fov ??= PORTRAIT ? 64 : 48;
+      }
+    }
+    const p: V3 = [cp.x, cp.y, cp.z], q: V3 = [look.x, look.y, look.z];
+    this.setCam({ p, yaw: this.yawTo(p, q), pitch: this.pitchTo(p, q), walk: 0, fov }, t, 0.3);
   }
 
   // ---- camera
@@ -277,15 +350,42 @@ export abstract class LitScene extends CityScene {
   }
   /** The torch's volumetric beam in the haze. */
   beam(out: THREE.WebGLRenderTarget, t: number, pose: TorchPose | null, on: number, o: { density?: number; maxDist?: number; floorY?: number; half?: number } = {}) {
-    if (!pose || on <= 0.01) return;
-    const lamp = makeLamp(pose.head, pose.target, o.half ?? 11, 12, 1.25 * on);
-    this.cone.render(this.ctx.renderer, out, this.cam, lamp, t, { density: o.density ?? 0.03, floorY: o.floorY ?? 0, maxDist: o.maxDist ?? 9, pool: 0 }); // the SpotLight already lights the floor (with shadows)
+    // The light itself lands on surfaces as the SpotLight's pool (with shadows). The haze is only a faint wedge drawn
+    // from the lens along the torch axis (drawn with the hands, so it starts exactly at the lens: TESTPLAN B1); a
+    // ray-marched cone ignored depth and read as a grey smudge floating in the air.
+    this.beamReq = pose && on > 0.01 ? { on, k: clamp((o.density ?? 0.02) / 0.02, 0.3, 1.5), maxDist: o.maxDist ?? 7, pose } : null;
+    void out; void t; void makeLamp;
+  }
+  /** The faint haze wedge from `from` (screen) along the torch's world axis. */
+  beamWedge(c: CanvasRenderingContext2D, lens: { x: number; y: number } | null) {
+    const b = this.beamReq; if (!b) return;
+    const o = this.third ? this.torchL.position.clone() : b.pose.head.clone();
+    const dir = (this.third ? this.torchL.target.position.clone().sub(this.torchL.position) : b.pose.target.clone().sub(b.pose.head)).normalize();
+    const L = clamp(b.maxDist, 0.8, 7);
+    const a = project(this.cam, o.x, o.y, o.z), e3 = o.clone().addScaledVector(dir, L), e = project(this.cam, e3.x, e3.y, e3.z);
+    if (a.behind || e.behind) return;
+    const s0 = lens ?? { x: a.x, y: a.y };
+    const dx = e.x - s0.x, dy = e.y - s0.y, len = Math.hypot(dx, dy); if (len < 4) return;
+    const nx = -dy / len, ny = dx / len;
+    const dEnd = Math.max(0.3, e3.clone().applyMatrix4(this.cam.matrixWorldInverse).z * -1);
+    const w1 = Math.min(W * 0.4, (H / 2) / Math.tan((this.cam.fov * Math.PI) / 360) * (L * 0.2) / dEnd), w0 = 3;
+    const g = c.createLinearGradient(s0.x, s0.y, e.x, e.y);
+    const a0 = 0.11 * b.on * b.k;
+    g.addColorStop(0, `rgba(255,228,178,${a0})`); g.addColorStop(0.45, `rgba(255,228,178,${a0 * 0.35})`); g.addColorStop(1, 'rgba(255,228,178,0)');
+    c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = g;
+    c.beginPath(); c.moveTo(s0.x + nx * w0, s0.y + ny * w0); c.lineTo(e.x + nx * w1, e.y + ny * w1); c.lineTo(e.x - nx * w1, e.y - ny * w1); c.lineTo(s0.x - nx * w0, s0.y - ny * w0); c.closePath(); c.fill();
+    c.restore();
   }
   /** Draw the torch hand (and its lens glow). */
   torchHand(c: CanvasRenderingContext2D, pose: TorchPose | null, light: Light) {
+    if (this.third) { // the torch in the child's hand, seen from outside: a small lens glow and the wedge
+      if (pose && this.beamReq && this.kid) { const q = this.torchL.position; const a = project(this.cam, q.x, q.y, q.z); if (!a.behind) { this.glow2D.add(a.x, a.y, 0, 18, 18, LIN.lamp, 0.7 * this.beamReq.on, 3); this.beamWedge(c, { x: a.x, y: a.y }); } }
+      return null;
+    }
     if (!pose) return null;
     const r = drawTorchHand(c, this.cam, pose, light);
     this.glow2D.add(r.lens.x, r.lens.y, 0, 50, 50, LIN.lamp, 0.8 * (light.torch ?? 0), 3);
+    this.beamWedge(c, r.lens);
     return r;
   }
 
