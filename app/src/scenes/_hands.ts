@@ -152,7 +152,8 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   const down = PORTRAIT ? { x: 0.28, y: 1 } : { x: 0.42, y: 1 };
   const dn = Math.hypot(down.x, down.y);
   // portrait holds the hand low in the frame: a shorter bare wrist keeps the cuff and the sleeve on screen
-  const wl = PORTRAIT ? 0.9 : 2.0;
+  // aimed steeply up the bare wrist would stretch into a long grey 'glove': shorten it so the cuff meets the hand
+  const wl = (PORTRAIT ? 0.9 : 2.0) * lerp(1, 0.35, clamp((-ay - 0.35) / 0.4));
   const cuff = { x: heel.x + (down.x / dn) * r * wl, y: heel.y + (down.y / dn) * r * wl };
   const base = { x: cuff.x + (down.x / dn) * (H - cuff.y + r * 9) * 1.05, y: H + r * 9 };
   const outline = drawSleeve(c, base, cuff, r * 6.6, r * 3.9, l, 1);
