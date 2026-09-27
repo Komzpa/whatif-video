@@ -69,7 +69,7 @@ export default class Storm extends LitScene {
     this.initKid(13);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
-    this.scrText = garble('ШТОРМОВОЕ ПРЕДУПРЕЖДЕНИЕ');
+    this.scrText = 'ШТОРМОВОЕ ПРЕДУПРЕЖДЕНИЕ'; // plain: 3 km from home is a familiar street (garble only in the unfamiliar district)
     const r = mulberry32(5);
     for (let i = 0; i < 6000; i++) this.drops.push({ x: (r() - 0.5) * 22, y: r() * 14, z: r(), sp: 9 + r() * 4 });
     // the strikes: far (the hook), mid, the pylon on «turns», far, close on «unsafe», over the road seen from shelter
@@ -412,7 +412,7 @@ export default class Storm extends LitScene {
     if (nearA > 0.02) rain(this.lines2D, t, { count: Math.round(900 * rk), alpha: 0.13 * nearA, speed: 2200, angle: 0.12 + wind * 0.9, seed: 17, lit: beamLit(cam, pose, on) });
     this.lines2D.render(renderer, out); this.lines2D.clear();
     // ---- QA text: the screen's mojibake
-    if (scrAlive > 0.5) this.logPlane(this.screen, this.scrText, 'garble', { frac: [0.37, 0.1, 1.0, 0.85], minPx: 10, letterFrac: 0.3, id: 'scenery:storm-screen', scenery: true });
+    if (scrAlive > 0.5) this.logPlane(this.screen, this.scrText, 'sign', { frac: [0.37, 0.1, 1.0, 0.85], minPx: 10, letterFrac: 0.3, id: 'scenery:storm-screen', scenery: true });
     // ---- hands and UI
     const u = this.ui.ctx;
     this.glow2D.clear();
