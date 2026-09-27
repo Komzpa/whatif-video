@@ -28,11 +28,11 @@ const GW = PORTRAIT ? 1.35 : 1.45, GH = PORTRAIT ? 2.0 : 2.15; // one LED glyph 
 const SIT_Z = 1.3, SIT_Y = 0.8;
 const BUS_Z = -6.5;
 
-interface Glyph { m: THREE.Mesh; mat: THREE.MeshBasicMaterial; slot: THREE.Vector3; tf: number; vx: number; vz: number; spin: THREE.Vector3; land: number; seed: number }
+interface Glyph { m: THREE.Mesh; mat: THREE.MeshBasicMaterial; tex0?: THREE.Texture; tex1?: THREE.Texture; tb: number; slot: THREE.Vector3; tf: number; vx: number; vz: number; spin: THREE.Vector3; land: number; seed: number }
 
 export default class Words extends LitScene {
   chapter = 'words';
-  text = '';
+  text = ''; plain = 'МЫ ЗАБОТИМСЯ О ВАС';
   glyphs: Glyph[] = [];
   heart: Glyph[] = [];
   screenBox!: THREE.Mesh;
@@ -55,6 +55,16 @@ export default class Words extends LitScene {
     T.sit0 = T.hurt + 0.05; T.sit1 = T.sit0 + 0.8;
     T.bus = T.say + 1.7; // the bus passes the stop
     this.T = T;
+    // shots: from high behind the child walking to the shelter, the screen saying it plainly across the road; in
+    // first person on the bench as its letters break and come loose; behind the child on the bench as they rain
+    // onto the road; from above the shelter, the letters dying on the asphalt; behind again as the bus goes by
+    this.shots = [
+      [s, T.hurt + (PORTRAIT ? 0.12 : 0.3), { k: 'wide', d: 0.8, h: 1.0, side: 0.3, ahead: 2.2, aimY: PORTRAIT ? 5.8 : 3.4, fov: PORTRAIT ? 74 : 60 }],
+      [T.words + 0.6, T.say + 0.3, { k: 'free', p: PORTRAIT ? [1.3, 1.75, 4.4] : [3.5, 1.8, 4.7], p1: PORTRAIT ? [1.2, 1.7, 4.1] : [3.3, 1.75, 4.4], look: [-0.6, PORTRAIT ? 3.6 : 3.0, -9], look1: [-0.6, PORTRAIT ? 2.4 : 2.0, -9], fov: PORTRAIT ? 80 : 62 }],
+      [T.say + 0.3, T.say + 2.5, { k: 'free', p: [2.6, 8.6, 4.8], p1: [2.1, 9.0, 3.8], look: PORTRAIT ? [-0.3, 0, 0.6] : [0.4, 0, -2.6], look1: PORTRAIT ? [-0.4, 0, 0.0] : [0.2, 0, -3.2], fov: PORTRAIT ? 74 : 58 }],
+      [T.say + 2.5, T.end + 1, { k: 'free', p: PORTRAIT ? [1.2, 1.1, 4.2] : [3.1, 1.15, 4.4], p1: PORTRAIT ? [1.1, 1.05, 4.0] : [2.9, 1.1, 4.1], look: [-0.8, 0.8, -6.5], fov: PORTRAIT ? 78 : 60 }],
+    ];
+    this.initKid(19);
     this.text = garble('МЫ ЗАБОТИМСЯ О ВАС');
     this.tableText = garble('РАСПИСАНИЕ');
     this.busSign = garble('Северо-Восточный');
@@ -97,9 +107,10 @@ export default class Words extends LitScene {
     boxMesh(S, 0.06, 2.0, 1.6, -1.8, 1.25, 1.1, lit([0.12, 0.13, 0.14], { rough: 0.5 }));
     this.tableCv = document.createElement('canvas'); this.tableCv.width = 256; this.tableCv.height = 320;
     this.tableTex = new THREE.CanvasTexture(this.tableCv); this.tableTex.colorSpace = THREE.SRGBColorSpace;
-    this.table = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.375), new THREE.MeshBasicMaterial({ map: this.tableTex, toneMapped: false, fog: true }));
+    this.table = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.375), new THREE.MeshBasicMaterial({ map: this.tableTex, toneMapped: false, fog: true, color: new THREE.Color(0.35, 0.35, 0.35) }));
     this.table.position.set(-1.76, 1.35, 1.1); this.table.rotation.y = Math.PI / 2; S.add(this.table);
     this.addPoint([-1.2, 1.4, 1.1], [0.6, 0.9, 0.7], 0.8, 4);
+    this.addPoint([0.2, 2.4, 1.2], [0.75, 0.85, 0.95], 2.4, 4.5); // the shelter's own tube under the roof
     // ---- streetlights along the road
     for (const x of [-26, 4, 34]) { const hp = streetLight(S, x, -1.5, { h: 8, arm: [0, 0, -1.8] }); this.addLamp(hp, { k: 60, angle: 0.8, shadow: x === 4, target: [hp[0], 0, hp[2] - 2] }); if (x === 4) this.lampP = hp; else (this as unknown as { lampsX: V3[] }).lampsX = [...((this as unknown as { lampsX?: V3[] }).lampsX ?? []), hp]; }
     void glowMat; void canvasTex; void speckle; void blotches; void lin;
@@ -131,8 +142,11 @@ export default class Words extends LitScene {
 
   buildScreen() {
     const S = this.three, T = this.T, r = mulberry32(151);
-    const chars = [...this.text];
-    const rows = PORTRAIT ? [chars.slice(0, 9), chars.slice(9)] : [chars];
+    // the screen first says it plainly, in its own language; each letter then breaks into mojibake before it falls
+    const chars = [...this.plain], bad = [...this.text];
+    const broken = (i: number) => (bad.length === chars.length ? bad[i]! : garble(chars[i]!));
+    const rows = PORTRAIT ? [chars.slice(0, 2), chars.slice(3, 12), chars.slice(13)] : [chars];
+    const rowOff = PORTRAIT ? [0, 3, 13] : [0];
     const perRow = Math.max(...rows.map((q) => q.length));
     const wTot = (perRow + 2.6) * GW, hTot = rows.length * (GH + 0.2) + 0.8;
     this.screenBox = boxMesh(S, wTot + 0.8, hTot, 0.3, 0, SY, FZ + 0.1, lit([0.03, 0.03, 0.03], { rough: 0.5, metal: 0.2 }));
@@ -148,13 +162,15 @@ export default class Words extends LitScene {
       const y = SY + ((rows.length - 1) / 2 - ri) * (GH + 0.2);
       row.forEach((ch, ci) => {
         if (ch === ' ') return;
-        const i = ri * 9 + ci;
-        const mat = new THREE.MeshBasicMaterial({ map: this.ledTex(ch), toneMapped: false, fog: true, side: THREE.DoubleSide });
+        const i = rowOff[ri]! + ci;
+        const tex0 = this.ledTex(ch), tex1 = this.ledTex(broken(i));
+        const mat = new THREE.MeshBasicMaterial({ map: tex0, toneMapped: false, fog: true, side: THREE.DoubleSide });
         const m = new THREE.Mesh(new THREE.PlaneGeometry(GW * 0.96, GH), mat);
         const slot = new THREE.Vector3(x0 + ci * GW + (perRow - row.length) * GW / 2, y, FZ + 0.27);
         m.position.copy(slot); S.add(m);
-        const order = idx.indexOf(PORTRAIT ? i : ci);
-        this.glyphs.push({ m, mat, slot, tf: times[Math.min(order + 1, times.length - 1)]!, vx: (r() - 0.5) * 2, vz: 6.2 + r() * 3.8, spin: new THREE.Vector3((r() - 0.5) * 7, (r() - 0.5) * 3, (r() - 0.5) * 5), land: 0, seed: i });
+        const order = idx.indexOf(i);
+        const tf = times[Math.min(order + 1, times.length - 1)]!;
+        this.glyphs.push({ m, mat, tex0, tex1, tb: Math.max(T.s + 2.7 + hash(i, 21) * 0.6, tf - 1.3 + hash(i, 22) * 0.4), slot, tf, vx: (r() - 0.5) * 2, vz: 6.2 + r() * 3.8, spin: new THREE.Vector3((r() - 0.5) * 7, (r() - 0.5) * 3, (r() - 0.5) * 5), land: 0, seed: i });
       });
     });
     // the heart (two halves) to the left of the text
@@ -163,7 +179,7 @@ export default class Words extends LitScene {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(GW, GH), mat);
       const slot = new THREE.Vector3(-wTot / 2 + 1.25 * GW + side * GW / 2, SY, FZ + 0.27);
       m.position.copy(slot); S.add(m);
-      this.heart.push({ m, mat, slot, tf: times[0]! - 0.05 + (side > 0 ? 0.12 : 0), vx: side * 1.5, vz: 7.5, spin: new THREE.Vector3(2, 0, side * 3), land: 0, seed: 90 + side });
+      this.heart.push({ m, mat, tb: 1e9, slot, tf: times[0]! - 0.05 + (side > 0 ? 0.12 : 0), vx: side * 1.5, vz: 7.5, spin: new THREE.Vector3(2, 0, side * 3), land: 0, seed: 90 + side });
     }
   }
 
@@ -210,6 +226,12 @@ export default class Words extends LitScene {
     const d = t - g.tf;
     const on0 = this.T.s + 0.3 + (g.seed % 20) * 0.03;
     if (t < on0 + 0.25) { g.m.position.copy(g.slot); g.m.rotation.set(0, 0, 0); g.mat.color.setScalar(t < on0 ? 0.04 : hash(Math.floor(t * 30), g.seed) < 0.5 ? 0.3 : 1.25); return; }
+    if (g.tex0 && g.tex1) {
+      // plain until tb, a stutter between the two, then mojibake
+      const e = t - g.tb;
+      const want = e < 0 ? g.tex0 : e < 0.35 ? (hash(Math.floor(t * 24), g.seed + 40) < 0.5 ? g.tex0 : g.tex1) : g.tex1;
+      if (g.mat.map !== want) { g.mat.map = want; g.mat.needsUpdate = true; }
+    }
     if (d <= 0) {
       // before the fall: a loose letter shivers
       const shiver = d > -0.5 ? Math.sin(t * 60 + g.seed) * 0.03 * (1 + d * 2) : 0;
@@ -297,6 +319,7 @@ export default class Words extends LitScene {
     const ground = fallen.length ? fallen.reduce((a, g) => a.add(g.m.position), new THREE.Vector3()).multiplyScalar(1 / fallen.length) : new THREE.Vector3(0.3, 0.1, -9);
     const aim = new THREE.Vector3(0.3, 0.2, cam.position.z - 5.5).lerp(new THREE.Vector3(0, SY - 1, FZ), smoothstep(T.sit0, T.sit1, t) * (1 - smoothstep(T.words + 0.5, T.can, t))).lerp(ground, smoothstep(T.words + 0.8, T.say, t));
     const pose = this.torch(t, { raise: 1, on: PROOF ? 0 : 1, walk: P.walk, aimAt: PROOF ? null : aim, aimK: PROOF ? 0 : 0.8, spot: clamp(20 * (aim.distanceTo(cam.position) / 5) ** 2, 3, 26) });
+    if (!PROOF) this.cut(t, P, pose, { speed: P.walk * 1.2, sit: smoothstep(T.sit0, T.sit1, t) });
     this.renderWorld(out, t, { sky: { top: [0.008, 0.01, 0.018], horizon: scaleRGB(LIN.smog, 0.1), low: scaleRGB(LIN.shadow, 0.8), horizonY: 0.5, haze: 1 } });
     const gb = this.glow3D;
     gb.add(this.lampP[0], this.lampP[1], this.lampP[2], 0.45, 0.35, LIN.sodium, 2.2, 4);
@@ -313,9 +336,11 @@ export default class Words extends LitScene {
     this.beam(out, t, pose, PROOF ? 0 : 1, { density: 0.02 * (1 - 0.75 * smoothstep(12, 16, aim.distanceTo(cam.position))), maxDist: clamp(aim.distanceTo(cam.position) - 0.5, 0.8, 8) });
     // ---- QA text: the screen line (mojibake) while it hangs whole; the timetable; the bus's route display
     const sb = this.screenRect();
+    const lastOn = T.s + 0.3 + 19 * 0.03 + 0.25, firstBreak = Math.min(...this.glyphs.map((g) => g.tb));
     if (sb && t < Math.min(...this.glyphs.map((g) => g.tf))) {
       const inFrame = sb.x >= 0 && sb.y >= 0 && sb.x + sb.w <= W && sb.y + sb.h <= H;
-      logText('garble', this.text, inFrame && sb.h > 14, sb, { id: 'scenery:words-screen' });
+      if (t >= lastOn && t < firstBreak) logText('sign', this.plain, inFrame && sb.h > 14, sb, { id: 'sign:words-screen' });
+      else if (t >= firstBreak) logText('garble', this.text, inFrame && sb.h > 14, sb, { id: 'scenery:words-screen' });
     }
     this.logPlane(this.table, this.tableText, 'garble', { frac: [0.05, 0.0, 0.95, 0.14], minPx: 10, id: 'scenery:words-table', scenery: true });
     if (this.bus.visible) this.logPlane(this.busSignMesh, this.busSign, 'garble', { minPx: 10, id: 'scenery:words-bus', scenery: true });
@@ -326,9 +351,7 @@ export default class Words extends LitScene {
     if (!PROOF) {
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
-      this.callout(u, t, homeLabel('words'), T.s + 0.05, T.s + 2.05, () => this.onScreen(this.heart[0]!.slot.x + 0.6, SY - 2.4, FZ + 0.3), { places: [city().home.name] });
-      const h = this.heart[0]!.slot;
-      this.callout(u, t, 'МЫ ЗАБОТИМСЯ О ВАС', T.s + 2.6, T.words + 0.45, () => this.onScreen(h.x + 0.5, h.y - 0.6, h.z));
+      this.callout(u, t, homeLabel('words'), T.s + 0.05, T.s + 2.05, () => this.onScreen(this.heart[0]!.slot.x + 0.6, SY - (PORTRAIT ? 4.3 : 2.4), FZ + 0.3), { places: [city().home.name] });
     }
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);
