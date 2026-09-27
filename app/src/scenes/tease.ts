@@ -96,7 +96,11 @@ export default class Tease extends LitScene {
     const archM = lit([0.4, 0.4, 0.39], { map: concreteTex(54, [3, 1], { stains: 50 }), rough: 0.95 });
     for (const sx of [-1, 1]) boxMesh(S, 0.3, 3.2, 12, sx * 2.1, 1.6, 7.5, archM);
     boxMesh(S, 4.4, 0.3, 12, 0, 3.2, 7.5, archM);
-    this.addPoint([0, 2.9, 4], [1.0, 0.75, 0.45], 1.2);
+    // the arch is the chapter's first frame (C: the 2 s hook): a caged bulb over the passage that lights the child's back,
+    // and a lamp just outside over the yard so the child stands as a silhouette against a lit ground
+    this.addPoint([0, 2.95, 6.2], [1.0, 0.74, 0.44], 4.5, 9);
+    const archBulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), glowMat([1.0, 0.8, 0.5], 2)); archBulb.position.set(0, 2.95, 6.2); S.add(archBulb);
+    this.addLamp([0.4, 4.6, 0.6], { k: 170, angle: 1.0, penumbra: 0.5, shadow: true, target: [-0.3, 0, -3.5], color: [1.0, 0.78, 0.5] });
     // ---- the other blocks around the yard
     wins.push(...panelBlock(S, { cx: 30, cz: -16, len: 50, floors: 9, ang: Math.PI / 2, seed: 55, litRate: 0.16 }));
     wins.push(...panelBlock(S, { cx: -2, cz: -46, len: 70, floors: 9, ang: 0.05, seed: 56, litRate: 0.15 }));
