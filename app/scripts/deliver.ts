@@ -11,7 +11,7 @@
 //   loudness, frames and duration.
 // Usage: bun scripts/deliver.ts --r 4 --date 2026-09-27 --chapter lost --prev-rev 22d2122 --poster 17.6
 //          [--poster-v 17.6] [--master ../out/draft-lost-r4.mp4] [--master-v ../out/draft-lost-r4-tiktok.mp4]
-//          [--render "<render command>"] [--max-mb 15]
+//          [--render "<render command>"] [--max-mb 15] [--name whatif-video-full]
 import path from 'node:path';
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { identity, fileSha } from './identity';
@@ -22,6 +22,8 @@ const ROOT = path.resolve(import.meta.dir, '../..'), OUT = path.join(ROOT, 'out'
 const R = +opt('r')!, DATE = opt('date')!, CH = opt('chapter', 'lost')!, PREV = opt('prev-rev');
 if (!R || !DATE) throw new Error('--r and --date are required');
 const MAXMB = +opt('max-mb', '15')!;
+// the delivered name's stem: a chapter draft by default, `--name whatif-video-full` for the whole song
+const NAME = opt('name', `whatif-video-draft-${CH}`)!;
 const LUFS = -14, TP = 0.891; // −1 dBFS
 
 function run(args: string[]): string {
@@ -53,7 +55,7 @@ mkdirSync(path.join(OUT, 'wip'), { recursive: true });
 for (const a of aspects) {
   if (!existsSync(a.master)) throw new Error(`missing master ${a.master}`);
   if (!Number.isFinite(a.poster)) throw new Error('--poster <t> is required');
-  const out = path.join(OUT, `whatif-video-draft-${CH}-${DATE}-r${R}${a.suffix}.mp4`);
+  const out = path.join(OUT, `${NAME}-${DATE}-r${R}${a.suffix}.mp4`);
   const pm = probe(a.master), vs = pm.streams.find((s: any) => s.codec_type === 'video');
   const [fn, fd] = vs.r_frame_rate.split('/').map(Number), fps = fn / fd, dur = +pm.format.duration;
   // the poster: the master's own frame at the chosen time (exact frame index, no re-render)
@@ -84,10 +86,10 @@ for (const a of aspects) {
   console.log(`${path.relative(ROOT, out)}  ${(statSync(out).size / 1e6).toFixed(2)} MB  ${ov.width}x${ov.height} ${fps} fps ${ov.nb_read_frames} frames  ${fin.I} LUFS (source ${src.I}, gain ${gain.toFixed(2)} dB)  poster ${a.poster}s`);
 }
 const manifest = {
-  draft: `whatif-video-draft-${CH}-${DATE}-r${R}`, chapter: CH, r: R, date: DATE,
+  draft: `${NAME}-${DATE}-r${R}`, chapter: CH, r: R, date: DATE,
   inputs: { sha: id.sha, files: id.files, committed: idHead.sha === id.sha, head, list: id.inputs },
   prev, render: opt('render') ?? null, files,
 };
-const json = path.join(OUT, `whatif-video-draft-${CH}-${DATE}-r${R}.json`);
+const json = path.join(OUT, `${NAME}-${DATE}-r${R}.json`);
 writeFileSync(json, JSON.stringify(manifest, null, 2) + '\n');
 console.log(`${path.relative(ROOT, json)}  inputs ${id.sha.slice(0, 16)}… (${id.files} files, ${manifest.inputs.committed ? 'committed' : 'NOT committed'} at ${head})${prev ? `, r${prev.r} ${prev.sha.slice(0, 16)}…` : ''}`);
