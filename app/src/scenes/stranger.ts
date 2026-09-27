@@ -357,12 +357,14 @@ export default class Stranger extends LitScene {
       this.heading(u, t, f);
       const head = () => this.onScreen(S_X, 1.95, this.manZ(t));
       this.callout(u, t, `${this.dist1} м`, T.back1 + 0.3, T.fwd1 + 0.05, head);
-      this.callout(u, t, `${this.dist2} м`, T.back2 + 0.2, T.fwd2 + 0.1, head);
+      // portrait: below-left of the head, off the headlights' bloom (A9)
+      const h2 = head();
+      this.callout(u, t, `${this.dist2} м`, T.back2 + 0.2, T.fwd2 + 0.1, head, PORTRAIT && h2 ? this.placeLabel(`${this.dist2} м`, 34, h2, { dx: -50, dy: 120, side: -1 }) : {});
       const cb = this.cams[2]!.p;
       // pinned left of the child, over the wall (away from the headlights' bloom and the stranger), every frame the same
       const incA = (tt: number) => (this.shots.some(([a0, a1]) => tt >= a0 && tt < a1) ? this.onScreen(this.camX(tt), 1.3, this.camZ(tt)) : this.onScreen(cb.x, cb.y, cb.z));
       const ia = incA(t), S0 = PORTRAIT ? 34 : 26;
-      this.callout(u, t, 'ИНЦИДЕНТ НЕ ОБНАРУЖЕН', T.fwd2 + 0.5, T.fwd2 + 2.95, incA, ia ? this.placeLabel('ИНЦИДЕНТ НЕ ОБНАРУЖЕН', S0, ia, { dx: -30, dy: 60, side: -1 }) : {});
+      this.callout(u, t, 'ИНЦИДЕНТ НЕ ОБНАРУЖЕН', T.fwd2 + 0.5, T.fwd2 + 2.95, incA, ia ? this.placeLabel('ИНЦИДЕНТ НЕ ОБНАРУЖЕН', S0, ia, { dx: -30, dy: -150, side: -1 }) : {});
       this.callout(u, t, homeLabel('stranger'), T.fwd2 + 3.35, T.fwd2 + 5.45, () => this.onScreen(-1.4, 0.8, KZ - 0.6), { places: [city().home.name] });
     }
     this.composite2D(this.ui, out);
