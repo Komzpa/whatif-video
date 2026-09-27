@@ -70,7 +70,7 @@ export default class Close extends LitScene {
     T.cut = beat(s + 9.0); // outside
     this.T = T;
     this.shots = [
-      [s, T.in1 + 0.1, { k: 'free', p: [0.05, FY + 0.3, -0.35], p1: [0.1, FY + 0.36, -0.7], look: [DOOR_X - 0.05, FY + 1.0, -RD], look1: [DOOR_X - 0.2, FY + 0.9, -RD + 0.6], fov: PORTRAIT ? 78 : 58 }],
+      [s, T.in1 + 0.1, { k: 'free', p: [0.05, FY + 0.72, -0.35], p1: [0.1, FY + 0.74, -0.7], look: [DOOR_X - 0.05, FY + 0.95, -RD], look1: [DOOR_X - 0.2, FY + 0.85, -RD + 0.6], /* at the child's own eye level: a low camera stretched the legs into adult proportions (author r1 item 5) */ fov: PORTRAIT ? 78 : 58 }],
       [T.coat - 0.1, T.phone - 0.2, { k: 'free', p: [-1.3, FY + 0.7, -0.35], p1: [-1.25, FY + 0.75, -0.5], look: [HOOK[0] - 0.25, FY + 1.25, HOOK[2]], fov: PORTRAIT ? 78 : 60 }],
     ];
     this.initKid(31);
@@ -244,9 +244,9 @@ export default class Close extends LitScene {
     cyl(this.handset, [-0.09, 0, 0], [0.09, 0, 0], 0.017, red, { seg: 8 });
     for (const sx of [-1, 1]) { const cup = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), red); cup.scale.set(1, 0.7, 1); cup.position.set(sx * 0.1, -0.012, 0); this.handset.add(cup); }
     // the room's lamp (on, in the last shot)
-    this.lamp = new THREE.PointLight(new THREE.Color().setRGB(1, 0.74, 0.42, THREE.LinearSRGBColorSpace), 0, 9, 2); this.lamp.position.set(-0.4, FY + 2.1, -2.2); S.add(this.lamp);
+    this.lamp = new THREE.PointLight(new THREE.Color().setRGB(1, 0.74, 0.42, THREE.LinearSRGBColorSpace), 0, 9, 2); this.lamp.position.set(-0.4, FY + 1.92, -2.2); S.add(this.lamp);
     cyl(S, [-0.4, FY + RH, -2.2], [-0.4, FY + 2.25, -2.2], 0.008, lit([0.2, 0.2, 0.2]), { seg: 4 });
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.24, 0.2, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0xd8b070, roughness: 0.8, side: THREE.DoubleSide, emissive: new THREE.Color(0xffb060), emissiveIntensity: 0 })); shade.position.set(-0.4, FY + 2.15, -2.2); S.add(shade);
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.24, 0.2, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8, side: THREE.DoubleSide, emissive: new THREE.Color(0xffb060), emissiveIntensity: 0 })); shade.position.set(-0.4, FY + 2.15, -2.2); S.add(shade);
     (this as unknown as { shade: THREE.Mesh }).shade = shade;
   }
 
@@ -298,7 +298,7 @@ export default class Close extends LitScene {
     const nl = PROOF ? 1 : smoothstep(T.click, T.click + 0.12, t) * (t < T.click + 0.3 ? (hash(Math.floor(t * 30), 4) < 0.7 ? 1 : 0.4) : 1);
     this.nlMat.emissiveIntensity = 2.2 * nl; this.nlLight.intensity = 2.4 * nl;
     const lampK = outside ? smoothstep(T.cut, T.cut + 0.4, t) : PROOF === 'facade' ? 1 : 0;
-    this.lamp.intensity = 24 * lampK; ((this as unknown as { shade: THREE.Mesh }).shade.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.2 * lampK;
+    this.lamp.intensity = 12 * lampK; ((this as unknown as { shade: THREE.Mesh }).shade.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.55 * lampK; // a soft shade, not a flaring bulb (author r1 item 4)
     const w0 = T.cut + 0.9, w1 = T.end - 1.2;
     const ou = outside ? smoothstep(T.cut, T.cut + 2.5, t) : PROOF === 'facade' ? 1 : 0;
     this.moon.intensity = 0.35 * ou; this.hemi.intensity = 0.05 + 0.12 * ou;
@@ -340,7 +340,7 @@ export default class Close extends LitScene {
       const gk = prog(t, T.coat - 0.15, T.coat + 0.55, ease.outCubic) * 0.75, ga = (1 - smoothstep(T.coat + 0.5, T.coat + 1.2, t)) * 0.8;
       this.ghost(u, t, gk, ga);
       if (!this.third) { this.torchHand(u, pose, light); this.reach(u, t, light); }
-      this.callout(u, t, homeLabel('close'), T.open + 0.3, T.open + 2.3, () => this.onScreen(DOOR_X - 0.45, FY + 1.75, -RD + 0.5), { places: [city().home.name] }); // over the doorway the child walks in through
+      this.callout(u, t, homeLabel('close'), T.open + 0.3, T.open + 2.3, () => this.onScreen(DOOR_X - 0.75, FY + 2.15, -RD + 0.02), { places: [city().home.name] }); // on the dark wall above and left of the doorway, clear of the child's head (author r1 item 4)
       this.callout(u, t, 'ПАЛЬТО', T.coat + 0.35, T.phone - 0.1, () => this.onScreen(HOOK[0] - 0.13, HOOK[1] - 0.45, HOOK[2]));
     }
     this.composite2D(this.ui, out);
