@@ -44,6 +44,8 @@ export interface TextItem {
   clip?: boolean;
   /** Runs of glyphs that share one fill colour (css), with their boxes and font size (A9 contrast). */
   ink?: { box: TextBox; fg: string; size: number }[];
+  /** The torch hand: the angle (degrees, on screen) between the forearm (cuff → heel) and the torch axis (B7). */
+  wristDeg?: number;
   /** Karaoke: how many letters are lit (sung) this frame (A10 sync). */
   lit?: number;
 }

@@ -39,7 +39,7 @@ const NV_EGL = '/usr/share/glvnd/egl_vendor.d/10_nvidia.json';
 
 type Kind = 'drone' | 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop' | 'book' | 'hand' | 'map';
 type Box = { x: number; y: number; w: number; h: number };
-interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string; clip?: boolean }
+interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string; clip?: boolean; wristDeg?: number }
 const OBJECTS: Kind[] = ['book', 'hand', 'map', 'drone'];
 
 // ------------------------------------------------------------------ city names
@@ -302,6 +302,11 @@ try {
   const polyArea = (pts: [number, number][]) => { const p = hull(pts); let a = 0; p.forEach((q, i) => { const r = p[(i + 1) % p.length]!; a += q[0] * r[1] - r[0] * q[1]; }); return Math.abs(a) / 2; };
   let handMax = 0, handAt = 0;
   frames.forEach((fr, i) => { for (const it of fr) if (it.kind === 'hand' && it.poly && it.poly.length > 2) { const clipped = [clipTo, clipTo, clipTo, clipTo].reduce((p, f, k) => f(p, [(q: [number, number]) => q[1] >= 0, (q: [number, number]) => q[1] <= LH, (q: [number, number]) => q[0] >= 0, (q: [number, number]) => q[0] <= LW][k]!, [cutY(0), cutY(LH), cutX(0), cutX(LW)][k]!), hull(it.poly)); const a = clipped.length > 2 ? polyArea(clipped) / (LW * LH) : 0; if (a > handMax) { handMax = a; handAt = times[i]!; } } });
+  // B7: the torch follows the forearm: the angle between the forearm (cuff → heel) and the torch axis stays ≤ 30°
+  // on every first-person frame (a torch at 90° to the arm reads as a broken wrist)
+  let wristMax = 0, wristAt = 0;
+  frames.forEach((fr, i) => { for (const it of fr) if (it.kind === 'hand' && typeof it.wristDeg === 'number' && it.wristDeg > wristMax) { wristMax = it.wristDeg; wristAt = times[i]!; } });
+  if (wristMax > 30) offenders.push(`B7       the torch bends ${wristMax.toFixed(0)}° off the forearm at ${wristAt.toFixed(2)}s (max 30°): a broken wrist`);
   if (handMax > 0.25) offenders.push(`B1       a hand with its sleeve covers ${(handMax * 100).toFixed(0)}% of the frame at ${handAt.toFixed(2)}s (max 25%)`);
   // C1: readable text is never cut by the frame edge or by scene geometry for longer than a pan's or a moving
   // train's crossing (0.5 s)
@@ -321,7 +326,7 @@ try {
     for (const id of [...cutRun.keys()]) if (!now.has(id)) cutRun.delete(id);
   });
   offenders.push(...[...cutBad.values()].slice(0, 12).map((s) => `C1       ${s}`));
-  const frameLine = `frame checks: A4 intersections ${a4.size} · A12 board faults ${a12.size} · A13 Latin/moji ${a13.size} · A5 ${kmBad ? 'FAIL' : 'ok'} · B1 hand ≤ ${(handMax * 100).toFixed(0)}% · C1 cut ${cutBad.size} · `
+  const frameLine = `frame checks: A4 intersections ${a4.size} · A12 board faults ${a12.size} · A13 Latin/moji ${a13.size} · A5 ${kmBad ? 'FAIL' : 'ok'} · B1 hand ≤ ${(handMax * 100).toFixed(0)}% · B7 wrist ≤ ${wristMax.toFixed(0)}° · C1 cut ${cutBad.size} · `
     + `A6 drone ${(droneFrames * DT).toFixed(2)}s · book ${bookSec.toFixed(2)}s · counter ${(counterFrames * DT).toFixed(2)}s · max overlays ${maxOv} (at ${maxAt.toFixed(2)}s) · lower-40% covered in ${(coverFrac * 100).toFixed(1)}% of frames (worst ${(worstCover * 100).toFixed(0)}%) · sung-line/sign overlaps ${clash.size}`;
   const kinds = new Map<string, number>();
   for (const { item } of runs.values()) kinds.set(item.kind, (kinds.get(item.kind) ?? 0) + 1);

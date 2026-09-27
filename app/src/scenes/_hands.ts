@@ -43,12 +43,27 @@ export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: 
   const raise = clamp(o.raise ?? 1), walk = o.walk ?? 0, beat = o.beat ?? 0;
   const bob = walk * Math.sin(t * 7.4) * 0.012;
   const sway = Math.sin(beat * Math.PI * 2) * 0.018 + Math.sin(t * 1.1) * 0.006;
-  const home = PORTRAIT ? new THREE.Vector3(0.035, -0.215, -0.5) : new THREE.Vector3(0.05, -0.085, -0.5);
-  const low = home.clone().add(new THREE.Vector3(0.1, -0.3, 0.1));
-  const headC = low.lerp(home, easeOut(raise)).add(new THREE.Vector3(sway * 0.4, bob, 0));
-  // the beam aims forward and a little down, towards the middle of the view
+  // the arm (B7): the torch lies along the forearm, so on screen the forearm is the torch axis continued back past
+  // the fist. For that forearm to come up from below the frame (the child's own arm, not one reaching in from the
+  // side), the axis from the fist to where the beam points must climb at least ~20°: when the aim would break that,
+  // the whole hand moves (lower, or across towards the aim) instead of the wrist bending.
   const ax = -0.2 + (o.aim?.x ?? 0) + sway, ay = -0.1 + (o.aim?.y ?? 0) + walk * Math.sin(t * 7.4 + 1) * 0.02;
   const dirC = new THREE.Vector3(Math.sin(ax), Math.sin(ay), -Math.cos(ax) * Math.cos(ay)).normalize();
+  const home = PORTRAIT ? new THREE.Vector3(0.035, -0.215, -0.5) : new THREE.Vector3(0.05, -0.085, -0.5);
+  const D = -home.z, tv = Math.tan((cam.fov * Math.PI) / 360), th = tv * cam.aspect;
+  // screen units: u, w in -1..1 (w up); v = where the beam's direction vanishes, p = the fist
+  const vz = Math.max(0.15, -dirC.z), v = { u: dirC.x / vz / th, w: dirC.y / vz / tv };
+  const p = { u: home.x / D / th, w: home.y / D / tv };
+  const CLIMB = Math.tan((16 * Math.PI) / 180) * (th / tv), W_MIN = PORTRAIT ? -0.78 : -0.62;
+  const need = (du: number) => v.w - CLIMB * Math.abs(du);
+  if (p.w > need(p.u - v.u)) {
+    p.w = need(p.u - v.u);
+    if (p.w < W_MIN) { p.w = W_MIN; const du = (v.w - p.w) / CLIMB; p.u = v.u + Math.sign(p.u - v.u || 1) * du; }
+  }
+  // never under the chapter line (bottom left): past that the arm comes in flatter from the right instead
+  p.u = Math.max(p.u, PORTRAIT ? -0.35 : -0.02);
+  const headC = new THREE.Vector3(p.u * th * D, p.w * tv * D, -D)
+    .add(new THREE.Vector3(0.1, -0.3, 0.1).multiplyScalar(1 - easeOut(raise))).add(new THREE.Vector3(sway * 0.4, bob, 0));
   const tailC = headC.clone().sub(dirC.clone().multiplyScalar(0.14));
   cam.updateMatrixWorld();
   const head = cam.localToWorld(headC.clone()), tail = cam.localToWorld(tailC.clone());
@@ -142,20 +157,24 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   const Ts = { x: Hs.x - ax * len, y: Hs.y - ay * len };
   const th = Math.atan2(ay, ax);
   // local frame: +x along the torch towards the lens, +y towards the fingers' side (under the body)
+  // the fingers wrap under the body, the knuckles up or out: the fingers' side is always the lower one on screen
+  // (aimed up-right the fist is mirrored rather than twisted so the back of the hand never turns to the camera)
+  const mir = -Math.cos(th) < 0 ? -1 : 1;
   const L2S = (x: number, y: number): P2 => {
-    const nx = Math.sin(th), ny = -Math.cos(th); // +y (fingers) = the side facing down-left on screen
+    const nx = Math.sin(th) * mir, ny = -Math.cos(th) * mir; // +y (fingers) = the lower side on screen
     return { x: Ts.x + (ax * x + nx * y) * r, y: Ts.y + (ay * x + ny * y) * r };
   };
   const on = pose ? clamp(l.torch ?? 0) : 0;
   // --- sleeve and wrist: the forearm comes up from below the frame to the heel of the hand
-  const heel = L2S(1.2, 1.35);
-  const down = PORTRAIT ? { x: 0.28, y: 1 } : { x: 0.42, y: 1 };
-  const dn = Math.hypot(down.x, down.y);
+  const heel = L2S(0.5, 0.35); // the heel of the fist sits on the torch axis: the wrist runs straight on into the forearm
+  // the forearm continues the torch axis back out of the frame (B7: the torch follows the forearm, the wrist is straight)
+  const down = { x: -ax, y: -ay };
+  const dn = 1;
   // portrait holds the hand low in the frame: a shorter bare wrist keeps the cuff and the sleeve on screen
-  // aimed steeply up the bare wrist would stretch into a long grey 'glove': shorten it so the cuff meets the hand
-  const wl = (PORTRAIT ? 0.9 : 2.0) * lerp(1, 0.35, clamp((-ay - 0.35) / 0.4));
+  const wl = PORTRAIT ? 0.9 : 1.6;
   const cuff = { x: heel.x + (down.x / dn) * r * wl, y: heel.y + (down.y / dn) * r * wl };
-  const base = { x: cuff.x + (down.x / dn) * (H - cuff.y + r * 9) * 1.05, y: H + r * 9 };
+  const exitT = Math.min(down.x > 1e-3 ? (W - cuff.x) / down.x : down.x < -1e-3 ? -cuff.x / down.x : 1e9, down.y > 1e-3 ? (H - cuff.y) / down.y : down.y < -1e-3 ? -cuff.y / down.y : 1e9);
+  const base = { x: cuff.x + down.x * (Math.max(0, exitT) + r * 9), y: cuff.y + down.y * (Math.max(0, exitT) + r * 9) };
   const outline = drawSleeve(c, base, cuff, r * 6.6, r * 3.9, l, 1);
   // the wrist, out of the cuff into the heel of the hand
   c.lineCap = 'round';
@@ -185,7 +204,7 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   c.restore();
   // --- the hand (local units of r)
   c.save();
-  c.translate(Ts.x, Ts.y); c.rotate(th); c.scale(r, -r); // flip so +y is the fingers' side (down-left)
+  c.translate(Ts.x, Ts.y); c.rotate(th); c.scale(r, -r * mir); // flip so +y is the fingers' side (the lower one)
   c.lineJoin = 'round'; c.lineCap = 'round';
   // back of the hand: from the heel up over the knuckle ridge to the index side
   const back = new Path2D();
@@ -256,7 +275,10 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   c.restore();
   const hand = [L2S(-0.2, 2.2), L2S(5.8, 1.5), L2S(len / r + 0.2, 1.4), L2S(len / r + 0.2, -1.4), L2S(4.2, -1.6), L2S(1.2, -2.2)].map((p) => [p.x, p.y] as [number, number]);
   const poly = [...outline, ...hand];
-  if (o.log !== false) logText('hand', 'torch hand', true, boxOf(poly), { id: 'hand:right', poly });
+  // B7: the on-screen angle between the forearm (cuff → heel) and the torch axis (tail → head)
+  const fx = heel.x - cuff.x, fy = heel.y - cuff.y, fl = Math.hypot(fx, fy) || 1;
+  const wristDeg = (Math.acos(clamp((fx * ax + fy * ay) / fl, -1, 1)) * 180) / Math.PI;
+  if (o.log !== false) logText('hand', 'torch hand', true, boxOf(poly), { id: 'hand:right', poly, wristDeg });
   return { lens: Hs, r, poly };
 }
 
