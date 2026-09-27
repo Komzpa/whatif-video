@@ -63,6 +63,18 @@ export default class CatScene extends LitScene {
     this.cat = new Quadruped(this.catSpec, this.three, 84);
     this.buildPath();
     this.obstacles = () => [];
+    // shots: walking into the yard from high behind; the torch climbing the trunk to the eyes in first person; an
+    // orbit round the tree at the cat's height, the child small below with the beam up; low behind the child as the
+    // cat comes down; from above as it crosses to the child and sits; the hand on its head in first person
+    const tEnd = this.path[this.path.length - 1]!.t;
+    const pc = this.perch, toKid = Math.atan2(STAND[2] - pc.z, STAND[0] - pc.x);
+    this.shots = [
+      [T.s, T.your - 0.3, { k: 'wide', d: 1.0, h: 1.2, side: 0.8, ahead: 1.4, aimY: 1.2 }],
+      [T.stuck - 0.2, T.a - 0.05, { k: 'orbit', p: [lerp(pc.x, STAND[0], 0.35), 0, lerp(pc.z, STAND[2], 0.35)], d: 4.4, h: 2.6, a0: toKid + 1.2, a1: toKid + 0.25, look: [lerp(pc.x, STAND[0], 0.3), PORTRAIT ? 2.9 : 3.3, lerp(pc.z, STAND[2], 0.3)], fov: PORTRAIT ? 86 : 74 }],
+      [T.a - 0.05, T.a + 2.6, { k: 'back', d: 1.3, side: 1, ahead: 0.7, aimY: 0.4 }],
+      [T.a + 2.6, tEnd - 0.2, { k: 'high', d: 0.35, h: 0.55, side: 0.6, ahead: PORTRAIT ? 0 : 0.6 }],
+    ];
+    this.initKid(5);
   }
 
   buildYard() {
@@ -244,6 +256,7 @@ export default class CatScene extends LitScene {
     const early = new THREE.Vector3(Math.sin((t - T.s) * 1.1) * 2, 0.2, 2);
     const aim = early.clone().lerp(trunkAim, smoothstep(T.s + 1.8, T.your - 0.4, t)).lerp(cp.clone().add(new THREE.Vector3(0, -0.1, 0)), smoothstep(T.found - 0.15, T.found + 0.2, t));
     const pose = this.torch(t, { raise: 1, on: 1, walk: P.walk, aimAt: PROOF ? null : aim, aimK: PROOF ? 0 : 0.95, spot: clamp(26 * (aim.distanceTo(this.cam.position) / 4.5) ** 2, 3, 40), angle: 0.3 });
+    if (!PROOF) this.cut(t, P, pose, { speed: P.walk * 1.1 });
     // the torch's spill (no shadow): the branches must not black out the cat entirely
     if (pose) { this.spill.position.copy(pose.head); this.spill.intensity = PROOF ? 0 : 3.5 * smoothstep(T.found - 0.2, T.found + 0.3, t) * (1 - smoothstep(T.tree + 1.0, T.tree + 2.0, t)); }
     const tdir = pose ? pose.target.clone().sub(pose.head).normalize() : null;
@@ -287,7 +300,7 @@ export default class CatScene extends LitScene {
     const light: Light = { amb: 0.2, warm: 0.25, torch: 1 };
     if (!PROOF) {
       this.torchHand(u, pose, light);
-      this.pet(u, t, light);
+      if (!this.third) this.pet(u, t, light);
       this.heading(u, t, f);
       this.callout(u, t, homeLabel('cat'), T.s + 0.3, T.your - 0.5, () => this.onScreen(TOWER[0], 12, TOWER[2]), { places: [city().home.name] });
       this.callout(u, t, 'КОШКА · 1', T.found + 0.1, T.stuck - 0.15, () => { const h = this.cat.head.getWorldPosition(new THREE.Vector3()); return this.onScreen(h.x, h.y + 0.08, h.z); });

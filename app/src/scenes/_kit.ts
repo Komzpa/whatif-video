@@ -25,7 +25,7 @@ export interface Pov { p: V3; yaw: number; pitch: number; walk: number; roll?: n
  * `free` = an absolute camera (`p`, `look`). `d`, `h`, `side` scale the offsets; `d1` dollies d to d1 over the shot;
  * `ahead` = how far in front of the child the camera aims; `fov` overrides.
  */
-export interface Shot { k: 'wide' | 'ots' | 'low' | 'high' | 'side' | 'back' | 'free'; d?: number; d1?: number; h?: number; side?: number; ahead?: number; yaw?: number; fov?: number; p?: V3; p1?: V3; look?: V3; look1?: V3; aimY?: number }
+export interface Shot { k: 'wide' | 'ots' | 'low' | 'high' | 'side' | 'back' | 'orbit' | 'free'; d?: number; d1?: number; h?: number; side?: number; ahead?: number; yaw?: number; a0?: number; a1?: number; fov?: number; p?: V3; p1?: V3; look?: V3; look1?: V3; aimY?: number }
 
 export const EYE = 1.12; // the child's eye height (m)
 export const lin = (hex: string): RGB => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }; // three parses hex as sRGB -> linear
@@ -291,6 +291,11 @@ export abstract class LitScene extends CityScene {
       case 'back': cp = feet.clone().addScaledVector(f, -2.0 * d).addScaledVector(r, 0.55 * sd).add(new THREE.Vector3(0, 0.38 * h, 0)); look = eye.clone().addScaledVector(f, 5 * ahead).add(new THREE.Vector3(0, 0.3 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 70 : 54; break;
       case 'high': cp = feet.clone().addScaledVector(f, -3.2 * d).addScaledVector(r, 0.8 * sd).add(new THREE.Vector3(0, 7.5 * h, 0)); look = feet.clone().addScaledVector(f, 2.2 * ahead).add(new THREE.Vector3(0, s.aimY ?? 0, 0)); fov ??= PORTRAIT ? 64 : 48; break;
       case 'side': cp = feet.clone().addScaledVector(r, 3.6 * d * sd).addScaledVector(f, 0.6).add(new THREE.Vector3(0, 1.0 * h, 0)); look = feet.clone().addScaledVector(f, 1.2 * ahead).add(new THREE.Vector3(0, 0.75 + (s.aimY ?? 0), 0)); fov ??= PORTRAIT ? 66 : 50; break;
+      case 'orbit': { // around s.p (centre on the ground) at radius d, height h, angle a0 -> a1, looking at s.look
+        const e = u * u * (3 - 2 * u), a = lerp(s.a0 ?? 0, s.a1 ?? 1, e), c0 = s.p ?? [0, 0, 0];
+        cp = new THREE.Vector3(c0[0] + Math.cos(a) * d, c0[1] + h, c0[2] + Math.sin(a) * d);
+        look = new THREE.Vector3(...(s.look ?? c0)); fov ??= PORTRAIT ? 64 : 48; break;
+      }
       default: {
         const a = new THREE.Vector3(...(s.p ?? [0, 2, 5])), b = new THREE.Vector3(...(s.p1 ?? s.p ?? [0, 2, 5]));
         const la = new THREE.Vector3(...(s.look ?? [P.p[0], 0.8, P.p[2]])), lb = new THREE.Vector3(...(s.look1 ?? s.look ?? [P.p[0], 0.8, P.p[2]]));
