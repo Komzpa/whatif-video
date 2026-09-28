@@ -110,6 +110,8 @@ nice -n 19 ionice -c3 bun scripts/render.ts video --aspect 9:16 --samples 4 --fr
 bun scripts/deliver.ts --r N --date YYYY-MM-DD --chapter lost --prev-rev <r(N-1) commit> --poster <t>
 ```
 
+Full-song renders can outlast short command-wrapper defaults: one measured full-render run took 3,462.9 s (~57m43s). Before each full-render command, set the external wrapper timeout explicitly above that measured duration, with margin for the current run; do not inherit a 300 s default or assume timeout 0 is universally appropriate. If a run stops early, preserve its partial files and logs as evidence, but do not treat them as deliverables. Accept only after both aspect renders have completed and finalized, then run QA against those actual output files; partial or truncated output never qualifies.
+
 `deliver.ts` turns the two full-quality renders into the viewing copies
 `out/whatif-video-draft-lost-YYYY-MM-DD-rN.mp4` and `…-rN-tiktok.mp4`. It bakes the poster (the master's own
 frame at `--poster`) in as frame 0, so duration and frame count are unchanged. It sets the audio to −14 LUFS
