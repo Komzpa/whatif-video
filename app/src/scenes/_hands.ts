@@ -58,17 +58,22 @@ export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: 
   v.u = clamp(v.u, -1.3, 1.3); v.w = clamp(v.w, -0.9, 1.3);
   dirC.set(v.u * th, v.w * tv, -1).normalize();
   const p = { u: home.x / D / th, w: home.y / D / tv };
-  const CLIMB = Math.tan((16 * Math.PI) / 180) * (th / tv), W_MIN = PORTRAIT ? -0.78 : -0.62;
-  const need = (du: number) => v.w - CLIMB * Math.abs(du);
-  if (p.w > need(p.u - v.u)) {
-    p.w = need(p.u - v.u);
-    if (p.w < W_MIN) { p.w = W_MIN; const du = (v.w - p.w) / CLIMB; p.u = v.u + Math.sign(p.u - v.u || 1) * du; }
+  // the forearm is the torch axis continued back past the fist. It is a right arm: it may come in from the lower
+  // right at a shallow angle, but never from the left, so an aim to the right of the fist must climb steeply (the
+  // arm reaches out from the shoulder, the fist moves under the aim) while an aim to the left may be flatter
+  const CL = Math.tan((16 * Math.PI) / 180) * (th / tv), CR = Math.tan((58 * Math.PI) / 180) * (th / tv);
+  const W_MIN = PORTRAIT ? -0.78 : -0.62, U_LO = PORTRAIT ? -0.35 : -0.02, U_HI = PORTRAIT ? 0.7 : 0.8;
+  const climb = (fu: number) => (v.u > fu ? CR : CL) * Math.abs(v.u - fu);
+  if (v.u > p.u) p.u += 0.75 * (Math.min(v.u, U_HI) - p.u); // aimed right: the fist goes out under the aim
+  if (p.w > v.w - climb(p.u)) {
+    p.w = Math.max(W_MIN, v.w - climb(p.u));
+    if (v.w - p.w < climb(p.u) && v.u < p.u) p.u = v.u + (v.w - p.w) / CL; // aimed left and low: the fist moves right
   }
-  // never under the chapter line (bottom left): past that the arm comes in flatter from the right instead
-  p.u = clamp(p.u, PORTRAIT ? -0.35 : -0.02, PORTRAIT ? 0.7 : 0.8); // and the fist never leaves the frame
+  // never under the chapter line (bottom left), and the fist never leaves the frame
+  p.u = clamp(p.u, U_LO, U_HI);
   // when the fist cannot go lower or further across, the beam gives way instead: it never points below the climb
-  // line from the fist, so the forearm behind it always comes up from the bottom of the frame
-  const vMin = p.w + CLIMB * Math.abs(p.u - v.u);
+  // line from the fist, so the forearm behind it always comes up from the bottom or the lower right of the frame
+  const vMin = p.w + climb(p.u);
   if (v.w < vMin) { v.w = vMin; dirC.set(v.u * th, v.w * tv, -1).normalize(); }
   const headC = new THREE.Vector3(p.u * th * D, p.w * tv * D, -D)
     .add(new THREE.Vector3(0.1, -0.3, 0.1).multiplyScalar(1 - easeOut(raise))).add(new THREE.Vector3(sway * 0.4, bob, 0));
