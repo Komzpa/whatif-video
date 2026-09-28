@@ -19,7 +19,7 @@ import {
   LitScene, lit, glowMat, canvasTex, blotches, speckle, asphalt, boxMesh, cyl, ground, concreteTex, corrugatedTex, streetLight,
   panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, mixRGB, lin, EYE, type Pov, type V3, type RGB,
 } from './_kit';
-import { makeLamp } from './_motifs';
+import { makeLamp, logText } from './_motifs';
 import { Quadruped, CAT, type QuadSpec } from './_beasts';
 import { Figure, type FigureSpec } from './_people';
 
@@ -32,6 +32,12 @@ const NG = 6;
 const POSTER: V3 = [-8.4, 1.45, G_Z0 + 0.02];
 const STOP_Z = -7.2; // where the child stops
 const NAME = 'ПОТЕРЯШКА';
+/** The older kids' lines (r8 note 6): shouted at the child as glyph soup, the grown-up's reading flickering under them. */
+const SAYS: { kid: number; ru: string; tr: string }[] = [
+  { kid: 3, ru: 'ТЫ С КАКОГО РАЙОНА', tr: '«ТЫ С КАКОГО РАЙОНА?»' },
+  { kid: 4, ru: 'ЕСТЬ ЗАКУРИТЬ', tr: '«ЕСТЬ ЗАКУРИТЬ?»' },
+  { kid: 1, ru: 'А ЕСЛИ НАЙДУ', tr: '«А ЕСЛИ НАЙДУ?»' },
+];
 
 interface Kid { glow: THREE.PointLight; f: Figure; pos: THREE.Vector3; sit: number; lit: number; rec: number; torch: number; phone: THREE.Mesh; L: THREE.SpotLight; seed: number; point?: boolean }
 interface Scrawl { door: number; x: number; y: number; size: number; ang: number; t: number }
@@ -200,6 +206,39 @@ export default class Tease extends LitScene {
       if (sit) pos.y = GY - 0.3 * sp.height;
       this.kids.push({ glow, f, pos, sit, lit: lt, rec: rt, torch: tt, phone, L, seed: i, point });
     });
+  }
+
+  /** A kid's shout as a rough speech balloon of glyph soup next to its head (null when the head is off screen). */
+  speech(c: CanvasRenderingContext2D, t: number, text: string, a: number, b: number, k: Kid, seed: number): { x: number; y: number } | null {
+    if (t < a || t > b + 0.3) return null;
+    const hp = k.f.headPos();
+    const q = this.onScreen(hp.x, hp.y + 0.12, hp.z, -40);
+    if (!q) return null;
+    const S = PORTRAIT ? 46 : 40;
+    const pop = smoothstep(a, a + 0.12, t), fade = 1 - smoothstep(b, b + 0.3, t);
+    c.save();
+    c.font = font(F.metro(900), S);
+    const w = c.measureText(text).width + S * 1.1, h = S * 1.7;
+    // the balloon sits above the head, nudged into the frame
+    const side = q.x > W * 0.55 ? -1 : 1;
+    let bx = q.x + side * S * 0.6 - (side < 0 ? w : 0), by = q.y - S * 1.3 - h;
+    bx = clamp(bx, 24, W - w - 24); by = clamp(by, 80, H - h - 24);
+    const jit = (i: number) => (hash(seed * 31 + i, Math.floor(t * 12)) - 0.5) * 3;
+    c.globalAlpha = 0.95 * pop * fade;
+    c.translate(bx + w / 2, by + h / 2); c.scale(0.85 + 0.15 * pop, 0.85 + 0.15 * pop); c.translate(-(bx + w / 2), -(by + h / 2));
+    c.fillStyle = 'rgba(14,14,16,0.9)'; c.strokeStyle = 'rgba(236,232,222,0.9)'; c.lineWidth = 2.2;
+    c.beginPath();
+    const n = 14;
+    for (let i = 0; i <= n; i++) { const an = (i / n) * Math.PI * 2, rx = w / 2 + jit(i) + 4 * Math.sin(an * 5 + seed), ry = h / 2 + jit(i + 50); const x = bx + w / 2 + Math.cos(an) * rx, y = by + h / 2 + Math.sin(an) * ry; if (i) c.lineTo(x, y); else c.moveTo(x, y); }
+    c.closePath(); c.fill(); c.stroke();
+    // the tail to the speaker
+    const tx = clamp(q.x, bx + w * 0.2, bx + w * 0.8);
+    c.beginPath(); c.moveTo(tx - 10, by + h - 2); c.lineTo(q.x, q.y - 6); c.lineTo(tx + 10, by + h - 2); c.fill(); c.stroke();
+    c.fillStyle = '#EDE6D6'; c.textBaseline = 'middle'; c.textAlign = 'center';
+    c.fillText(text, bx + w / 2 + jit(99), by + h / 2 + jit(98));
+    c.restore();
+    logText('garble', text, pop >= 1 && fade >= 0.97, { x: bx + S * 0.55, y: by + h / 2 - S * 0.6, w: w - S * 1.1, h: S * 1.2 }, { id: `garble:tease-say-${seed}` });
+    return { x: bx + w / 2, y: by + h };
   }
 
   /** The chalk: on «call» one ПОТЕРЯШКА per beat across the doors, then faster and stacked until it doesn't read. */
@@ -377,7 +416,13 @@ export default class Tease extends LitScene {
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
       this.callout(u, t, homeLabel('tease'), T.s + 0.1, T.s + 2.0, () => this.onScreen(-10, 4, -46), { places: [city().home.name] });
-      this.callout(u, t, 'НЕДЕЛЯ ДОБРОТЫ', T.they + 3.4, T.they + 6.2, () => this.onScreen(POSTER[0] + 0.45, POSTER[1] + 0.5, POSTER[2]));
+      this.callout(u, t, 'НЕДЕЛЯ ДОБРОТЫ', T.they + 3.4, T.they + 6.2, () => this.onScreen(POSTER[0] + 0.45, POSTER[1] + 0.5, POSTER[2]), { maybe: true });
+      const win = [[T.tease - 2.4, T.tease - 0.15], [T.tease + 0.15, T.tease + 2.15], [T.laugh + 0.2, T.call + 0.6]];
+      SAYS.forEach((sy, i) => {
+        const [a, b] = win[i]!;
+        const bub = this.speech(u, t, garble(sy.ru), a, b, this.kids[sy.kid]!, 40 + i);
+        this.callout(u, t, sy.tr, a + 0.45, b, () => bub, { maybe: true });
+      });
     }
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);

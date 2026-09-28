@@ -1170,10 +1170,10 @@ export default class Lost extends CityScene {
     // (c) your stop on the wall map, where the torch runs back to
     call('ТВОЯ ОСТАНОВКА', T.stopCall, T.turnArch + 0.3, () => { const w = this.mapWorld(this.mapCv(yourStop().at)); return onScreen(project(this.cam, w.x, w.y, w.z)); });
     // (d) the station closed, on the shutter
-    call('СТАНЦИЯ ЗАКРЫТА', T.shutterGo, T.land + 1.0, (tt) => onScreen(PORTRAIT ? project(this.cam, 0, this.shutterY(tt) + 1.56, CURT_Z - 0.02) : project(this.cam, -0.14, Math.min(OPEN_H - 0.15, this.shutterY(tt) + 1.45), CURT_Z - 0.02)));
+    call('СТАНЦИЯ ЗАКРЫТА', T.shutterGo, T.land + 1.0, (tt) => onScreen(PORTRAIT ? project(this.cam, 0, this.shutterY(tt) + 1.56, CURT_Z - 0.02) : project(this.cam, -0.14, Math.min(OPEN_H - 0.15, this.shutterY(tt) + 1.45), CURT_Z - 0.02)), { maybe: true });
     // (e) the only way home is through the promzona's gate
     const zt = [city().restricted.sign, homeLabel('lost')];
-    call(zt, T.turnZone + 0.4, f.end + 1, () => onScreen(project(this.cam, GATE_X - 0.45, 1.67, FENCE_Z + 0.04)), { color: '#FF7FA8', plate: 1, places: [city().restricted.sign, city().home.name] });
+    call(zt, T.turnZone + 0.4, f.end + 1, () => onScreen(project(this.cam, GATE_X - 0.45, 1.67, FENCE_Z + 0.04)), { color: '#FF7FA8', plate: 1, maybe: true, places: [city().restricted.sign, city().home.name] });
     void cam;
   }
 

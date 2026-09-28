@@ -46,6 +46,8 @@ export interface TextItem {
   ink?: { box: TextBox; fg: string; size: number }[];
   /** The torch hand: the angle (degrees, on screen) between the forearm (cuff → heel) and the torch axis (B7). */
   wristDeg?: number;
+  /** A maybe-translation callout (flickers by design): reading time bridges its gaps ≤ 0.45 s. */
+  maybe?: boolean;
   /** Karaoke: how many letters are lit (sung) this frame (A10 sync). */
   lit?: number;
 }

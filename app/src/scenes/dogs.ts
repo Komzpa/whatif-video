@@ -312,7 +312,7 @@ export default class Dogs extends LitScene {
     this.heading(u, t, f);
     this.callout(u, t, homeLabel('dogs'), T.s + 0.3, T.stray - 0.2, () => this.onScreen(FAR[0], 9, -110), { places: [city().home.name] });
     this.callout(u, t, 'ХОЗЯИН', T.ownerCall, T.night - 0.3, () => { const h = this.owner.headPos(); return this.onScreen(h.x, h.y + 0.1, h.z); });
-    this.callout(u, t, 'ВЫГУЛ ЗАПРЕЩЁН', T.signCall, f.end + 1, () => this.onScreen(RX - 0.17, 2.3, -2.8));
+    this.callout(u, t, 'ВЫГУЛ ЗАПРЕЩЁН', T.signCall, f.end + 1, () => this.onScreen(RX - 0.17, 2.3, -2.8), { maybe: true });
   }
 }
 

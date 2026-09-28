@@ -39,7 +39,7 @@ const NV_EGL = '/usr/share/glvnd/egl_vendor.d/10_nvidia.json';
 
 type Kind = 'drone' | 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop' | 'book' | 'hand' | 'map';
 type Box = { x: number; y: number; w: number; h: number };
-interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string; clip?: boolean; wristDeg?: number }
+interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string; clip?: boolean; wristDeg?: number; maybe?: boolean }
 const OBJECTS: Kind[] = ['book', 'hand', 'map', 'drone'];
 
 // ------------------------------------------------------------------ city names
@@ -90,6 +90,21 @@ try {
     frames.push(...await page.evaluate((ts) => ts.map((t: number) => (window as any).__video.texts(t)), batch));
   }
 
+  // maybe-translations flicker by design (TREATMENT r8 note 4): bridge their dropouts ≤ 0.45 s for reading time
+  {
+    const gap = Math.round(0.45 * FPS), lastFull = new Map<string, number>();
+    frames.forEach((fr, i) => {
+      for (const it of fr) {
+        if (!it.maybe || !it.full) continue;
+        const j = lastFull.get(it.id);
+        if (j !== undefined && i - j > 1 && i - j <= gap + 1) for (let k = j + 1; k < i; k++) {
+          const f = frames[k]!, cur = f.find((x) => x.id === it.id);
+          if (cur) cur.full = true; else f.push({ ...it });
+        }
+        lastFull.set(it.id, i);
+      }
+    });
+  }
   // --debug <text>: print, per frame, whether items matching the text were drawn and fully visible
   const dbg = opt('debug');
   if (dbg) frames.forEach((fr, i) => { const m = fr.filter((x) => x.text.includes(dbg)); if (m.length) console.log(times[i]!.toFixed(2), m.map((x) => `${x.id}:${x.full ? "FULL" : "part"}${x.box ? ` [${Math.round(x.box.x)},${Math.round(x.box.y)} ${Math.round(x.box.w)}x${Math.round(x.box.h)}]` : ""}`).join(' ')); });

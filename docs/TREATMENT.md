@@ -15,6 +15,14 @@ unfamiliar district's signs into shuffled Cyrillic («деръл бунд гюо
 - Checked by TESTPLAN A13: Latin/box glyphs appear only in 'garble' items, and each re-derives from its source.
 
 ### r8 author notes 3–8 (2026-09-28, same round)
+- **4. Blinking = translation, and more of it.** A glyph-soup sign is steady; what flickers is the grown-up's clean
+  reading of it (the callout): steady stretches broken by uncertain bursts where it ghosts out and back ("maybe it
+  says that, maybe not"), `maybe: true` in drawCallout. Used on: lost «СТАНЦИЯ ЗАКРЫТА» (shutter notice) and the gate
+  «ПОСТОРОННИМ ВХОД ВОСПРЕЩЁН» (the «ДОМ · x км» line under it never flickers), dogs «ВЫГУЛ ЗАПРЕЩЁН», tease
+  «НЕДЕЛЯ ДОБРОТЫ» and the three kids' lines, words «РАСПИСАНИЕ». QA bridges its dropouts ≤ 0.45 s for reading time.
+- **6. Tease: the older kids talk.** Besides the chalk «ПОТЕРЯШКА», three kids shout at the child in rough speech
+  balloons of glyph soup (real codec transforms of «ТЫ С КАКОГО РАЙОНА», «ЕСТЬ ЗАКУРИТЬ», «А ЕСЛИ НАЙДУ»), each ≥1.5 s,
+  with the flickering maybe-translation «ТЫ С КАКОГО РАЙОНА?» etc. under it.
 - **7. words LED collapse.** Keep the broken mid-collapse fragment («й обну сь»). A letter module first stutters and
   switches OFF (dark plastic, dead dot grid, no image, no glow) before it lets go; it falls and lands dark. When the
   night bus's wheels reach a module lying in its lane, the module cracks and shatters into pieces that skitter along

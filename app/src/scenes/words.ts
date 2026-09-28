@@ -437,6 +437,8 @@ export default class Words extends LitScene {
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
       this.callout(u, t, homeLabel('words'), T.s + 0.05, T.s + 2.05, () => this.onScreen(this.heart[0]!.slot.x + 0.6, SY - (PORTRAIT ? 4.3 : 2.4), FZ + 0.3), { places: [city().home.name] });
+      // the grown-up's reading of the broken timetable, flickering: maybe it says that, maybe not (r8 note 4)
+      this.callout(u, t, 'РАСПИСАНИЕ', this.firstBreak() + 0.9, T.say + 0.5, () => this.onScreen(-1.74, 1.98, 1.1), { maybe: true });
     }
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);

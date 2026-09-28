@@ -526,6 +526,19 @@ export function drawLeader(c: CanvasRenderingContext2D, a: { x: number; y: numbe
  * label, then the label types in. (ax, ay) = the thing pointed at; (lx, ly) = the label's baseline start
  * (the leader ends just before it; `side` -1 puts the label left of the elbow, right-aligned).
  */
+/** Visibility of a maybe-translation at time `e` after it appears (1 = fully there, ~0.1–0.4 = a ghost): steady
+ *  stretches broken by uncertain bursts of flicker, deterministic per label. */
+export function maybeVis(e: number, key: string): number {
+  if (e < 0.35) return 1;
+  let sd = 0; for (let i = 0; i < key.length; i++) sd = (sd * 31 + key.charCodeAt(i)) | 0;
+  const P = 1.05 + hash(sd, 3) * 0.5; // one doubt every ~1.05–1.55 s
+  const k = Math.floor((e - 0.35) / P), ph = (e - 0.35) - k * P;
+  const burst = 0.22 + hash(sd, k + 11) * 0.2;
+  const bin = Math.floor(e * 20);
+  if (ph < burst) return hash(bin, sd + 5) < 0.55 ? 0.1 + 0.3 * hash(bin, sd + 9) : 1;
+  return hash(bin, sd + 13) < 0.03 ? 0.35 : 1;
+}
+
 export function drawCallout(c: CanvasRenderingContext2D, t: number, o: {
   ax: number; ay: number; lx: number; ly: number; text: string | string[]; at: number; out?: number;
   color?: PaletteKey | string; size?: number; alpha?: number; ring?: boolean; side?: 1 | -1; cps?: number; dim?: number;
@@ -533,6 +546,9 @@ export function drawCallout(c: CanvasRenderingContext2D, t: number, o: {
   plate?: number;
   /** QA: the text kind (default 'callout') and place names inside the label (checked against city.json). */
   kind?: TextKind; places?: string[];
+  /** A maybe-translation (TREATMENT r8 note 4): the grown-up's reading of a glyph-soup sign flickers in and out
+   *  uncertainly while the sign itself stays steady. Lines starting with «ДОМ ·» never flicker. */
+  maybe?: boolean;
 }) {
   const a0 = (o.alpha ?? 1) * smoothstep(o.at - 0.01, o.at + 0.08, t) * (o.out !== undefined ? 1 - smoothstep(o.out, o.out + 0.35, t) : 1);
   if (a0 <= 0.001) return;
@@ -564,6 +580,7 @@ export function drawCallout(c: CanvasRenderingContext2D, t: number, o: {
   if (along > seg1) drawLeader(c, knee, elbow, clamp((along - seg1) / Math.max(1, seg2)), color, 6, 1.25);
   // label types in once the leader arrives
   const lines = Array.isArray(o.text) ? o.text : [o.text];
+  const mv = o.maybe ? maybeVis(t - o.at, lines.join('')) : 1;
   const t0 = o.at + 0.06 + drawDur * 0.8;
   const n = Math.floor(Math.max(0, t - t0) * (o.cps ?? 60));
   c.font = font(F.mono(500), size);
@@ -573,8 +590,8 @@ export function drawCallout(c: CanvasRenderingContext2D, t: number, o: {
     const all = lines.join(' / '), wMax = Math.max(...lines.map((ln) => measure(ln, F.mono(500), size, size * 0.06)));
     const bx = side > 0 ? o.lx : o.lx - wMax;
     const onScreen = o.lx > -wMax && o.lx < W + wMax && o.ly > 0 && o.ly < H + size;
-    logText(o.kind ?? 'callout', all, n >= lines.join('').length && a0 * (o.dim ?? 1) >= 0.97 && onScreen,
-      { x: bx, y: o.ly - size, w: wMax, h: size * (1 + 1.35 * (lines.length - 1)) + size * 0.3 }, { places: o.places });
+    logText(o.kind ?? 'callout', all, n >= lines.join('').length && a0 * (o.dim ?? 1) >= 0.97 && mv >= 0.97 && onScreen,
+      { x: bx, y: o.ly - size, w: wMax, h: size * (1 + 1.35 * (lines.length - 1)) + size * 0.3 }, { places: o.places, ...(o.maybe ? { maybe: true } : {}) });
   }
   if (o.plate && n > 0) {
     const wMax = Math.max(...lines.map((ln) => measure(ln, F.mono(500), size, size * 0.06)));
@@ -588,6 +605,8 @@ export function drawCallout(c: CanvasRenderingContext2D, t: number, o: {
     const s = ln.slice(0, Math.max(0, left));
     left -= ln.length;
     if (!s) return;
+    const flick = mv < 1 && !/^ДОМ ·/.test(ln);
+    c.globalAlpha = flick ? a0 * mv : a0;
     if (side > 0) c.fillText(s, o.lx, o.ly + i * size * 1.35);
     else { c.textAlign = 'right'; c.fillText(s, o.lx, o.ly + i * size * 1.35); c.textAlign = 'left'; }
   });
