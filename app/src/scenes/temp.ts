@@ -300,8 +300,8 @@ export default class Temp extends LitScene {
     const flash = hot ? 0.93 + 0.07 * Math.sign(Math.sin((t - T.line1) * 9)) * (t < T.line1 + 0.7 ? 1 : 0) : cold ? 0.93 + 0.07 * Math.sign(Math.sin((t - T.line2) * 9)) * (t < T.line2 + 0.6 ? 1 : 0) : 1;
     for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) {
       const on = d[(y * 128 + x) * 4]! > 110;
-      c.fillStyle = on ? `rgba(255,${cold ? 150 : 120},${cold ? 110 : 70},${flash})` : 'rgba(40,10,6,0.5)';
-      c.beginPath(); c.arc(x * 4 + 2, y * 4 + 2, on ? 1.7 : 1.1, 0, Math.PI * 2); c.fill();
+      c.fillStyle = on ? `rgba(255,${cold ? 175 : 120},${cold ? 135 : 70},${flash})` : 'rgba(10,3,2,0.8)'; // bright enough to read through the frost haze (A9)
+      c.beginPath(); c.arc(x * 4 + 2, y * 4 + 2, on ? 1.9 : 1.0, 0, Math.PI * 2); c.fill();
     }
     this.boardTex.needsUpdate = true;
   }
