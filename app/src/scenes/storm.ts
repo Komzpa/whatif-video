@@ -21,7 +21,7 @@ import {
   panelBlock, WindowPanes, beamLit, POST_BASE, LIN, scaleRGB, mixRGB, EYE, type Pov, type V3, type RGB,
 } from './_kit';
 import { rain, lampDie, flicker } from './_motifs';
-import { Quadruped, CAT, type QuadSpec } from './_beasts';
+import { Quadruped, OUR_CAT, type QuadSpec } from './_beasts';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
 const DZ0 = -14, DZ1 = -21; // the deck's near and far edges (z)
@@ -36,7 +36,7 @@ interface Bolt { t: number; k: number; segs: [THREE.Vector3, THREE.Vector3, numb
 export default class Storm extends LitScene {
   chapter = 'storm';
   cat!: Quadruped;
-  catSpec: QuadSpec = { ...CAT, back: [0.34, 0.12, 0.03], belly: [0.62, 0.36, 0.14], legs: [0.5, 0.26, 0.08], muzzleC: [0.7, 0.5, 0.32], eye: [0.45, 0.95, 0.3], stripes: 70 };
+  catSpec: QuadSpec = OUR_CAT;
   screen!: THREE.Mesh; scrCv!: HTMLCanvasElement; scrTex!: THREE.CanvasTexture; scrText = '';
   flashL!: THREE.DirectionalLight;
   tube!: THREE.PointLight; tubeMesh!: THREE.Mesh;

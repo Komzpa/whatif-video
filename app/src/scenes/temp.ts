@@ -19,7 +19,7 @@ import {
   LitScene, lit, glowMat, canvasTex, blotches, speckle, asphalt, boxMesh, cyl, ground, concreteTex, streetLight, concreteFence,
   POST_BASE, LIN, scaleRGB, mixRGB, lin, EYE, type Pov, type V3, type RGB,
 } from './_kit';
-import { Quadruped, CAT, type QuadSpec } from './_beasts';
+import { Quadruped, OUR_CAT, type QuadSpec } from './_beasts';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
 const PX = 1.95; // pipe axis x (right of the road)
@@ -35,7 +35,7 @@ const DIAL: V3 = [IX - 0.25, 1.62, -2.66]; // the dial thermometer on the inside
 export default class Temp extends LitScene {
   chapter = 'temp';
   cat!: Quadruped;
-  catSpec: QuadSpec = { ...CAT, back: [0.34, 0.12, 0.03], belly: [0.62, 0.36, 0.14], legs: [0.5, 0.26, 0.08], muzzleC: [0.7, 0.5, 0.32], eye: [0.45, 0.95, 0.3], stripes: 70 };
+  catSpec: QuadSpec = OUR_CAT;
   board!: THREE.Mesh; boardCv!: HTMLCanvasElement; boardTex!: THREE.CanvasTexture; boardText = ''; tickText = '';
   frost!: HTMLCanvasElement;
   snow: { x: number; y: number; z: number; sp: number; ph: number }[] = [];

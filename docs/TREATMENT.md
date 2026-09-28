@@ -30,6 +30,13 @@ unfamiliar district's signs into shuffled Cyrillic («деръл бунд гюо
 - **6. Tease: the older kids talk.** Besides the chalk «ПОТЕРЯШКА», three kids shout at the child in rough speech
   balloons of glyph soup (real codec transforms of «ТЫ С КАКОГО РАЙОНА», «ЕСТЬ ЗАКУРИТЬ», «А ЕСЛИ НАЙДУ»), each ≥1.5 s,
   with the flickering maybe-translation «ТЫ С КАКОГО РАЙОНА?» etc. under it.
+- **3/8. One home, one cat.** The home block is one shared model (`app/src/scenes/_home.ts`: 5 floors, 48 m of
+  3.2 m panels, our window 2nd floor middle panel, entrance canopy two panels left, lift room on the roof). `door`
+  sees it through the open gate with a long lens on «home»: our window lit, the cat waiting on the sill (ДОМ · 5,8 км
+  points at our window). `close` is inside that same window. The cat is one spec (`OUR_CAT` in `_beasts.ts`) in every
+  chapter; it leaves on «No one stays» (alone) and is waiting at home at the end: sitting facing the door when it
+  opens, it trots to the child, rubs round its legs and against it at the night-light, is hugged with its head over
+  the child's shoulder by the coat, then sits on the sill by the phone and is the second shape in our window outside.
 - **7. words LED collapse.** Keep the broken mid-collapse fragment («й обну сь»). A letter module first stutters and
   switches OFF (dark plastic, dead dot grid, no image, no glow) before it lets go; it falls and lands dark. When the
   night bus's wheels reach a module lying in its lane, the module cracks and shatters into pieces that skitter along

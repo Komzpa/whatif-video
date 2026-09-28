@@ -20,16 +20,18 @@ import {
   panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, EYE, project, type Pov, type V3, type LitWindow,
 } from './_kit';
 import { Figure } from './_people';
+import { buildHome, HOME } from './_home';
+import { Quadruped, OUR_CAT } from './_beasts';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
-const FY = 3.4; // the room's floor (second floor)
+const FY = HOME.PLINTH + HOME.FLOOR_H; // the room's floor (second floor of the shared home block)
 const RW = 1.6, RD = 3.6, RH = 2.6; // the room: half width, depth (z from -RD to 0), height
-const WIN = { x0: -0.7, x1: 0.7, y0: FY + 0.85, y1: FY + 2.3 }; // our window in the facade
+const WIN = HOME.WIN; // our window in the facade
 const DOOR_X = 0.9; // the room door (in the back wall)
 const NL: V3 = [RW - 0.03, FY + 0.28, -1.5]; // the night-light, low on the right wall
 const HOOK: V3 = [RW - 0.06, FY + 1.78, -3.05]; // the coat hook, right wall by the door
 const PHONE: V3 = [1.05, FY + 0.5, -0.55]; // the phone on a stool by the window
-const PANEL_W = 3.2, FLOOR_H = 2.8, PLINTH = 0.6;
+
 
 type Stroke = [number, number][];
 function circle(cx: number, cy: number, rx: number, ry = rx, n = 18, a0 = 0): Stroke { const s: Stroke = []; for (let i = 0; i <= n; i++) { const a = a0 + (i / n) * Math.PI * 2; s.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]); } return s; }
@@ -56,6 +58,7 @@ export default class Close extends LitScene {
   panes!: WindowPanes; lit0: number[] = [];
   shadowKid!: THREE.Group; lampTip!: V3;
   moon!: THREE.DirectionalLight; yard!: THREE.SpotLight;
+  cat!: Quadruped;
 
   override init() {
     this.initLit();
@@ -76,6 +79,7 @@ export default class Close extends LitScene {
     this.initKid(31);
     this.build();
     this.buildRoom();
+    this.cat = new Quadruped(OUR_CAT, this.three, 72);
     this.kidW = new Figure(this.three, { height: 1.24, kid: true, coat: [0.6, 0.47, 0.08], trousers: [0.06, 0.07, 0.12], hair: [0.05, 0.035, 0.025], pack: [0.16, 0.05, 0.04], seed: 21 }, 64);
     // the child's own shadow in the doorway light (a shape that only casts shadow)
     const inv = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
@@ -91,46 +95,10 @@ export default class Close extends LitScene {
     const S = this.three;
     const { map, rough } = asphalt(211, [10, 10], { puddles: 8, base: '#222427' });
     ground(S, 120, 120, 0, 40, lit([0.6, 0.6, 0.6], { map, roughMap: rough, rough: 0.5 }));
-    // the facade texture: one panel per tile (3.2 x 2.8 m), a window in each
-    const fac = canvasTex(512, 448, (c) => {
-      c.fillStyle = '#77756d'; c.fillRect(0, 0, 512, 448);
-      speckle(c, 512, 448, 8000, 0.22, 212); blotches(c, 512, 448, 10, () => 'rgba(30,28,24,0.25)', 20, 90, 213);
-      c.strokeStyle = 'rgba(25,25,25,0.8)'; c.lineWidth = 4; c.strokeRect(0, 0, 512, 448);
-      const wx0 = (1.6 - 0.7) / 3.2 * 512, wx1 = (1.6 + 0.7) / 3.2 * 512, wy0 = 448 - (2.3 / 2.8) * 448, wy1 = 448 - (0.85 / 2.8) * 448;
-      c.fillStyle = '#0b0d10'; c.fillRect(wx0, wy0, wx1 - wx0, wy1 - wy0);
-      c.strokeStyle = '#b8b4a6'; c.lineWidth = 7; c.strokeRect(wx0, wy0, wx1 - wx0, wy1 - wy0);
-      c.beginPath(); c.moveTo((wx0 + wx1) / 2, wy0); c.lineTo((wx0 + wx1) / 2, wy1); c.moveTo(wx0, wy0 + 50); c.lineTo(wx1, wy0 + 50); c.stroke();
-      c.fillStyle = '#5a5850'; c.fillRect(wx0 - 10, wy1, wx1 - wx0 + 20, 10);
-    });
-    fac.wrapS = fac.wrapT = THREE.RepeatWrapping;
-    fac.repeat.set(1 / PANEL_W, 1 / FLOOR_H); fac.offset.set(0.5, -PLINTH / FLOOR_H);
-    const shape = new THREE.Shape(); shape.moveTo(-24, PLINTH); shape.lineTo(24, PLINTH); shape.lineTo(24, PLINTH + 5 * FLOOR_H); shape.lineTo(-24, PLINTH + 5 * FLOOR_H); shape.closePath();
-    const hole = new THREE.Path(); hole.moveTo(WIN.x0, WIN.y0); hole.lineTo(WIN.x0, WIN.y1); hole.lineTo(WIN.x1, WIN.y1); hole.lineTo(WIN.x1, WIN.y0); hole.closePath(); shape.holes.push(hole);
-    const wall = new THREE.Mesh(new THREE.ShapeGeometry(shape), lit([0.75, 0.75, 0.75], { map: fac, rough: 0.9 }));
-    wall.position.z = 0.3; wall.receiveShadow = true; S.add(wall);
-    boxMesh(S, 48, PLINTH, 0.4, 0, PLINTH / 2, 0.2, lit([0.3, 0.3, 0.29], { map: concreteTex(214, [12, 1]), rough: 0.9 }));
-    boxMesh(S, 48, 0.3, 12, 0, PLINTH + 5 * FLOOR_H + 0.15, -5.7, lit([0.2, 0.2, 0.2], { rough: 0.9 })); // roof
-    boxMesh(S, 48, PLINTH + 5 * FLOOR_H, 11.4, 0, (PLINTH + 5 * FLOOR_H) / 2, -9.0 - RD, lit([0.1, 0.1, 0.1], { rough: 0.9 }), { cast: false }); // the block's body behind the room
-    for (const sx of [-1, 1]) boxMesh(S, 0.3, 5 * FLOOR_H, RD + 0.3, sx * 24, PLINTH + 2.5 * FLOOR_H, -RD / 2 + 0.15, lit([0.3, 0.3, 0.28], { rough: 0.9 }));
-    // the reveal round our window (the wall's thickness) and the sill
-    const rev = lit([0.55, 0.54, 0.5], { rough: 0.9 });
-    boxMesh(S, 1.4, 0.05, 0.3, 0, WIN.y0 - 0.025, 0.15, rev); boxMesh(S, 1.4, 0.05, 0.3, 0, WIN.y1 + 0.025, 0.15, rev);
-    boxMesh(S, 0.05, 1.45, 0.3, WIN.x0 - 0.025, (WIN.y0 + WIN.y1) / 2, 0.15, rev); boxMesh(S, 0.05, 1.45, 0.3, WIN.x1 + 0.025, (WIN.y0 + WIN.y1) / 2, 0.15, rev);
-    boxMesh(S, 1.6, 0.04, 0.28, 0, WIN.y0 - 0.06, 0.42, lit([0.4, 0.4, 0.4], { metal: 0.5, rough: 0.5 }));
-    // our window's frame (white wood, a cross), glass
-    const frameM = lit([0.8, 0.78, 0.72], { rough: 0.6 });
-    boxMesh(S, 1.4, 0.06, 0.08, 0, WIN.y0 + 0.03, 0.05, frameM); boxMesh(S, 1.4, 0.06, 0.08, 0, WIN.y1 - 0.03, 0.05, frameM);
-    boxMesh(S, 0.06, 1.45, 0.08, WIN.x0 + 0.03, (WIN.y0 + WIN.y1) / 2, 0.05, frameM); boxMesh(S, 0.06, 1.45, 0.08, WIN.x1 - 0.03, (WIN.y0 + WIN.y1) / 2, 0.05, frameM);
-    boxMesh(S, 0.05, 1.45, 0.07, 0, (WIN.y0 + WIN.y1) / 2, 0.05, frameM); boxMesh(S, 1.4, 0.05, 0.07, 0, WIN.y1 - 0.33, 0.05, frameM);
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(1.36, 1.41), new THREE.MeshStandardMaterial({ color: 0xa8b8c0, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.1, depthWrite: false }));
-    glass.position.set(0, (WIN.y0 + WIN.y1) / 2, 0.06); S.add(glass);
-    // the other windows of our facade (all dark now; a few light up at the end)
-    const mine: LitWindow[] = [];
-    const r = mulberry32(215);
-    for (let f = 0; f < 5; f++) for (let k = -7; k <= 7; k++) {
-      if (f === 1 && k === 0) continue;
-      mine.push({ p: [k * PANEL_W, PLINTH + f * FLOOR_H + 1.575, 0.31], ry: 0, c: r() < 0.6 ? [0.5, 0.58, 0.78] : [0.8, 0.66, 0.5], k: 0.3 + r() * 0.25, tv: 0 }); // the neighbours: dimmer, cooler than ours
-    }
+    // our block: the shared model (the same house the child saw far off from the gatehouse in `door`)
+    const home = buildHome(S, { hole: true });
+    const mine: LitWindow[] = home.windows;
+    boxMesh(S, 1.5, 0.04, 0.32, 0, WIN.y0 - 0.02, -0.14, lit([0.78, 0.76, 0.7], { rough: 0.6 })); // the inner sill (the cat's place)
     const others = [
       ...panelBlock(S, { cx: 0, cz: 44, len: 60, floors: 5, ang: 0, seed: 216, litRate: 0.3 }),
       ...panelBlock(S, { cx: -32, cz: 16, len: 40, floors: 5, ang: Math.PI / 2, seed: 217, litRate: 0.3 }),
@@ -320,12 +288,14 @@ export default class Close extends LitScene {
     this.shadowKid.visible = false;
     this.shadowKid.position.set(cam.position.x, FY, cam.position.z + 0.05); this.shadowKid.rotation.y = P.yaw;
     const pose = this.torch(t, { raise: outside || PROOF ? 0 : 1 - smoothstep(T.crouch, T.crouch + 0.5, t), on: 0, walk: P.walk });
-    if (!PROOF && !outside) this.cut(t, P, null, { floor: FY, speed: P.walk * 1.1, look: 0, headDown: 0 });
+    const held = t >= T.coat - 0.1 && t < T.phone - 0.2; // the cat in the child's arms (the window-corner shot)
+    if (!PROOF && !outside) this.cut(t, P, null, { floor: FY, speed: P.walk * 1.1, look: 0, headDown: held ? 0.35 : 0, ...(held ? { phone: 0.55, armL: 0.55 } : {}) });
     else if (this.kid) { this.kid.visible = false; this.third = false; }
     // crouched at the night-light the standing shadow would swallow the wall: fold it away
     const crouchK = ease.inOutCubic(prog(t, T.crouch - 0.2, T.crouch + 0.4)) * (1 - ease.inOutCubic(prog(t, T.coat + 0.2, T.coat + 0.8)));
     this.shadowKid.scale.set(1, Math.max(0.05, 1 - crouchK), 1);
     this.shadowKid.visible = !outside && !PROOF && !this.third && crouchK < 0.95;
+    this.poseCat(t, held && !!this.kid && this.third, P);
     this.renderWorld(out, t, { sky: { top: [0.012, 0.014, 0.026], horizon: scaleRGB(LIN.smog, 0.1), low: scaleRGB(LIN.shadow, 0.6), horizonY: 0.5, haze: 1 } });
     const g = this.glow3D;
     if (nl > 0) { const dn = Math.hypot(cam.position.x - NL[0], cam.position.y - NL[1], cam.position.z - NL[2]); g.add(NL[0] - 0.08, NL[1], NL[2], 0.11, 0.11, [1, 0.7, 0.35], 0.8 * nl * clamp(dn / 2.2, 0.3, 1), 3); }
@@ -346,6 +316,53 @@ export default class Close extends LitScene {
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);
     return { ...POST_BASE, vignette: 0.55 };
+  }
+
+  /**
+   * The cat waited at home (TREATMENT r8 note 8): sitting on the floor facing the door when it opens, it gets up and
+   * trots to the child, rubs round its legs and against it at the night-light, is in its arms by the coat, then sits
+   * on the sill by the phone; from outside it is the second shape in our window.
+   */
+  poseCat(t: number, held: boolean, P: Pov) {
+    const T = this.T, E = ease.inOutCubic;
+    const at = (x: number, z: number) => new THREE.Vector3(x, FY, z);
+    const head = (d: THREE.Vector3) => Math.atan2(-d.z, d.x); // the body's +x along d
+    if (held && this.kid) {
+      // hugged to the chest, its head over the child's shoulder, looking back at us (reads from behind)
+      const k = this.kid, f = new THREE.Vector3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)), rgt = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
+      const p = k.headW.clone().addScaledVector(f, 0.02).addScaledVector(rgt, -0.13); p.y -= 0.36;
+      const back = f.clone().negate();
+      this.cat.pose({ pos: p, heading: Math.atan2(-back.z, back.x), dist: 0, speed: 0, sit: 1, t, tailUp: 0, pitch: 0.25, lookK: 0.8, look: this.cam.position.clone() });
+      return;
+    }
+    if (t >= T.phone - 0.2) {
+      // on the sill by the phone, and from outside next to the child in our window
+      this.cat.pose({ pos: new THREE.Vector3(-0.42, WIN.y0 + 0.005, -0.2), heading: -Math.PI / 2 + 0.35, dist: 0, speed: 0, sit: 1, t, tailUp: 0.15, look: new THREE.Vector3(0.05, FY + 1.0, -0.42), lookK: 0.5 });
+      return;
+    }
+    const wait = at(0.3, -1.55), door = new THREE.Vector3(DOOR_X, FY, -RD);
+    const kid = (tt: number) => { const c = this.camIn(tt); return at(c[0], c[2]); };
+    if (t < T.open + 0.55) { // waiting: sitting, facing the door; ears up when the light floods in
+      this.cat.pose({ pos: wait, heading: head(door.clone().sub(wait)), dist: 0, speed: 0, sit: 1 - smoothstep(T.open + 0.35, T.open + 0.55, t), t, tailUp: 0.3, look: door.clone().setY(FY + 1.0), lookK: 1 });
+      return;
+    }
+    if (t < T.in1 + 0.2) { // trots to meet the child
+      const u = E(smoothstep(T.open + 0.55, T.in1 + 0.2, t));
+      const goal = kid(Math.min(t + 0.3, T.in1)).add(new THREE.Vector3(-0.25, 0, 0.15));
+      const p = wait.clone().lerp(goal, u);
+      const d = goal.clone().sub(wait);
+      this.cat.pose({ pos: p, heading: head(d), dist: d.length() * u, speed: 1.4, t, tailUp: 1, look: kid(t).setY(FY + 0.9), lookK: 0.6 });
+      return;
+    }
+    // rubbing: figure-eights round the child's legs, then along its knee as it crouches at the night-light
+    const c = kid(t), tt = t - T.in1 - 0.2;
+    const a = tt * 3.2, r0 = 0.24;
+    const crouch = smoothstep(T.crouch, T.crouch + 0.6, t);
+    const toNL = new THREE.Vector3(NL[0], FY, NL[2]).sub(c).normalize();
+    const side = new THREE.Vector3(-toNL.z, 0, toNL.x);
+    const p = c.clone().add(new THREE.Vector3(Math.cos(a) * r0, 0, Math.sin(a * 2) * r0 * 0.6)).lerp(c.clone().addScaledVector(toNL, 0.62).addScaledVector(side, 0.14 * Math.sin(tt * 2.2)), crouch);
+    const tan = new THREE.Vector3(-Math.sin(a) * r0, 0, Math.cos(a * 2) * r0 * 1.2).lerp(side.clone().multiplyScalar(Math.cos(tt * 2.2)), crouch);
+    this.cat.pose({ pos: p, heading: head(tan), dist: tt * 0.5, speed: 0.5, t, tailUp: 1, look: this.cam.position.clone(), lookK: 0.7 * crouch });
   }
 
   ghost(c: CanvasRenderingContext2D, t: number, k: number, alpha: number) {

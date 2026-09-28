@@ -20,7 +20,7 @@ import {
   LitScene, lit, glowMat, canvasTex, blotches, speckle, asphalt, boxMesh, cyl, ground, planeSign, concreteTex, brickTex, corrugatedTex,
   POST_BASE, LIN, scaleRGB, mixRGB, lin, project, EYE, type Pov, type V3,
 } from './_kit';
-import { Quadruped, CAT, type QuadSpec } from './_beasts';
+import { Quadruped, OUR_CAT, type QuadSpec } from './_beasts';
 import { Tree } from './_tree';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
@@ -37,7 +37,7 @@ export default class CatScene extends LitScene {
   chapter = 'cat';
   tree!: Tree;
   cat!: Quadruped;
-  catSpec: QuadSpec = { ...CAT, back: [0.34, 0.12, 0.03], belly: [0.62, 0.36, 0.14], legs: [0.5, 0.26, 0.08], muzzleC: [0.7, 0.5, 0.32], eye: [0.45, 0.95, 0.3], stripes: 70 };
+  catSpec: QuadSpec = OUR_CAT;
   path: CatKey[] = [];
   perch = new THREE.Vector3(); low = new THREE.Vector3();
   heightTxt = '';

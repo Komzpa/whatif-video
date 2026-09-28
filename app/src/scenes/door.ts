@@ -18,6 +18,8 @@ import { F, font } from '../engine/type';
 import { logText } from '../textlog';
 import { homeLabel, city, garble } from '../city';
 import { metroSignCanvas } from './_ru';
+import { buildHome, HOME, type Home } from './_home';
+import { Quadruped, OUR_CAT } from './_beasts';
 import { drawOpenHand, pxAt, type Light } from './_hands';
 import {
   LitScene, lit, glowMat, canvasTex, blotches, speckle, asphalt, boxMesh, cyl, ground, planeSign, concreteFence, streetLight, panelBlock, WindowPanes,
@@ -34,6 +36,7 @@ const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.sea
 const SEAT: V3 = [0.12, 0.98, 0.1];
 const STAND: V3 = [-1.08, EYE, -0.22];
 const LAMP: V3 = [0.62, 1.2, -0.95]; // the desk lamp's shade
+const HOME_P: V3 = [2, 0, -90]; // the home block, far out beyond the gate (the same model as in `close`)
 
 export default class Door extends LitScene {
   chapter = 'door';
@@ -46,6 +49,7 @@ export default class Door extends LitScene {
   scrText = { title: '', yes: '', no: '' };
   hammer = new THREE.Group(); handle = new THREE.Group(); leaf = new THREE.Group();
   panes!: WindowPanes;
+  home!: Home; homeCat!: Quadruped;
   winDrops!: THREE.Mesh;
   metroSign!: THREE.Mesh;
   rainPts: { x: number; z: number; ph: number; sp: number }[] = [];
@@ -72,7 +76,9 @@ export default class Door extends LitScene {
     // lamp light; over the shoulder when the bell rings and the child goes to the door; the button in first person;
     // low by the window when the handle is tried, the child backing away from the shape on the glass
     this.shots = [
-      [T.s + 1.35, T.bell1 + 0.05, { k: 'free', p: [0.75, 1.9, 1.15], p1: [0.6, 1.8, 0.95], look: [PORTRAIT ? 0.8 : -0.1, PORTRAIT ? 1.1 : 0.8, -1.3], look1: [PORTRAIT ? 0.9 : 0.0, PORTRAIT ? 1.1 : 0.8, -1.3], fov: PORTRAIT ? 90 : 72 }],
+      // far out there, as the child stares at it: our window on the home block, the lamp on, the cat waiting (a long lens)
+      [T.home + 0.1, T.alone + 0.45, { k: 'free', p: [0.37, 1.3, -1.05], p1: [0.37, 1.3, -1.05], look: [HOME_P[0] - 0.3, 4.85, HOME_P[2] + 0.3], look1: [HOME_P[0], 5.0, HOME_P[2] + 0.3], fov: PORTRAIT ? 7 : 4.6 }],
+      [T.alone + 0.45, T.bell1 + 0.05, { k: 'free', p: [0.75, 1.9, 1.15], p1: [0.6, 1.8, 0.95], look: [PORTRAIT ? 0.8 : -0.1, PORTRAIT ? 1.1 : 0.8, -1.3], look1: [PORTRAIT ? 0.9 : 0.0, PORTRAIT ? 1.1 : 0.8, -1.3], fov: PORTRAIT ? 90 : 72 }],
       [T.bell1 + 0.05, T.walk1, { k: 'ots', d: 1.5, side: -1.2, h: 2.2, aimY: PORTRAIT ? -0.9 : 0 }],
       [T.bell2, T.leave1 + 2, { k: 'free', p: [0.7, 1.55, 1.2], p1: [0.6, 1.5, 1.1], look: [WALL_X, 1.1, 0.1], look1: [WALL_X, 1.15, 0.05], fov: PORTRAIT ? 84 : 64 }],
     ];
@@ -281,12 +287,18 @@ export default class Door extends LitScene {
     cyl(Y, [4.6, 0, -21.9], [4.6, 5.0, -21.9], 0.06, vm);
     this.addPoint([4.6, 5.6, -21.2], LIN.red, 6);
     const wins = [
-      ...panelBlock(Y, { cx: -30, cz: -70, len: 96, floors: 9, ang: 0.12, seed: 3, litRate: 0.08 }),
-      ...panelBlock(Y, { cx: 55, cz: -95, len: 80, floors: 9, ang: -0.3, seed: 4, litRate: 0.07 }),
+      ...panelBlock(Y, { cx: -64, cz: -70, len: 96, floors: 9, ang: 0.12, seed: 3, litRate: 0.08 }),
+      ...panelBlock(Y, { cx: 95, cz: -112, len: 80, floors: 9, ang: -0.3, seed: 4, litRate: 0.07 }),
       ...panelBlock(Y, { cx: 10, cz: -150, len: 120, floors: 9, ang: 0.02, seed: 5, litRate: 0.06 }),
       ...panelBlock(Y, { cx: -90, cz: -120, len: 70, floors: 5, ang: 0.5, seed: 6, litRate: 0.07 }),
-      ...panelBlock(Y, { cx: 40, cz: -48, len: 60, floors: 5, ang: -0.1, seed: 7, litRate: 0.09 }),
+      ...panelBlock(Y, { cx: 58, cz: -48, len: 60, floors: 5, ang: -0.1, seed: 7, litRate: 0.09 }),
     ];
+    // home, far out there: the SAME block the child comes back to in `close` (shared model), facing the booth; the lamp
+    // left on in our window and the cat waiting on the sill (TREATMENT r8 notes 3 and 8)
+    this.home = buildHome(Y, { pos: [HOME_P[0], 0, HOME_P[2]], ry: Math.atan2(-HOME_P[0], -HOME_P[2]), ourLight: 0.55 }); // seen through the open gate, left of the metro
+    wins.push(...this.home.windows.filter((_, i) => hash(i, 41) < 0.2).map((w) => ({ ...w, c: [0.95, 0.7, 0.4] as [number, number, number], k: 0.6 })));
+    this.homeCat = new Quadruped(OUR_CAT, Y, 56);
+    this.addLamp(this.home.toWorld([4.5, 6.5, 8]), { k: 90, angle: 0.8, color: [0.95, 0.75, 0.5], target: this.home.toWorld([1, 3.5, 0]) }); // the yard lamp in front of our block
     this.panes = new WindowPanes(Y, wins);
     // rain in the yard (3D streaks)
     const r = mulberry32(5);
@@ -434,6 +446,10 @@ export default class Door extends LitScene {
     this.drawGlass(t, 1);
     this.drawScreen(t, scrOn);
     // the yard: the windows breathe (a television or two)
+    {
+      const ry = this.home.ry, p = this.home.toWorld([0.25, HOME.WIN.y0, -0.2]);
+      this.homeCat.pose({ pos: new THREE.Vector3(...p), heading: Math.atan2(-Math.cos(ry), Math.sin(ry)), dist: 0, speed: 0, sit: 1, t, tailUp: 0.1, look: new THREE.Vector3(0, 1.2, 0), lookK: 0.6 });
+    }
     this.panes.set((w, i) => (w.tv ? 0.6 + 0.4 * Math.sin(t * 7 + i) * Math.sin(t * 2.3 + i * 3) : 1));
     this.torchL.intensity = 0;
     // ---- render
@@ -472,7 +488,7 @@ export default class Door extends LitScene {
   drawUI(u: CanvasRenderingContext2D, t: number, f: Frame) {
     const T = this.T;
     this.heading(u, t, f);
-    this.callout(u, t, homeLabel('door'), T.home, T.bell1 - 0.25, () => this.onScreen(25, 16, -88), { places: [city().home.name] });
+    this.callout(u, t, homeLabel('door'), T.home + 0.15, T.alone + 0.35, () => this.onScreen(...this.home.our), { places: [city().home.name] });
   }
 
   /** The left hand: presses the lamp switch; later reaches for the big button and stops short. */

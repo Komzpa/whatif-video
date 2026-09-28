@@ -18,7 +18,7 @@ import {
   panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, lin, EYE, project, type Pov, type V3,
 } from './_kit';
 import { lampDie } from './_motifs';
-import { Quadruped, CAT, type QuadSpec } from './_beasts';
+import { Quadruped, OUR_CAT, type QuadSpec } from './_beasts';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
 const WX = -1.5; // the wall's axis
@@ -30,7 +30,7 @@ const BX = 22; // the block across the road (its facade at BX - 6)
 export default class Alone extends LitScene {
   chapter = 'alone';
   cat!: Quadruped;
-  catSpec: QuadSpec = { ...CAT, back: [0.34, 0.12, 0.03], belly: [0.62, 0.36, 0.14], legs: [0.5, 0.26, 0.08], muzzleC: [0.7, 0.5, 0.32], eye: [0.45, 0.95, 0.3], stripes: 70 };
+  catSpec: QuadSpec = OUR_CAT;
   panes!: WindowPanes;
   people: { m: THREE.Mesh; mat: THREE.MeshBasicMaterial; off: number; tv: boolean; p: V3 }[] = [];
   lamps: V3[] = [];

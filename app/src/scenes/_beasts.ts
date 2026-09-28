@@ -108,6 +108,9 @@ export const CAT: QuadSpec = {
   gait: 'walk', cycle: 0.55,
 };
 
+/** The child's own cat (a ginger tabby): ONE spec for every chapter it appears in (TREATMENT r8 continuity). */
+export const OUR_CAT: QuadSpec = { ...CAT, back: [0.34, 0.12, 0.03], belly: [0.62, 0.36, 0.14], legs: [0.5, 0.26, 0.08], muzzleC: [0.7, 0.5, 0.32], eye: [0.45, 0.95, 0.3], stripes: 70 };
+
 export interface QuadPose {
   pos: THREE.Vector3; heading: number; // root on the ground (between the feet), facing +x rotated by heading about y
   dist: number; speed: number; // distance travelled (drives the gait), speed m/s (0 = standing)
