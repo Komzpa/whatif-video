@@ -21,7 +21,7 @@ import {
 } from './_kit';
 import { makeLamp, logText } from './_motifs';
 import { Quadruped, OUR_CAT, type QuadSpec } from './_beasts';
-import { Figure, type FigureSpec } from './_people';
+import { Figure, STRANGER, faceTo, type FigureSpec } from './_people';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
 const GX = -5.6; // the garage fronts (doors face +x)
@@ -31,6 +31,7 @@ const GW = 3.3; // one garage
 const NG = 6;
 const POSTER: V3 = [-8.4, 1.45, G_Z0 + 0.02];
 const STOP_Z = -7.2; // where the child stops
+const MAN: V3 = [3.0, 0, -30]; // the man in the long coat, far off at the yard's end under its lamp, straight down the yard (~23 m)
 const NAME = 'ПОТЕРЯШКА';
 /** The older kids' lines (r8 note 6): shouted at the child as glyph soup, the grown-up's reading flickering under them. */
 const SAYS: { kid: number; ru: string; tr: string }[] = [
@@ -55,6 +56,7 @@ export default class Tease extends LitScene {
   grain!: HTMLCanvasElement;
   bulbP: V3 = [0, 0, 0];
   lampP: V3 = [-11.4, 6.5, -13.5];
+  man!: Figure; manLamp: V3 = [0, 0, 0];
   yardP: V3 = [0, 0, 0];
 
   override init() {
@@ -84,6 +86,8 @@ export default class Tease extends LitScene {
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
     this.buildKids();
+    this.man = new Figure(this.three, STRANGER, 56); // first seen here: far off by the rocket frame, watching (r8 note 8)
+    { const hp = streetLight(this.three, MAN[0] + 1.6, MAN[2] - 0.6, { h: 5.5, arm: [-1.2, 0, 0.3] }); this.addLamp(hp, { k: 40, angle: 0.9, target: [MAN[0], 0, MAN[2]] }); this.manLamp = hp; }
     this.buildScrawls();
     this.obstacles = () => { const b = this.planeBox(this.poster); return b ? [b] : []; };
   }
@@ -338,6 +342,7 @@ export default class Tease extends LitScene {
     this.swing.rotation.z = Math.sin(t * 1.6) * 0.28;
     const c = this.catAt(t);
     const camP = new THREE.Vector3(0.3, EYE, this.camZ(t));
+    { const mp = new THREE.Vector3(MAN[0], 0, MAN[2]); this.man.g.visible = t > T.tease - 2.6; this.man.pose({ pos: mp, heading: faceTo(mp, { x: 0, z: STOP_Z }), t, speed: 0, dist: 0, look: 0, headDown: 0.05 }); }
     this.cat.pose({ pos: c.pos, heading: c.heading, dist: c.dist, speed: c.speed, t, sit: c.sit, crouch: c.crouch, look: c.look, lookK: c.look ? 0.7 : 0, tailUp: c.sit > 0.5 ? 0.2 : 0.6, tailWag: 0.04, earBack: smoothstep(T.laugh - 0.3, T.laugh + 0.3, t) * 0.9 });
     // the kids: heads follow the child, phones up, laughing on «laugh», one points
     const laugh = smoothstep(T.laugh - 0.2, T.laugh + 0.1, t) * (1 - smoothstep(T.call + 1.5, T.call + 3.0, t)) + 0.4 * smoothstep(T.name, T.name + 0.5, t);
@@ -371,6 +376,7 @@ export default class Tease extends LitScene {
     this.renderWorld(out, t, { sky: { top: [0.008, 0.01, 0.018], horizon: scaleRGB(LIN.smog, 0.12), low: scaleRGB(LIN.shadow, 0.8), horizonY: 0.52, haze: 1 } });
     const g = this.glow3D;
     g.add(this.lampP[0], this.lampP[1], this.lampP[2], 0.45, 0.35, LIN.sodium, 2.2, 4);
+    g.add(this.manLamp[0], this.manLamp[1], this.manLamp[2], 0.4, 0.3, LIN.sodium, 2.0, 4);
     g.add(this.yardP[0], this.yardP[1], this.yardP[2], 0.35, 0.28, LIN.sodium, 1.8, 4);
     g.add(this.bulbP[0], this.bulbP[1], this.bulbP[2], 0.18, 0.18, [1.0, 0.8, 0.5], 1.5, 4);
     for (const z of [-4, -20, -36]) g.add(23.3, 2.9, z, 0.3, 0.3, lin('#ffb85c'), 1.2, 4);

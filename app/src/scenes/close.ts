@@ -16,7 +16,7 @@ import { clamp, ease, lerp, smoothstep, keys, mulberry32, hash, prog } from '../
 import { homeLabel, city } from '../city';
 import { drawOpenHand, pxAt, type Light } from './_hands';
 import {
-  LitScene, lit, canvasTex, speckle, blotches, asphalt, boxMesh, cyl, ground, concreteTex, streetLight,
+  LitScene, KID, lit, canvasTex, speckle, blotches, asphalt, boxMesh, cyl, ground, concreteTex, streetLight,
   panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, EYE, project, type Pov, type V3, type LitWindow,
 } from './_kit';
 import { Figure } from './_people';
@@ -80,7 +80,7 @@ export default class Close extends LitScene {
     this.build();
     this.buildRoom();
     this.cat = new Quadruped(OUR_CAT, this.three, 72);
-    this.kidW = new Figure(this.three, { height: 1.24, kid: true, coat: [0.6, 0.47, 0.08], trousers: [0.06, 0.07, 0.12], hair: [0.05, 0.035, 0.025], pack: [0.16, 0.05, 0.04], seed: 21 }, 64);
+    this.kidW = new Figure(this.three, { ...KID, seed: 21 }, 64); // the same child (shared spec)
     // the child's own shadow in the doorway light (a shape that only casts shadow)
     const inv = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
     this.shadowKid = new THREE.Group(); this.three.add(this.shadowKid);

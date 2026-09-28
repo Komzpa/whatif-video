@@ -13,6 +13,7 @@ import { W, H, PORTRAIT } from '../engine/gl';
 import { clamp, ease, lerp, smoothstep, keys, mulberry32, hash, prog } from '../engine/util';
 import { homeLabel, city } from '../city';
 import { drawOpenHand, pxAt, type Light } from './_hands';
+import { Figure, STRANGER, faceTo } from './_people';
 import {
   LitScene, lit, glowMat, canvasTex, speckle, asphalt, boxMesh, cyl, ground, concreteTex, brickTex, streetLight,
   panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, lin, EYE, project, type Pov, type V3,
@@ -30,6 +31,7 @@ const BX = 22; // the block across the road (its facade at BX - 6)
 export default class Alone extends LitScene {
   chapter = 'alone';
   cat!: Quadruped;
+  man!: Figure;
   catSpec: QuadSpec = OUR_CAT;
   panes!: WindowPanes;
   people: { m: THREE.Mesh; mat: THREE.MeshBasicMaterial; off: number; tv: boolean; p: V3 }[] = [];
@@ -62,6 +64,7 @@ export default class Alone extends LitScene {
     this.initKid(17);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
+    this.man = new Figure(this.three, STRANGER, 56); // closer now: across the road under the streetlight (r8 note 8)
   }
 
   build() {
@@ -212,6 +215,7 @@ export default class Alone extends LitScene {
     this.fogE.color.setRGB(0.02, 0.022, 0.03);
     const c = this.catAt(t);
     this.cat.g.visible = c.vis > 0;
+    { const mp = new THREE.Vector3(12.0, 0, -9.2); this.man.g.visible = t > T.gone; this.man.pose({ pos: mp, heading: faceTo(mp, { x: 0, z: this.camZ(t) }), t, speed: 0, dist: 0, look: 0, headDown: 0.05 }); }
     this.cat.pose({ pos: c.pos, heading: c.heading, dist: c.dist, speed: c.speed, t, sit: c.sit, crouch: c.crouch, jump: c.jump, pitch: c.pitch, look: c.look, lookK: c.lookK, tailUp: 0.7, tailWag: 0.06 });
     // the windows: people inside, a TV flickering; after «friend» they go dark one by one
     const dark0 = T.friend + 1.6;

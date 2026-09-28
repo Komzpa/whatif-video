@@ -50,6 +50,7 @@ Each check must fail on the rejected draft named in its row (baseline proof) and
 | A10 | Loudness and sync: integrated LUFS −14 ± 1; each lyric line starts within ±60 ms of its aligned word | all | — |
 | A12 | Line-map labels intersecting a station dot, the line or the board edge; stations not evenly spaced on one straight line | 0 | lost r3 (≈9 s) |
 | A13 | Latin letters or box-drawing glyphs in any on-screen text outside glyph soup; every glyph-soup ('garble') string must re-derive from a Russian city.json name by a real codec transform (TREATMENT item 6 + r8) | 0 | lost r3, r2 author |
+| A14 | Continuity (`qa-continuity.ts`, static): child from `KID`, torch hand only via `drawTorchHand`, every cat `OUR_CAT`, the man in tease/alone/words/stranger from `STRANGER`, the home in door and close from `buildHome` (TREATMENT r8 continuity table; visual half `proof-continuity.py`) | 0 | r1 (252b4c1: 18 faults) |
 | A11 | Draft identity: file name carries rN, and a `…-rN.json` next to it holds the content sha of the render inputs (code, data, audio) | present, sha differs from r(N−1) | — |
 
 ## Gate 3: visual self-check (builder)
@@ -106,5 +107,5 @@ Only then open them for the author, saying which version changed and what change
 - The first 2 seconds hook: something happens to the child; the video never opens on a title card or a book.
 - The mood is lost and helpless. No adult proxy (drone, helper UI) solves anything for the child.
 - A living creature is present where TREATMENT requires one (the cat through temp, storm and tease; it leaves on
-  "No one stays").
+  "No one stays"; r8: it is also seen waiting at home in our window in `door`, and greets the child in `close`).
 - Every frozen frame is worth posting (brag's "every frame postable").

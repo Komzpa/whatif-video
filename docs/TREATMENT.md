@@ -52,6 +52,27 @@ unfamiliar district's signs into shuffled Cyrillic («деръл бунд гюо
   the asphalt (cold glints, not lit LEDs). Modules that land after the bus has passed stay whole and dark.
 
 
+- **8. The stranger is one man, closing in.** One spec (`STRANGER` in `_people.ts`: 1.86 m, black long coat, hat,
+  dark trousers). In `door` he is only the hat-and-shoulders shape on the reeded glass and in the intercom camera.
+  From then on he is tracked, each time nearer and never explained: `tease` far off (~23 m) under his own
+  streetlight beyond the rocket frame, facing the child, from «tease» on; `alone` across the road under the
+  streetlight (~15 m) once the cat has gone; `words` walking the far pavement and stopping opposite the bus stop
+  (~12 m) after the bus has passed; `stranger` the chase itself. `dark` and `close` do not show him.
+- **8. The child is one child.** One spec (`KID` in `_kit.ts`: 1.24 m, yellow coat, dark-blue trousers, brown pack),
+  built by `initKid` in every chapter with a third-person child and by `close` for the figure walking home; the seed
+  only shifts the gait phase.
+
+### r8 continuity table (every recurring element; checked by `qa-continuity.ts` = TESTPLAN A14, and by eye on
+### `out/wip/author-fix-r2/proof-continuity-{16x9,9x16}.jpg`)
+| Element | Shared asset | First appearance | Last appearance | Appears in (every cut is checked) |
+|---|---|---|---|---|
+| Child (outfit) | `KID` (`_kit.ts`) | `door`, from behind in the stairwell (~0:31) | `close`, walking in / at the night-light (~2:48) | door, dogs, cat, temp (inside and out, same coat), storm, tease, alone, words, stranger, dark, close; `lost` is first person only |
+| Torch (right fist round the barrel, lanyard) | `drawTorchHand` (`_hands.ts`), called from `_kit.ts` and `lost.ts`; third person: lens glow in the figure's right hand | `lost`, the first first-person shot | `close`, already off, lowered as the child crouches at the night-light (~2:42) | every first-person shot; proof `proof-hands-*.jpg` at 25, 40.3, 68.5, 103.0, 113.0, 137.6 s |
+| Cat | `OUR_CAT` (`_beasts.ts`) | `door`, waiting on the inner sill of our window, long lens on «home» (0:27–0:29) | `close`, on the sill by the phone, seen from outside in our window (~2:52) | door (at home), cat, temp, storm, tease, alone (leaves on «No one stays»), close (greets, rubs, is held, sill) |
+| Stranger | `STRANGER` (`_people.ts`) | `door`, shape on the glass and in the intercom camera (0:30–0:35) | `stranger`, the chase (to ~2:30) | door, tease (~23 m), alone (~15 m), words (~12 m), stranger |
+| Home block | `buildHome` (`_home.ts`) | `door`, through the gate with a long lens, our window lit (0:27–0:29) | `close`, the outside shot, our window with child and cat (~2:50–2:56) | door, close (inside that window) |
+| ДОМ · x км counter | the chapter's callout line, value from `data/city.json` | `lost`, «ДОМ · 6,3 км» under the gate sign (~0:24) | `close`, «ДОМ · 0,0 км» | one per chapter, only decreasing (TESTPLAN A5, dynamic, `qa-reading-time.ts`); never flickers |
+
 ## r7: Russian clip, Soviet city (author, 2026-09-27 01:15; overrides every English-text and grid-city item below)
 «надо клип делать весь на русском как книжка исходная. и город "советский" брать, не квадратно-гнездовой.»
 **Language.** Every word on screen is Russian, as in the source handbook «Что делать, если…»:

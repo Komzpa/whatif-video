@@ -20,6 +20,7 @@ import {
   panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, lin, EYE, type Pov, type V3, type Box,
 } from './_kit';
 import { logText } from './_motifs';
+import { Figure, STRANGER, faceTo } from './_people';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
 const FZ = -17.5; // the facade across the road
@@ -42,6 +43,7 @@ export default class Words extends LitScene {
   bus!: THREE.Group; busSign = ''; busSignMesh!: THREE.Mesh; busLights: THREE.Light[] = [];
   panes!: WindowPanes;
   lampP: V3 = [0, 0, 0];
+  man!: Figure;
   offMat!: THREE.MeshStandardMaterial;
 
   override init() {
@@ -73,6 +75,7 @@ export default class Words extends LitScene {
     this.build();
     this.buildScreen();
     this.buildBus();
+    this.man = new Figure(this.three, STRANGER, 56); // closer again: along the far pavement, then opposite the stop (r8 note 8)
     this.obstacles = () => { const b = this.screenRect(); return b ? [b] : []; };
   }
 
@@ -393,6 +396,11 @@ export default class Words extends LitScene {
     const bx = this.busX(t);
     this.bus.visible = bx > -70 && bx < 70;
     this.bus.position.set(bx, 0, BUS_Z);
+    { // the man: along the far pavement while the letters fall, stops opposite the stop; there when the bus has gone
+      const u = smoothstep(T.words, T.say + 0.6, t), mp = new THREE.Vector3(lerp(-16, 3.2, u), 0, -10.6);
+      this.man.g.visible = t > T.words - 0.2;
+      this.man.pose({ pos: mp, heading: u < 1 ? faceTo(mp, { x: 20, z: -10.6 }) * (1 - smoothstep(T.say + 0.3, T.say + 0.9, t)) + faceTo(mp, { x: 0.15, z: 1.3 }) * smoothstep(T.say + 0.3, T.say + 0.9, t) : faceTo(mp, { x: 0.15, z: 1.3 }), t, speed: u < 1 ? 1.2 : 0, dist: u * 19, look: 0, headDown: 0.05 });
+    }
     for (const l of this.busLights) l.intensity = this.bus.visible ? (l instanceof THREE.SpotLight ? 90 : 5) : 0;
     const P = this.pov(t);
     this.setCam(P, t, P.walk);

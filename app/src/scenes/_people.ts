@@ -12,6 +12,13 @@ export interface FigureSpec {
   height: number; coat: RGB3; trousers?: RGB3; skin?: RGB3; hair?: RGB3; shoes?: RGB3;
   hat?: boolean; hood?: boolean; pack?: RGB3; beanie?: RGB3; kid?: boolean; longCoat?: boolean; bulk?: number; seed?: number;
 }
+/** The man who follows the child (TREATMENT r8 note 8): ONE figure from the teasing yard to the `stranger` chapter —
+ *  a long black coat and a hat, 1.86 m, always black against a light, closer in each chapter (tease ~23 m, alone ~15 m, words ~12 m,
+ *  then the chase). The intercom picture in `door` shows the same hat. */
+export const STRANGER: FigureSpec = { height: 1.86, coat: [0.035, 0.035, 0.04], trousers: [0.02, 0.02, 0.025], shoes: [0.01, 0.01, 0.01], hat: true, longCoat: true, bulk: 1.1, seed: 11 };
+/** The heading that makes a figure (or a quadruped) face from `a` towards `b` on the ground. */
+export const faceTo = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.atan2(-(b.z - a.z), b.x - a.x);
+
 export interface FigurePose {
   pos: THREE.Vector3; heading: number; t: number;
   dist?: number; speed?: number; // distance walked (m) drives the gait; speed 0 = standing

@@ -21,7 +21,7 @@ import {
   LitScene, lit, canvasTex, speckle, blotches, asphalt, boxMesh, cyl, ground, concreteTex, streetLight,
   panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, EYE, project, type Pov, type V3,
 } from './_kit';
-import { Figure } from './_people';
+import { Figure, STRANGER } from './_people';
 import { makeLamp } from './_motifs';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
@@ -91,7 +91,7 @@ export default class Stranger extends LitScene {
     this.buildCar();
     this.buildKiosk();
     this.buildCams();
-    this.man = new Figure(this.three, { height: 1.86, coat: [0.035, 0.035, 0.04], trousers: [0.02, 0.02, 0.025], shoes: [0.01, 0.01, 0.01], hat: true, longCoat: true, bulk: 1.1, seed: 11 }, 72);
+    this.man = new Figure(this.three, STRANGER, 72);
     this.seller = new Figure(this.three, { height: 1.66, coat: [0.32, 0.16, 0.12], trousers: [0.1, 0.08, 0.08], hair: [0.12, 0.07, 0.04], beanie: [0.55, 0.52, 0.48], bulk: 1.15, seed: 12 }, 56);
     this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.012), new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(0.5, 0.65, 0.85, THREE.LinearSRGBColorSpace) }));
     this.three.add(this.phone);

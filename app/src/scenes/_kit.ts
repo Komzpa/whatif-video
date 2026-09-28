@@ -12,7 +12,7 @@ import { CityScene, LIN, POST_BASE, SAFE, scaleRGB, mixRGB, project, drawCallout
 import { drawHeading } from './_ru';
 import { torchPose, drawTorchHand, type Light, type TorchPose } from './_hands';
 import { entriesOf } from '../contents';
-import { Figure } from './_people';
+import { Figure, type FigureSpec } from './_people';
 
 export type V3 = [number, number, number];
 export type RGB = [number, number, number];
@@ -195,6 +195,10 @@ export interface ShotLights { amb: number; warm: number }
  * The base class of the lit chapters. Owns: the scene's lights (hemisphere + the torch spotlight with shadows),
  * the first-person camera, the torch pose and hand, the chapter line, callout placement clear of signs.
  */
+/** The child: ONE outfit in every chapter (TREATMENT r8 continuity): the yellow coat, dark trousers, dark hair, the
+ *  small red-brown backpack, 1.24 m (about 4.5 heads). */
+export const KID: FigureSpec = { height: 1.24, kid: true, coat: [0.6, 0.47, 0.08], trousers: [0.05, 0.055, 0.08], shoes: [0.03, 0.02, 0.02], hair: [0.03, 0.02, 0.015], pack: [0.16, 0.05, 0.04] };
+
 export abstract class LitScene extends CityScene {
   hemi = new THREE.HemisphereLight(0x6f7e92, 0x1a1612, 0.35);
   torchL = new THREE.SpotLight(0xffe8b5, 0, 0, 0.36, 0.7, 2);
@@ -246,9 +250,9 @@ export abstract class LitScene extends CityScene {
 
   // ---- third-person shots
   /** The child in a yellow raincoat with the hood up (the sleeve of the first-person shots), about 4.5 heads tall. */
-  initKid(seed = 31, coat: RGB = [0.6, 0.47, 0.08]) {
+  initKid(seed = 31) {
     // hood down (a hood up reads as a round ball on a round body: R2 «Kenny»), dark hair, a small backpack
-    this.kid = new Figure(this.three, { height: 1.24, kid: true, coat, trousers: [0.05, 0.055, 0.08], shoes: [0.03, 0.02, 0.02], hair: [0.03, 0.02, 0.015], pack: [0.16, 0.05, 0.04], seed }, 64);
+    this.kid = new Figure(this.three, { ...KID, seed }, 64);
     this.kid.visible = false;
     return this.kid;
   }
