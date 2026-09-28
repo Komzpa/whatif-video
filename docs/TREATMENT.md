@@ -37,6 +37,15 @@ unfamiliar district's signs into shuffled Cyrillic («деръл бунд гюо
   chapter; it leaves on «No one stays» (alone) and is waiting at home at the end: sitting facing the door when it
   opens, it trots to the child, rubs round its legs and against it at the night-light, is hugged with its head over
   the child's shoulder by the coat, then sits on the sill by the phone and is the second shape in our window outside.
+- **9. `door` is a flashback that intrudes.** Grammar: a hard cut in on a white frame with a zoom punch (no
+  transition from `lost`); the whole chapter in a memory grade on the world only (saturation 0.32, cold tint, lifted
+  blacks, overexposed ×1.22, heavy bloom and chromatic fringe, grain and vignette breathing at 0.9 Hz), the sung line
+  keeping its colours; each ring of the bell repeated as four decaying punches (zoom, shake, a flash in the world's
+  lift, extra grain and fringe) — the ring echoing; stutter frames (6 per second, some held twice) while the shape is
+  on the reeded glass after each ring; time stretched to 0.6× as the child crosses to the door, ended by a jump cut;
+  one white frame at the end and a hard snap back to the present (`dogs` in its normal grade). The world runs on its
+  own clock (`memT`), both rings still land on the lyric. The song is untouched: the ring's repetition is visual
+  (the audio is the recorded track; no sound design pipeline exists to distort it).
 - **7. words LED collapse.** Keep the broken mid-collapse fragment («й обну сь»). A letter module first stutters and
   switches OFF (dark plastic, dead dot grid, no image, no glow) before it lets go; it falls and lands dark. When the
   night bus's wheels reach a module lying in its lane, the module cracks and shatters into pieces that skitter along

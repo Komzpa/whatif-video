@@ -416,8 +416,39 @@ export default class Door extends LitScene {
   }
 
   // ================================================================ frame
+  /**
+   * The flashback's clock (TREATMENT r8 note 9): the world runs on its own time while the sung line stays on the
+   * song's. Stutter (frames held, 6 per second) while the shape is on the glass after each ring; stretched time (0.6x)
+   * as the child crosses to the door, ended by a jump cut; identity elsewhere, so both rings land on the lyric.
+   */
+  memT(tr: number) {
+    const T = this.T;
+    const stut = (a: number, b: number) => (tr >= a && tr < b ? a + Math.floor((tr - a) * 6) / 6 + (hash(Math.floor((tr - a) * 6), 9) < 0.25 ? -1 / 6 : 0) : null);
+    const s1 = stut(T.bell1 + 0.12, T.bell1 + 0.9); if (s1 !== null) return Math.max(T.bell1 + 0.12, s1);
+    const s2 = stut(T.bell2 + 0.2, T.bell2 + 1.4); if (s2 !== null) return Math.max(T.bell2 + 0.2, s2);
+    const a = T.bell1 + 0.9, b = T.reach0;
+    if (tr >= a && tr < b) return a + 0.6 * (tr - a);
+    return tr;
+  }
+  /** The flashback's grade and its intrusions (world only; the HUD keeps its colours): hard cut in (a white frame and a punch), the memory grade (washed out,
+   *  overexposed, cold, heavy grain, a breathing vignette), each ring repeated as decaying punches, a snap back out. */
+  memPost(tr: number) {
+    const T = this.T, s = this.ctx.start, e = this.ctx.end;
+    const echoes = (b: number) => { let k = 0; for (let i = 0; i < 4; i++) { const d = tr - (b + i * 0.21); if (d >= 0 && d < 0.2) k = Math.max(k, (1 - d / 0.2) * (1 - i * 0.22)); } return k; };
+    const ring = Math.max(echoes(T.bell1), echoes(T.bell2));
+    const inK = 1 - smoothstep(s, s + 0.3, tr), outK = tr >= e - 1 / 60 ? 1 : 0; // one white frame: the snap back to the present
+    const breathe = 0.5 + 0.5 * Math.sin((tr - s) * 2 * Math.PI * 0.9);
+    return {
+      sat: tr > T.home + 0.1 && tr < T.alone + 0.45 ? 0.6 : 0.32, tint: [0.92, 1.0, 1.07] as [number, number, number], lift: 0.012 + Math.max(inK > 0.8 ? 1.1 : 0, outK * 1.2, 0.3 * ring * (ring > 0.7 ? 1 : 0)), exposure: 1.22, bloom: 0.9, ca: 2.4 + 3 * ring,
+      grain: 0.1 + 0.04 * breathe + 0.06 * ring, vignette: 0.55 + 0.18 * breathe,
+      // the white frames of the cut in / snap out and the ring's flashes are in the world's lift, so the sung line stays readable
+      zoom: 1 + 0.07 * inK + 0.035 * ring, shake: [8 * ring * Math.sin(tr * 173), 6 * ring * Math.cos(tr * 151)] as [number, number],
+    };
+  }
+
   render(f: Frame, out: THREE.WebGLRenderTarget) {
-    const t = f.t, T = this.T, { renderer } = this.ctx;
+    const tr = f.t, T = this.T, { renderer } = this.ctx;
+    const t = PROOF ? tr : this.memT(tr);
     this.begin();
     const P = this.pov(t);
     this.setCam(P, t, 0);
@@ -425,7 +456,7 @@ export default class Door extends LitScene {
     const cam = this.cam;
     // the desk lamp: comes on with a stutter
     const lamp = PROOF ? 1 : t < T.lampOn ? 0 : clamp((t - T.lampOn) / 0.06) * (t < T.lampOn + 0.25 ? (hash(frameIdx(t) >> 1, 3) > 0.35 ? 1 : 0.2) : 1);
-    const ring1 = t > T.bell1 && t < T.bell1 + 0.9 ? 1 : 0, ring2 = t > T.bell2 && t < T.bell2 + 1.3 ? 1 : 0;
+    const ring1 = tr > T.bell1 && tr < T.bell1 + 0.9 ? 1 : 0, ring2 = tr > T.bell2 && tr < T.bell2 + 1.3 ? 1 : 0; // the bell on the song's clock
     const ring = Math.max(ring1, ring2);
     const jitter = ring ? 0.93 + 0.07 * Math.sin(t * 157) : 1;
     this.deskLamp.intensity = 2.2 * lamp * jitter;
@@ -435,7 +466,7 @@ export default class Door extends LitScene {
     this.coil.color.setRGB(1.6 * heat, 0.35 * heat, 0.08 * heat, THREE.LinearSRGBColorSpace);
     this.heaterL.intensity = 0.5 * heat;
     // the bell's hammer
-    this.hammer.rotation.x = ring ? 0.35 * Math.sin(t * 2 * Math.PI * 22) : 0;
+    this.hammer.rotation.x = ring ? 0.35 * Math.sin(tr * 2 * Math.PI * 22) : 0;
     // the handle tried from outside, twice
     const tryH = Math.max(Math.exp(-(((t - (T.bell2 + 0.25)) / 0.12) ** 2)), Math.exp(-(((t - (T.bell2 + 0.75)) / 0.12) ** 2)));
     this.handle.rotation.x = -0.55 * tryH;
@@ -479,10 +510,10 @@ export default class Door extends LitScene {
     this.glow2D.clear();
     const light: Light = { amb: 0.12 + 0.3 * lamp, warm: 0.55 * lamp, torch: 0 };
     if (!PROOF && !this.third) this.drawHands(u, t, light, lamp);
-    if (!PROOF) this.drawUI(u, t, f);
+    if (!PROOF) this.drawUI(u, tr, f);
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);
-    return { ...POST_BASE, vignette: 0.5 };
+    return { ...POST_BASE, vignette: 0.5, ...(PROOF ? {} : this.memPost(tr)) };
   }
 
   drawUI(u: CanvasRenderingContext2D, t: number, f: Frame) {

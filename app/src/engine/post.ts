@@ -33,6 +33,9 @@ export interface PostParams {
   shake: [number, number]; // frame offset in px
   zoom: number; // frame zoom (1 = none), for punch-ins on hits
   invert: number; // 0..1 invert (dark <-> paper), applied before grain
+  /** The picture's grade (the world only; the HUD — lyrics, callouts — keeps its colours): saturation (1 = as
+   *  rendered), a multiplicative tint and a lift of the blacks. Used for the `door` flashback (TREATMENT r8 note 9). */
+  sat: number; tint: [number, number, number]; lift: number;
 }
 
 export const DEFAULT_POST: PostParams = {
@@ -53,6 +56,7 @@ export const DEFAULT_POST: PostParams = {
   shake: [0, 0],
   zoom: 1,
   invert: 0,
+  sat: 1, tint: [1, 1, 1], lift: 0,
 };
 
 const MIPS = 7;
@@ -116,8 +120,8 @@ ${SCALE === 1 ? `        c += texture(src, vUv + texel * vec2(-1, -1)).rgb; c +=
       }`, { src: { value: null }, prev: { value: null }, texel: { value: new THREE.Vector2() }, radius: { value: 1 } });
     this.final = new FSPass(/* glsl */ `
       uniform sampler2D src; uniform sampler2D bloomTex; uniform sampler2D haloTex; uniform sampler2D hudTex;
-      uniform float exposure, bloom, halation, ca, grain, vignette, hud, fade, flash, time, zoom, invert;
-      uniform vec2 shake; uniform vec2 res;
+      uniform float exposure, bloom, halation, ca, grain, vignette, hud, fade, flash, time, zoom, invert, gsat, glift;
+      uniform vec2 shake; uniform vec2 res; uniform vec3 gtint;
       ${SHOULDER_GLSL}
       void main() {
         vec2 uv = (vUv - 0.5) / zoom + 0.5 - shake / res;
@@ -133,6 +137,7 @@ ${SCALE === 1 ? `        c += texture(src, vUv + texel * vec2(-1, -1)).rgb; c +=
         col += bl * bloom;
         col += vec3(1.0, 0.18, 0.04) * luma(ha) * halation;
         col *= exposure;
+        col = (mix(vec3(luma(col)), col, gsat) + vec3(glift)) * gtint; // the world's grade (not the HUD)
         // HUD is composited in linear space before the shoulder so it gets grain & vignette too
         vec4 h = texture(hudTex, vUv);
         col = mix(col, h.rgb / max(h.a, 1e-4), h.a * hud);
@@ -160,6 +165,7 @@ ${SCALE === 1 ? `        float g1 = hash12(gl_FragCoord.xy + fract(time * 13.37)
       exposure: { value: 1 }, bloom: { value: 0.5 }, halation: { value: 0.2 }, ca: { value: 1 }, grain: { value: 0.05 },
       vignette: { value: 0.3 }, hud: { value: 1 }, fade: { value: 0 }, flash: { value: 0 }, time: { value: 0 },
       zoom: { value: 1 }, invert: { value: 0 }, shake: { value: new THREE.Vector2() }, res: { value: new THREE.Vector2(W, H) },
+      gsat: { value: 1 }, glift: { value: 0 }, gtint: { value: new THREE.Vector3(1, 1, 1) },
     });
   }
 
@@ -205,6 +211,8 @@ ${SCALE === 1 ? `        float g1 = hash12(gl_FragCoord.xy + fract(time * 13.37)
     f.time!.value = time;
     f.zoom!.value = p.zoom;
     f.invert!.value = p.invert;
+    f.gsat!.value = p.sat ?? 1; f.glift!.value = p.lift ?? 0;
+    (f.gtint!.value as THREE.Vector3).set(...(p.tint ?? [1, 1, 1]));
     (f.shake!.value as THREE.Vector2).set(p.shake[0], p.shake[1]);
     this.final.render(renderer, out);
   }
