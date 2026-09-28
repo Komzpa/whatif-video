@@ -49,7 +49,7 @@ export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: 
   // the whole hand moves (lower, or across towards the aim) instead of the wrist bending.
   const ax = -0.2 + (o.aim?.x ?? 0) + sway, ay = -0.1 + (o.aim?.y ?? 0) + walk * Math.sin(t * 7.4 + 1) * 0.02;
   const dirC = new THREE.Vector3(Math.sin(ax), Math.sin(ay), -Math.cos(ax) * Math.cos(ay)).normalize();
-  const home = PORTRAIT ? new THREE.Vector3(0.035, -0.215, -0.5) : new THREE.Vector3(0.05, -0.085, -0.5);
+  const home = PORTRAIT ? new THREE.Vector3(0.035, -0.19, -0.5) : new THREE.Vector3(0.05, -0.085, -0.5);
   const D = -home.z, tv = Math.tan((cam.fov * Math.PI) / 360), th = tv * cam.aspect;
   // screen units: u, w in -1..1 (w up); v = where the beam's direction vanishes, p = the fist
   const vz = Math.max(0.15, -dirC.z), v = { u: dirC.x / vz / th, w: dirC.y / vz / tv };
@@ -166,7 +166,7 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   const len0 = Math.hypot(ax, ay) || 1;
   ax /= len0; ay /= len0;
   // seen nearly end-on the body would shrink to a stub: keep a readable three-quarter length
-  const len = Math.max(len0, 7.2 * r);
+  const len = Math.max(len0, 9.4 * r);
   const Ts = { x: Hs.x - ax * len, y: Hs.y - ay * len };
   const th = Math.atan2(ay, ax);
   // local frame: +x along the torch towards the lens, +y towards the fingers' side (under the body)
@@ -179,7 +179,7 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   };
   const on = pose ? clamp(l.torch ?? 0) : 0;
   // --- sleeve and wrist: the forearm comes up from below the frame to the heel of the hand
-  const heel = L2S(0.5, 0.35); // the heel of the fist sits on the torch axis: the wrist runs straight on into the forearm
+  const heel = L2S(0.1, -1.45); // the wrist enters the back of the fist, which sits over the top of the body (the fingers wrap round under it)
   // the forearm continues the torch axis back out of the frame (B7: the torch follows the forearm, the wrist is straight)
   const down = { x: -ax, y: -ay };
   const dn = 1;
@@ -215,78 +215,91 @@ export function drawTorchHand(c: CanvasRenderingContext2D, cam: THREE.Perspectiv
   c.fillStyle = rgba('lamp', 0.25 + 0.75 * on);
   c.beginPath(); c.ellipse(hx + 0.02, 0, 0.12, 1.12, 0, 0, Math.PI * 2); c.fill();
   c.restore();
-  // --- the hand (local units of r)
-  c.save();
-  c.translate(Ts.x, Ts.y); c.rotate(th); c.scale(r, -r * mir); // flip so +y is the fingers' side (the lower one)
-  c.lineJoin = 'round'; c.lineCap = 'round';
-  // back of the hand: from the heel up over the knuckle ridge to the index side
-  const back = new Path2D();
-  back.moveTo(-0.1, -0.4);
-  back.bezierCurveTo(0.1, 1.2, 0.8, 1.95, 1.8, 2.0);
-  back.bezierCurveTo(2.8, 2.2, 3.9, 2.12, 4.6, 1.62);
-  back.bezierCurveTo(5.05, 1.25, 5.05, 0.35, 4.7, -0.2);
-  back.bezierCurveTo(3.4, -0.5, 2.2, -1.5, 1.4, -1.9);
-  back.bezierCurveTo(0.7, -2.1, 0.0, -1.4, -0.1, -0.4);
-  back.closePath();
-  const gk = c.createLinearGradient(0, 2.2, 0, -1.6);
-  gk.addColorStop(0, skinHC(l)); gk.addColorStop(0.4, skinC(l, 1.02)); gk.addColorStop(1, skinC(l, 0.84));
-  c.fillStyle = gk; c.fill(back);
-  // tendons fanning to the knuckles, faint
-  c.strokeStyle = skinDC(l); c.globalAlpha = 0.22; c.lineWidth = 0.09;
-  for (const kx of [4.15, 3.35, 2.55, 1.8]) { c.beginPath(); c.moveTo(0.9, 0.3); c.quadraticCurveTo((kx + 0.9) / 2, 1.2, kx, 1.85); c.stroke(); }
-  c.globalAlpha = 1;
-  // the fingers wrapped round under the body: four curled bands, index nearest the lens
-  const fingers = [
-    { x: 1.6, w: 0.78, b: -1.15 }, // little finger
-    { x: 2.42, w: 0.88, b: -1.34 },
-    { x: 3.28, w: 0.92, b: -1.42 },
-    { x: 4.14, w: 0.9, b: -1.3 }, // index
-  ];
-  for (const f of fingers) {
-    const x0 = f.x - f.w / 2, x1 = f.x + f.w / 2, tilt = -0.18;
-    const p = new Path2D();
-    p.moveTo(x0, 0.5);
-    p.lineTo(x0 + tilt * 0.5, f.b + f.w * 0.45);
-    p.quadraticCurveTo(x0 + tilt, f.b - f.w * 0.02, f.x + tilt, f.b - f.w * 0.05);
-    p.quadraticCurveTo(x1 + tilt, f.b - f.w * 0.02, x1 + tilt * 0.5, f.b + f.w * 0.45);
-    p.lineTo(x1, 0.5);
-    p.closePath();
-    const gf = c.createLinearGradient(0, 0.6, 0, f.b);
-    gf.addColorStop(0, skinC(l, 1)); gf.addColorStop(0.55, skinC(l, 0.93)); gf.addColorStop(1, skinC(l, 0.8));
-    c.fillStyle = gf; c.fill(p);
-    c.strokeStyle = skinDC(l); c.lineWidth = 0.05; c.globalAlpha = 0.6; c.stroke(p); c.globalAlpha = 1;
-    // the middle joint's crease and the knuckle's highlight
-    c.strokeStyle = skinDC(l); c.lineWidth = 0.06; c.globalAlpha = 0.6;
-    c.beginPath(); c.moveTo(x0 + 0.12 + tilt * 0.3, f.b * 0.45); c.quadraticCurveTo(f.x + tilt * 0.3, f.b * 0.45 - 0.1, x1 - 0.12 + tilt * 0.3, f.b * 0.45); c.stroke();
-    c.globalAlpha = 1;
-    c.strokeStyle = skinHC(l, 0.5); c.lineWidth = 0.1;
-    c.beginPath(); c.arc(f.x, 1.55, f.w * 0.3, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
+  // --- the lanyard: a thin cord loop from the tail cap, hanging straight down on screen (reference photos 28.09)
+  {
+    const gx = Math.sin(th), gy = -Math.cos(th) * mir; // screen-down in the local frame (+y = the lower side)
+    const T0 = L2S(0.15, 0.55), dl = 6.2, sw = 0.55;
+    const P = (x: number, y: number) => L2S(x, y);
+    const bot = P(0.15 + gx * dl, 0.55 + gy * dl), a1 = P(0.15 + gx * dl * 0.5 - gy * sw, 0.55 + gy * dl * 0.5 + gx * sw), a2 = P(0.15 + gx * dl * 0.5 + gy * sw * 0.4, 0.55 + gy * dl * 0.5 - gx * sw * 0.4);
+    c.strokeStyle = mixRgba('shadow', '#9EA3A6', clamp(0.35 + 0.55 * l.amb + 0.3 * (l.warm ?? 0))); c.lineWidth = Math.max(1.2, r * 0.16); c.lineCap = 'round';
+    c.beginPath(); c.moveTo(T0.x, T0.y); c.quadraticCurveTo(a1.x, a1.y, bot.x, bot.y); c.quadraticCurveTo(a2.x, a2.y, T0.x, T0.y); c.stroke();
   }
-  // the thumb: along the top of the body onto the switch, its nail towards the lens
+  // --- the fist round the body (local units of r; +y = the lower side on screen). Reference: a closed fist
+  // round the barrel, the back of the hand and the knuckle row on top towards the viewer, four curled fingers
+  // crossing over the body and tucking under it, the thumb along the top towards the head; the body continues
+  // out of the front of the fist, the tail and its lanyard out of the back.
+  c.save();
+  c.translate(Ts.x, Ts.y); c.rotate(th); c.scale(r, -r * mir);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  const edge = skinDC(l), ow = 0.075;
+  const stroke = (p: Path2D, a = 0.85, w = ow) => { c.strokeStyle = edge; c.globalAlpha = a; c.lineWidth = w; c.stroke(p); c.globalAlpha = 1; };
+  // the heel of the palm and the fingertips tucked under the body (the shadow side)
+  const under = new Path2D();
+  under.moveTo(0.1, 0.4);
+  under.bezierCurveTo(0.2, 1.55, 1.2, 2.05, 2.4, 2.0);
+  under.bezierCurveTo(3.5, 1.95, 4.4, 1.7, 4.7, 1.1);
+  under.lineTo(4.6, 0.3); under.closePath();
+  c.fillStyle = skinC(l, 0.72); c.fill(under); stroke(under, 0.7);
+  // the back of the hand, over the top of the body: heel to the knuckle row
+  const back = new Path2D();
+  back.moveTo(-0.55, -1.0);
+  back.bezierCurveTo(-0.7, -2.1, 0.2, -3.05, 1.5, -3.1);
+  back.bezierCurveTo(2.7, -3.15, 4.0, -2.8, 4.75, -2.15);
+  back.bezierCurveTo(5.05, -1.85, 4.95, -1.4, 4.6, -1.25);
+  back.lineTo(0.9, -0.9); back.closePath();
+  const gk = c.createLinearGradient(0, -3.1, 0, -0.9);
+  gk.addColorStop(0, skinHC(l)); gk.addColorStop(0.55, skinC(l, 1.03)); gk.addColorStop(1, skinC(l, 0.9));
+  c.fillStyle = gk; c.fill(back); stroke(back);
+  // tendons fanning from the wrist to the knuckles, faint
+  c.strokeStyle = edge; c.globalAlpha = 0.25; c.lineWidth = 0.08;
+  for (const kx of [1.3, 2.3, 3.25, 4.15]) { c.beginPath(); c.moveTo(0.1, -2.0); c.quadraticCurveTo((kx + 0.1) / 2, -2.55, kx, -2.1); c.stroke(); }
+  c.globalAlpha = 1;
+  // four curled fingers (little finger at the wrist end, index at the head end): from the knuckle down over the
+  // body's face to the tip tucked under it; each a rounded band across the body, split by dark gaps
+  const F = [{ x: 1.3, w: 0.9, t: 1.35 }, { x: 2.25, w: 1.0, t: 1.6 }, { x: 3.25, w: 1.02, t: 1.62 }, { x: 4.2, w: 0.95, t: 1.4 }];
+  for (const q of F) {
+    const x0 = q.x - q.w / 2, x1 = q.x + q.w / 2, lean = 0.18; // the fingers lean a little towards the head as they curl
+    const p = new Path2D();
+    p.moveTo(x0, -2.15);
+    p.bezierCurveTo(x0 - 0.05, -2.45, x1 + 0.05, -2.45, x1, -2.15); // the knuckle's dome
+    p.bezierCurveTo(x1 + 0.1, -0.8, x1 + lean, 0.4, x1 + lean * 0.6, q.t - 0.35);
+    p.bezierCurveTo(x1 + lean * 0.5, q.t + 0.05, x0 + lean * 0.5, q.t + 0.05, x0 + lean * 0.6, q.t - 0.35); // the rounded tip
+    p.bezierCurveTo(x0 + lean, 0.4, x0 - 0.1, -0.8, x0, -2.15);
+    p.closePath();
+    const gf = c.createLinearGradient(0, -2.4, 0, q.t);
+    gf.addColorStop(0, skinHC(l)); gf.addColorStop(0.3, skinC(l, 1.02)); gf.addColorStop(0.7, skinC(l, 0.88)); gf.addColorStop(1, skinC(l, 0.72));
+    c.fillStyle = gf; c.fill(p); stroke(p, 0.95, 0.085);
+    // the two joint creases across the finger and the knuckle's highlight
+    c.strokeStyle = edge; c.lineWidth = 0.06; c.globalAlpha = 0.6;
+    for (const yy of [-0.95, 0.45]) { const sh = lean * (yy + 2.15) / 3.2; c.beginPath(); c.moveTo(x0 + 0.14 + sh, yy); c.quadraticCurveTo(q.x + sh, yy + 0.12, x1 - 0.14 + sh, yy); c.stroke(); }
+    c.globalAlpha = 1;
+    c.strokeStyle = skinHC(l, 0.7); c.lineWidth = 0.11;
+    c.beginPath(); c.arc(q.x, -2.05, q.w * 0.28, Math.PI * 1.15, Math.PI * 1.85); c.stroke();
+  }
+  // the thumb: from the side of the hand over the top of the body, lying along it towards the head
   const thumb = new Path2D();
-  thumb.moveTo(2.0, 1.95);
-  thumb.bezierCurveTo(3.0, 2.25, 4.4, 1.75, 5.3, 1.12);
-  thumb.bezierCurveTo(5.75, 0.8, 5.7, 0.2, 5.25, 0.18);
-  thumb.bezierCurveTo(4.6, 0.25, 3.6, 0.55, 2.6, 0.9);
+  thumb.moveTo(4.0, -2.5);
+  thumb.bezierCurveTo(4.9, -2.6, 6.0, -1.9, 6.75, -1.25);
+  thumb.bezierCurveTo(7.1, -0.95, 7.0, -0.35, 6.55, -0.3);
+  thumb.bezierCurveTo(5.9, -0.3, 5.1, -0.65, 4.55, -1.05);
   thumb.closePath();
-  const gt = c.createLinearGradient(0, 2.2, 0, 0.2);
-  gt.addColorStop(0, skinHC(l)); gt.addColorStop(0.5, skinC(l, 1.02)); gt.addColorStop(1, skinC(l, 0.86));
-  c.fillStyle = gt; c.fill(thumb);
-  c.strokeStyle = skinDC(l); c.lineWidth = 0.07; c.globalAlpha = 0.7; c.stroke(thumb); c.globalAlpha = 1;
+  const gt = c.createLinearGradient(0, -2.6, 0, -0.3);
+  gt.addColorStop(0, skinHC(l)); gt.addColorStop(0.5, skinC(l, 1.02)); gt.addColorStop(1, skinC(l, 0.84));
+  c.fillStyle = gt; c.fill(thumb); stroke(thumb, 0.95, 0.085);
   // nail and joint
   c.fillStyle = mixRgba('shadow', NAIL, clamp(0.35 + 0.6 * l.amb + 0.5 * on));
-  c.beginPath(); c.ellipse(5.08, 0.78, 0.42, 0.26, -0.5, 0, Math.PI * 2); c.fill();
-  c.strokeStyle = skinDC(l); c.lineWidth = 0.06; c.globalAlpha = 0.55;
-  c.beginPath(); c.moveTo(4.05, 1.7); c.quadraticCurveTo(4.2, 1.2, 4.0, 0.62); c.stroke();
+  c.beginPath(); c.ellipse(6.45, -0.95, 0.42, 0.27, 0.55, 0, Math.PI * 2); c.fill();
+  c.strokeStyle = edge; c.lineWidth = 0.06; c.globalAlpha = 0.55;
+  c.beginPath(); c.moveTo(5.35, -2.05); c.quadraticCurveTo(5.35, -1.4, 5.0, -0.85); c.stroke();
   c.globalAlpha = 1;
-  // the lens's warm spill on the thumb tip and the index knuckle
+  // the lens's warm spill on the thumb tip and the index finger
   if (on > 0.02) {
-    const gw = c.createRadialGradient(len / r, 0, 0, len / r, 0, 3.6);
-    gw.addColorStop(0, rgba('lamp', 0.32 * on)); gw.addColorStop(1, rgba('lamp', 0));
-    c.save(); c.clip(thumb); c.fillStyle = gw; c.fillRect(2, -2, 6, 5); c.restore();
+    const gw = c.createRadialGradient(len / r, 0, 0, len / r, 0, 4.2);
+    gw.addColorStop(0, rgba('lamp', 0.3 * on)); gw.addColorStop(1, rgba('lamp', 0));
+    c.save(); c.clip(thumb); c.fillStyle = gw; c.fillRect(3, -3, 6, 4); c.restore();
   }
   c.restore();
-  const hand = [L2S(-0.2, 2.2), L2S(5.8, 1.5), L2S(len / r + 0.2, 1.4), L2S(len / r + 0.2, -1.4), L2S(4.2, -1.6), L2S(1.2, -2.2)].map((p) => [p.x, p.y] as [number, number]);
+  const hand = [L2S(-0.8, -2.2), L2S(1.5, -3.2), L2S(4.9, -2.6), L2S(7.1, -1.2), L2S(len / r + 0.2, -1.4), L2S(len / r + 0.2, 1.4), L2S(4.7, 1.9), L2S(2.4, 2.1), L2S(0.1, 1.2)].map((p) => [p.x, p.y] as [number, number]);
   const poly = [...outline, ...hand];
   // B7: the on-screen angle between the forearm (cuff → heel) and the torch axis (tail → head)
   const fx = heel.x - cuff.x, fy = heel.y - cuff.y, fl = Math.hypot(fx, fy) || 1;
