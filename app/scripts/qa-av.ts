@@ -93,7 +93,7 @@ try {
       // PPM P6 header: magic, width, height, maxval, then RGB
       let p = 0, fields = 0; while (fields < 4) { while (buf[p] === 0x20 || buf[p] === 0x0a) p++; while (buf[p] !== 0x20 && buf[p] !== 0x0a) p++; fields++; } p++;
       let red = 0;
-      for (let i = p; i + 2 < buf.length; i += 3) if (buf[i]! > 170 && buf[i + 1]! < 120 && buf[i + 2]! < 110) red++;
+      for (let i = p; i + 2 < buf.length; i += 3) if (buf[i]! > 170 && buf[i + 1]! < 120 && buf[i + 2]! < 110 && buf[i]! - buf[i + 1]! > 80) red++; // the sung-word red (R−G ≈ 110), not an orange lamp or its reflection (R−G ≈ 55)
       if (red > 30) first = n;
     }
     if (first === null) { bad.push(`A10      ${JSON.stringify(s.text)} (${s.t}s): no lit letter within ±8 frames`); continue; }
