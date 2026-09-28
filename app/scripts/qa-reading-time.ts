@@ -115,6 +115,12 @@ try {
     }
   });
   void seenAt;
+  // --garble-list: every glyph-soup item with its longest fully visible run (for the proof sheet of garbled signs)
+  if (argv.includes('--garble-list')) for (const [id, { item, runs: rs }] of runs) {
+    if (item.kind !== 'garble' || !rs.length) continue;
+    const best = rs.reduce((x, y) => (y.b - y.a > x.b - x.a ? y : x));
+    console.log(`GARBLE ${id}\t${((best.a + best.b) / 2).toFixed(2)}\t${best.a.toFixed(2)}-${best.b.toFixed(2)}\t${(best.b - best.a).toFixed(2)}s\t${JSON.stringify(item.text)}`);
+  }
   const need = (text: string) => { const t = text.replace(/ \/ /g, ' '); return Math.max(1.5, 0.4 + t.length / 14, 0.3 * t.split(/\s+/).filter(Boolean).length); };
   const offenders: string[] = [];
   const UI: Kind[] = ['note', 'callout', 'step', 'system', 'banner', 'chip', 'title'];
@@ -282,19 +288,20 @@ try {
   const a12 = new Map<string, string>();
   frames.forEach((fr, i) => { for (const it of fr) if (it.bad && !a12.has(it.id)) a12.set(it.id, `${times[i]!.toFixed(2)}s ${JSON.stringify(it.text)}: ${it.bad}`); });
   offenders.push(...[...a12.values()].map((s) => `A12      ${s}`));
-  // A13: no Latin letters on screen at all (mojibake too must be Cyrillic-to-Cyrillic, TREATMENT r7), and every
-  // mojibake string must re-derive from a Russian source by its logged codec
+  // A13: Latin letters and box-drawing glyphs appear only in glyph soup (TREATMENT item 6 + r8): every 'garble'
+  // item must re-derive from a Russian source by its logged codec; everything else on screen stays Cyrillic
   const a13 = new Map<string, string>();
   const LATIN = /[A-Za-z\u00C0-\u024F]/, BOXDRAW = /[\u2500-\u259F]/;
   for (const fr of frames) for (const it of fr) {
     if (OBJECTS.includes(it.kind) || it.kind === 'prop' || a13.has(it.text)) continue;
-    if (LATIN.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Latin letters`); continue; }
-    if (BOXDRAW.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has box-drawing glyphs (not Cyrillic garbage)`); continue; }
     if (it.kind === 'garble') {
       const parts = it.text.split(' / ');
       const ok = parts.every((p, k) => { const m = it.moji?.[k]; return !!m && /[А-яЁё]/.test(m.src) && mojibake(m.src, m.codec, m.level) === p; });
       if (!ok) a13.set(it.text, `garble ${JSON.stringify(it.text)} is not a codec transform of a logged Russian source`);
+      continue;
     }
+    if (LATIN.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Latin letters outside glyph soup`); continue; }
+    if (BOXDRAW.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has box-drawing glyphs outside glyph soup`); continue; }
   }
   offenders.push(...[...a13.values()].slice(0, 12).map((s) => `A13      ${s}`));
   if (a13.size > 12) offenders.push(`A13      … and ${a13.size - 12} more`);

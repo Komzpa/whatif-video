@@ -1,19 +1,23 @@
-// Cyrillic mojibake by real wrong-codec transforms (TREATMENT r7, TESTPLAN A13). A Russian string is encoded
+// Glyph soup by real wrong-codec transforms (TREATMENT item 6 + r8, TESTPLAN A13). A Russian name is encoded
 // with one codec and decoded with another, exactly as a mis-configured sign controller would show it:
-//   «ПРОЕЗД» UTF-8 read as CP1251 -> «РџР РћР•Р—Р”»;  «ВЫХОД В ГОРОД» KOI8-R read as CP1251 -> «бшунд б цнпнд».
-// Only Cyrillic-to-Cyrillic confusions are used (TREATMENT r7, coordinator 27.09): the output is Cyrillic and
-// punctuation, never Latin letters (a CP1252 or CP866 reading would put «Ð…» or «®» on a Russian street).
+//   «ПРОДУКТЫ» UTF-8 read as CP1252 -> «ÐŸÐ ÐžÐ”Ð£ÐšÐ¢Ð«»;  CP1251 read as CP866 -> «╧╨╬─╙╩╥█».
+// The point is the author's «смотрю, но как прочесть — не ебу»: the output must NOT read as Russian, so the
+// readings are Latin-1 and DOS box-drawing ones (mis-decoded Latin/Cyrillic fragments, box glyphs), never a
+// Cyrillic-to-Cyrillic shuffle (r7 did that and it read as Russian words; r8 reverts it).
 // The byte tables are the browser's own WHATWG decoders (TextDecoder); an encoder is the inverse of the decoder
-// over the 256 byte values, so nothing here is hand-drawn glyph soup. Characters a codec cannot encode become
-// '?', and C0/C1 control characters produced by the wrong decoder are dropped (a display shows nothing there).
+// over the 256 byte values, so nothing here is hand-drawn. Characters a codec cannot encode become '?', and
+// C0/C1 control characters produced by the wrong decoder are dropped (a display shows nothing there).
 // `level` < 1 transforms only some characters (a deterministic per-character choice), for names that degrade
 // step by step; each transformed character is still the codec's real output for that character.
 
-export type Codec = 'utf8>cp1251' | 'koi8>cp1251' | 'cp1251>koi8';
-export const CODECS: Codec[] = ['utf8>cp1251', 'koi8>cp1251', 'cp1251>koi8'];
-const LABEL: Record<string, string> = { cp1251: 'windows-1251', koi8: 'koi8-r' };
+export type Codec = 'utf8>cp1252' | 'cp1251>cp866' | 'utf8>cp866' | 'cp1251>cp1252';
+export const CODECS: Codec[] = ['utf8>cp1252', 'cp1251>cp866', 'utf8>cp866', 'cp1251>cp1252'];
+const LABEL: Record<string, string> = { cp1251: 'windows-1251', cp1252: 'windows-1252', cp866: 'ibm866' };
 /** How the codec is named for people (Russian, for captions). */
-export const CODEC_RU: Record<Codec, string> = { 'utf8>cp1251': 'юникод прочитан как 1251', 'koi8>cp1251': 'КОИ-8 прочитан как 1251', 'cp1251>koi8': '1251 прочитан как КОИ-8' };
+export const CODEC_RU: Record<Codec, string> = {
+  'utf8>cp1252': 'юникод прочитан как латиница', 'cp1251>cp866': '1251 прочитан как ДОС',
+  'utf8>cp866': 'юникод прочитан как ДОС', 'cp1251>cp1252': '1251 прочитан как латиница',
+};
 
 const dec = new Map<string, TextDecoder>();
 const decoder = (cs: string) => { let d = dec.get(cs); if (!d) { d = new TextDecoder(LABEL[cs]!); dec.set(cs, d); } return d; };
@@ -38,9 +42,6 @@ const CONTROL = /[\u0000-\u001F\u007F-\u009F]/g;
 /** The whole string through one wrong-codec round trip. */
 export function transcode(s: string, codec: Codec): string {
   const [from, to] = codec.split('>') as [string, string];
-  // a KOI-8 display has no Ё where CP1251 keeps it (0xA8 reads as a box-drawing corner «╗»): the sign
-  // controller's typeset source, like a Soviet typewriter, writes Е for Ё, so the garble stays Cyrillic
-  if (codec === 'cp1251>koi8') s = s.replace(/ё/g, 'е').replace(/Ё/g, 'Е');
   return decoder(to).decode(encode(s, from)).replace(CONTROL, '');
 }
 

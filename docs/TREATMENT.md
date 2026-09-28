@@ -1,4 +1,19 @@
-# What if — treatment and style bible (r7)
+# What if — treatment and style bible (r8)
+
+## r8: glyph soup is back (author, 2026-09-28 ~15:35; overrides the r7 mojibake bullet and any later rule that touches item 6)
+«договаривались брать нечитаемые кракозябры... верни кракозябры». r7's "every word on screen is Russian" turned the
+unfamiliar district's signs into shuffled Cyrillic («деръл бунд гюопеыем»), which reads as Russian and loses the vibe.
+- **Item 6 stands exactly as written.** Unfamiliar-district and restricted-zone signs, boards and screens are
+  broken-encoding glyph soup: mis-decoded Latin/Cyrillic fragments («ÐŸÐ ÐžÐ”Ð£ÐšÐ¢Ð«», «ÂÛÃÓË»), box and block
+  characters («╧╨╬─╙╩╥█», «╨Т╨л╨У»), dot-matrix rendering. Only the frame/header is readable. Each string is a real
+  wrong-codec transform (UTF-8 or CP1251 read as CP1252 or CP866) of the real city.json name, deterministic per
+  name; route names degrade into it step by step; ≥1.5 s on screen; known districts stay clean.
+- **The r7 Russian rule covers only** handbook headings, lyrics/karaoke, and clean signs and callouts (including
+  «ДОМ · x км» and the drone's plain-Russian readings). It never applies to glyph soup. A Cyrillic-to-Cyrillic
+  shuffle is not glyph soup and is not allowed on garbled signs.
+- No Georgian or other real script stands in for the soup.
+- Checked by TESTPLAN A13: Latin/box glyphs appear only in 'garble' items, and each re-derives from its source.
+
 
 ## r7: Russian clip, Soviet city (author, 2026-09-27 01:15; overrides every English-text and grid-city item below)
 «надо клип делать весь на русском как книжка исходная. и город "советский" брать, не квадратно-гнездовой.»
@@ -7,9 +22,7 @@
   ВОСПРЕЩЁН», «ДЕТЯМ ВХОД ЗАПРЕЩЁН»), METRO CLOSED (→ «ВХОД ЗАКРЫТ», «СТАНЦИЯ ЗАКРЫТА»).
 - The on-screen line for each chapter is the handbook's own Russian heading (e.g. «НЕ УСПЕЛ ВЫЙТИ ИЗ ВАГОНА
   МЕТРО», «ТЫ ПОТЕРЯЛСЯ»), timed to the chapter's sung line. There is no English karaoke. The song itself stays as recorded.
-- The unfamiliar district's garbled signs become Cyrillic mojibake, the way broken encodings really look
-  (КОИ-8/CP1251/UTF-8 mixups: «РџР РћР•Р—Р”», «ëÔÁÎÃÉÑ», «Ð¡Ð¢ÐÐÐ¦ÐÐ¯»). Generate them deterministically from the real
-  Russian name with a real wrong-codec transform. Don't invent glyph soup. A callout gives the plain Russian where the story needs it.
+- (Superseded by r8: garbled signs are item-6 glyph soup, not Cyrillic mojibake.) A callout gives the plain Russian where the story needs it.
 - Fonts: Cyrillic faces with a Soviet signage feel (a metro-sign grotesque in the manner of the Moscow metro
   lettering, a stencil for fences, a typewriter for taped notices). The font licences are recorded in the repo.
 **City.** A Soviet city, not a grid:

@@ -730,7 +730,7 @@ export default class Lost extends CityScene {
     this.curtain.position.set(0, OPEN_H, CURT_Z);
     S.add(this.curtain);
     // the station board on the wall above the drum; the metro «М» on a post by the roof
-    this.vestBoard = new NeonSign({ kind: 'led', header: 'М', lines: [moji(exitStation().name, 1, 'koi8>cp1251')], pos: [0, 3.9, FACE_Z - 0.02], rotY: Math.PI, height: 0.42, color: 'sodium', garbled: true });
+    this.vestBoard = new NeonSign({ kind: 'led', header: 'М', lines: [moji(exitStation().name, 1, 'cp1251>cp866')], pos: [0, 3.9, FACE_Z - 0.02], rotY: Math.PI, height: 0.42, color: 'sodium', garbled: true });
     S.add(this.vestBoard.mesh);
     const mtex = new THREE.CanvasTexture(metroSignCanvas(256, 1)); mtex.colorSpace = THREE.SRGBColorSpace;
     const msign = new THREE.Mesh(new THREE.CircleGeometry(0.5, 40), new THREE.MeshBasicMaterial({ map: mtex, fog: true }));
@@ -1173,7 +1173,7 @@ export default class Lost extends CityScene {
     call('СТАНЦИЯ ЗАКРЫТА', T.shutterGo, T.land + 1.0, (tt) => onScreen(PORTRAIT ? project(this.cam, 0, this.shutterY(tt) + 1.56, CURT_Z - 0.02) : project(this.cam, -0.14, Math.min(OPEN_H - 0.15, this.shutterY(tt) + 1.45), CURT_Z - 0.02)));
     // (e) the only way home is through the promzona's gate
     const zt = [city().restricted.sign, homeLabel('lost')];
-    call(zt, T.turnZone + 0.4, f.end + 1, () => onScreen(project(this.cam, GATE_X - 0.45, 1.67, FENCE_Z + 0.04)), { color: 'neon', places: [city().restricted.sign, city().home.name] });
+    call(zt, T.turnZone + 0.4, f.end + 1, () => onScreen(project(this.cam, GATE_X - 0.45, 1.67, FENCE_Z + 0.04)), { color: '#FF7FA8', plate: 1, places: [city().restricted.sign, city().home.name] });
     void cam;
   }
 
