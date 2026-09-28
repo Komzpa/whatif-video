@@ -53,6 +53,10 @@ export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: 
   const D = -home.z, tv = Math.tan((cam.fov * Math.PI) / 360), th = tv * cam.aspect;
   // screen units: u, w in -1..1 (w up); v = where the beam's direction vanishes, p = the fist
   const vz = Math.max(0.15, -dirC.z), v = { u: dirC.x / vz / th, w: dirC.y / vz / tv };
+  // a child aims where it looks: the beam's vanishing point stays near the frame (an aim far off to the side or
+  // behind would lay the arm flat across the whole frame, B1)
+  v.u = clamp(v.u, -1.3, 1.3); v.w = clamp(v.w, -0.9, 1.3);
+  dirC.set(v.u * th, v.w * tv, -1).normalize();
   const p = { u: home.x / D / th, w: home.y / D / tv };
   const CLIMB = Math.tan((16 * Math.PI) / 180) * (th / tv), W_MIN = PORTRAIT ? -0.78 : -0.62;
   const need = (du: number) => v.w - CLIMB * Math.abs(du);
@@ -61,7 +65,11 @@ export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: 
     if (p.w < W_MIN) { p.w = W_MIN; const du = (v.w - p.w) / CLIMB; p.u = v.u + Math.sign(p.u - v.u || 1) * du; }
   }
   // never under the chapter line (bottom left): past that the arm comes in flatter from the right instead
-  p.u = Math.max(p.u, PORTRAIT ? -0.35 : -0.02);
+  p.u = clamp(p.u, PORTRAIT ? -0.35 : -0.02, PORTRAIT ? 0.7 : 0.8); // and the fist never leaves the frame
+  // when the fist cannot go lower or further across, the beam gives way instead: it never points below the climb
+  // line from the fist, so the forearm behind it always comes up from the bottom of the frame
+  const vMin = p.w + CLIMB * Math.abs(p.u - v.u);
+  if (v.w < vMin) { v.w = vMin; dirC.set(v.u * th, v.w * tv, -1).normalize(); }
   const headC = new THREE.Vector3(p.u * th * D, p.w * tv * D, -D)
     .add(new THREE.Vector3(0.1, -0.3, 0.1).multiplyScalar(1 - easeOut(raise))).add(new THREE.Vector3(sway * 0.4, bob, 0));
   const tailC = headC.clone().sub(dirC.clone().multiplyScalar(0.14));
