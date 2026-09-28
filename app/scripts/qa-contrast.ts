@@ -127,6 +127,11 @@ try {
   const rows = [...worst.values()].sort((a, b) => a.ratio / a.need - b.ratio / b.need);
   console.log(`qa-contrast ${PORTRAIT ? '9:16' : '16:9'}  ${from.toFixed(2)}–${to.toFixed(2)}s  ${times.length} frames @ ${FPS} fps  ${rows.length} items (${all.length} measurements)`);
   const bad: string[] = [];
+  if (PORTRAIT && from <= 73 && 73 < to) {
+    const coldBoard = all.find((m) => m.kind === 'sign' && m.text === '−27°' && m.t === 73);
+    if (!coldBoard) bad.push('A9       portrait cold-board pixels were not measured at 73.00s');
+    else if (coldBoard.ratio < 4.5) bad.push(`A9       portrait cold-board contrast ${coldBoard.ratio.toFixed(2)}:1 < 4.5:1 at 73.00s`);
+  }
   for (const m of rows) {
     const scenery = m.id.startsWith('scenery:');
     const ok = m.ratio >= m.need;
