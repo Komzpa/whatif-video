@@ -20,6 +20,13 @@ unfamiliar district's signs into shuffled Cyrillic («деръл бунд гюо
   says that, maybe not"), `maybe: true` in drawCallout. Used on: lost «СТАНЦИЯ ЗАКРЫТА» (shutter notice) and the gate
   «ПОСТОРОННИМ ВХОД ВОСПРЕЩЁН» (the «ДОМ · x км» line under it never flickers), dogs «ВЫГУЛ ЗАПРЕЩЁН», tease
   «НЕДЕЛЯ ДОБРОТЫ» and the three kids' lines, words «РАСПИСАНИЕ». QA bridges its dropouts ≤ 0.45 s for reading time.
+- **5. Temp: same child, same coat, hot inside / cold outside.** The chapter opens inside a heat point (ЦТП) the
+  heating main runs into: from behind, the child in its yellow coat among hot rusty pipes, orange steam, a bare bulb,
+  steam wisps rising off its shoulders, the cat curled on the warm pump. First person: the wall dial's needle slams to
+  +41° on «too hot», the view fogs with condensation and beading drops, the child looks down and unzips the coat,
+  steam off the jumper. On «It's far too cold» the steel door bangs open onto the road: the same child steps out in
+  the same damp open coat, which smokes white in the frost; the condensation on the view freezes into frost at the
+  edges; the street board reads −27°; snow; the cat walks the pipe, then close to the child's legs.
 - **6. Tease: the older kids talk.** Besides the chalk «ПОТЕРЯШКА», three kids shout at the child in rough speech
   balloons of glyph soup (real codec transforms of «ТЫ С КАКОГО РАЙОНА», «ЕСТЬ ЗАКУРИТЬ», «А ЕСЛИ НАЙДУ»), each ≥1.5 s,
   with the flickering maybe-translation «ТЫ С КАКОГО РАЙОНА?» etc. under it.
