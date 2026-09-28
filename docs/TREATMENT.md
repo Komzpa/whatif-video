@@ -40,8 +40,8 @@ unfamiliar district's signs into shuffled Cyrillic («деръл бунд гюо
 - **9. `door` is a flashback that intrudes.** Grammar: a hard cut in on a white frame with a zoom punch (no
   transition from `lost`); the whole chapter in a memory grade on the world only (saturation 0.32, cold tint, lifted
   blacks, overexposed ×1.22, heavy bloom and chromatic fringe, grain and vignette breathing at 0.9 Hz), the sung line
-  keeping its colours; each ring of the bell repeated as four decaying punches (zoom, shake, a flash in the world's
-  lift, extra grain and fringe) — the ring echoing; stutter frames (6 per second, some held twice) while the shape is
+  keeping its colours; each ring of the bell repeated as four decaying punches (zoom, shake, extra grain and
+  fringe; no flash: a lifted frame washed the sung line out, A9) — the ring echoing; stutter frames (6 per second, some held twice) while the shape is
   on the reeded glass after each ring; time stretched to 0.6× as the child crosses to the door, ended by a jump cut;
   one white frame at the end and a hard snap back to the present (`dogs` in its normal grade). The world runs on its
   own clock (`memT`), both rings still land on the lyric. The song is untouched: the ring's repetition is visual

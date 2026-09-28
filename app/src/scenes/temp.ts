@@ -68,8 +68,8 @@ export default class Temp extends LitScene {
     this.shots = [
       [T.s, T.line1 + 1.25, { k: 'back', d: 1.2, h: 1.5, side: -1, ahead: 1, aimY: PORTRAIT ? 0.9 : 0.6 }],
       [T.line2, T.line2 + 1.7, { k: 'free', p: [1.6, 1.25, DOOR[2] + 4.2], p1: [1.4, 1.2, DOOR[2] + 3.6], look: [DOOR[0] + 0.4, 1.0, DOOR[2] - 0.2], look1: [PORTRAIT ? -0.3 : -1.2, 1.0, DOOR[2] - 1.6], fov: PORTRAIT ? 66 : 50 }],
-      [T.line2 + 1.7, T.cold - 0.45, { k: 'back', d: 1.3, h: 0.8, side: 1, ahead: 1, aimY: PORTRAIT ? 0.9 : 2.4, yaw: PORTRAIT ? 0.1 : 0.3 }],
-      [T.cold - 0.45, T.cold + 1.7, { k: 'high', d: 0.4, d1: 0.5, h: 0.6, side: -0.5, ahead: PORTRAIT ? 0 : 0.7 }],
+      [T.line2 + 1.7, T.cold + (PORTRAIT ? 0.15 : -0.15), { k: 'back', d: 1.3, h: 0.8, side: 1, ahead: 1, aimY: PORTRAIT ? 1.7 : 2.4, yaw: PORTRAIT ? 0.1 : 0.3 }],
+      [T.cold + (PORTRAIT ? 0.15 : -0.15), T.cold + 1.7, { k: 'high', d: 0.4, d1: 0.5, h: 0.6, side: -0.5, ahead: PORTRAIT ? 0 : 0.7 }],
       [T.cold + 1.7, T.cold + 3.6, { k: 'ots', d: 2.0, h: 2.2, side: -1.3, ahead: 0.5, yaw: 0.2, aimY: PORTRAIT ? 0 : 1.6 }],
     ];
     this.initKid(9);
@@ -397,8 +397,7 @@ export default class Temp extends LitScene {
       if (inside && !this.third && P.pitch < -0.5) this.drawCoat(u, t, light);
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
-      this.callout(u, t, homeLabel('temp'), T.line2 + 0.35, T.line2 + 2.45, () => this.onScreen(0, 8, cam.position.z - 60), { places: [city().home.name] });
-      this.callout(u, t, 'ОСТАВАЙТЕСЬ ДОМА', T.line2 + 2.65, T.cold + 1.2, () => this.onScreen(BOARD[0] - 1.0, BOARD[1] - 0.45, BOARD[2] - 0.2));
+      this.callout(u, t, homeLabel('temp'), T.line2 + 0.35, T.line2 + 3.3, () => this.onScreen(0, 8, cam.position.z - 60), { places: [city().home.name] });
       this.callout(u, t, 'КОШКА · 1', T.cold + 1.5, T.end + 1, () => { const h = this.cat.head.getWorldPosition(new THREE.Vector3()); return this.onScreen(h.x, h.y + 0.08, h.z); });
     }
     this.composite2D(this.ui, out);

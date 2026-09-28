@@ -136,6 +136,19 @@ try {
     const best = rs.reduce((x, y) => (y.b - y.a > x.b - x.a ? y : x));
     console.log(`GARBLE ${id}\t${((best.a + best.b) / 2).toFixed(2)}\t${best.a.toFixed(2)}-${best.b.toFixed(2)}\t${(best.b - best.a).toFixed(2)}s\t${JSON.stringify(item.text)}`);
   }
+  // --hand-list: every run of frames with the first-person torch hand on screen (for the POV hand proof sheet)
+  if (argv.includes('--hand-list')) {
+    let s = -1;
+    frames.forEach((fr, i) => {
+      const on = fr.some((it) => it.kind === 'hand' && !!it.poly && it.poly.length > 2);
+      if (on && s < 0) s = i;
+      if (s >= 0 && (!on || i === frames.length - 1)) {
+        const a = times[s]!, b = times[on ? i : i - 1]! + DT;
+        console.log(`HAND\t${((a + b) / 2).toFixed(2)}\t${a.toFixed(2)}-${b.toFixed(2)}\t${(b - a).toFixed(2)}s`);
+        s = -1;
+      }
+    });
+  }
   const need = (text: string) => { const t = text.replace(/ \/ /g, ' '); return Math.max(1.5, 0.4 + t.length / 14, 0.3 * t.split(/\s+/).filter(Boolean).length); };
   const offenders: string[] = [];
   const UI: Kind[] = ['note', 'callout', 'step', 'system', 'banner', 'chip', 'title'];

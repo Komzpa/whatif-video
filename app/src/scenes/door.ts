@@ -77,8 +77,8 @@ export default class Door extends LitScene {
     // low by the window when the handle is tried, the child backing away from the shape on the glass
     this.shots = [
       // far out there, as the child stares at it: our window on the home block, the lamp on, the cat waiting (a long lens)
-      [T.home + 0.1, T.alone + 0.45, { k: 'free', p: [0.37, 1.3, -1.05], p1: [0.37, 1.3, -1.05], look: [HOME_P[0] - 0.3, 4.85, HOME_P[2] + 0.3], look1: [HOME_P[0], 5.0, HOME_P[2] + 0.3], fov: PORTRAIT ? 7 : 4.6 }],
-      [T.alone + 0.45, T.bell1 + 0.05, { k: 'free', p: [0.75, 1.9, 1.15], p1: [0.6, 1.8, 0.95], look: [PORTRAIT ? 0.8 : -0.1, PORTRAIT ? 1.1 : 0.8, -1.3], look1: [PORTRAIT ? 0.9 : 0.0, PORTRAIT ? 1.1 : 0.8, -1.3], fov: PORTRAIT ? 90 : 72 }],
+      [T.home + 0.1, T.alone + 0.95, { k: 'free', p: [0.37, 1.3, -1.05], p1: [0.37, 1.3, -1.05], look: [HOME_P[0] - 0.3, 4.85, HOME_P[2] + 0.3], look1: [HOME_P[0], 5.0, HOME_P[2] + 0.3], fov: PORTRAIT ? 7 : 4.6 }],
+      [T.alone + 0.95, T.bell1 + 0.05, { k: 'free', p: [0.75, 1.9, 1.15], p1: [0.6, 1.8, 0.95], look: [PORTRAIT ? 0.8 : -0.1, PORTRAIT ? 1.1 : 0.8, -1.3], look1: [PORTRAIT ? 0.9 : 0.0, PORTRAIT ? 1.1 : 0.8, -1.3], fov: PORTRAIT ? 90 : 72 }],
       [T.bell1 + 0.05, T.walk1, { k: 'ots', d: 1.5, side: -1.2, h: 2.2, aimY: PORTRAIT ? -0.9 : 0 }],
       [T.bell2, T.leave1 + 2, { k: 'free', p: [0.7, 1.55, 1.2], p1: [0.6, 1.5, 1.1], look: [WALL_X, 1.1, 0.1], look1: [WALL_X, 1.15, 0.05], fov: PORTRAIT ? 84 : 64 }],
     ];
@@ -426,7 +426,7 @@ export default class Door extends LitScene {
     const stut = (a: number, b: number) => (tr >= a && tr < b ? a + Math.floor((tr - a) * 6) / 6 + (hash(Math.floor((tr - a) * 6), 9) < 0.25 ? -1 / 6 : 0) : null);
     const s1 = stut(T.bell1 + 0.12, T.bell1 + 0.9); if (s1 !== null) return Math.max(T.bell1 + 0.12, s1);
     const s2 = stut(T.bell2 + 0.2, T.bell2 + 1.4); if (s2 !== null) return Math.max(T.bell2 + 0.2, s2);
-    const a = T.bell1 + 0.9, b = T.reach0;
+    const a = T.bell1 + 0.9, b = T.walk1 - 0.5; // the jump lands mid-cross, before the intercom comes up
     if (tr >= a && tr < b) return a + 0.6 * (tr - a);
     return tr;
   }
@@ -439,7 +439,7 @@ export default class Door extends LitScene {
     const inK = 1 - smoothstep(s, s + 0.3, tr), outK = tr >= e - 1 / 60 ? 1 : 0; // one white frame: the snap back to the present
     const breathe = 0.5 + 0.5 * Math.sin((tr - s) * 2 * Math.PI * 0.9);
     return {
-      sat: tr > T.home + 0.1 && tr < T.alone + 0.45 ? 0.6 : 0.32, tint: [0.92, 1.0, 1.07] as [number, number, number], lift: 0.012 + Math.max(inK > 0.8 ? 1.1 : 0, outK * 1.2, 0.3 * ring * (ring > 0.7 ? 1 : 0)), exposure: 1.22, bloom: 0.9, ca: 2.4 + 3 * ring,
+      sat: tr > T.home + 0.1 && tr < T.alone + 0.95 ? 0.6 : 0.32, tint: [0.92, 1.0, 1.07] as [number, number, number], lift: 0.012 + Math.max(inK > 0.8 ? 1.1 : 0, outK * 1.2), exposure: 1.22, bloom: 0.9, ca: 2.4 + 3 * ring,
       grain: 0.1 + 0.04 * breathe + 0.06 * ring, vignette: 0.55 + 0.18 * breathe,
       // the white frames of the cut in / snap out and the ring's flashes are in the world's lift, so the sung line stays readable
       zoom: 1 + 0.07 * inK + 0.035 * ring, shake: [8 * ring * Math.sin(tr * 173), 6 * ring * Math.cos(tr * 151)] as [number, number],
@@ -519,7 +519,7 @@ export default class Door extends LitScene {
   drawUI(u: CanvasRenderingContext2D, t: number, f: Frame) {
     const T = this.T;
     this.heading(u, t, f);
-    this.callout(u, t, homeLabel('door'), T.home + 0.15, T.alone + 0.35, () => this.onScreen(...this.home.our), { places: [city().home.name] });
+    this.callout(u, t, homeLabel('door'), T.home + 0.15, T.alone + 0.85, () => this.onScreen(...this.home.our), { places: [city().home.name] });
   }
 
   /** The left hand: presses the lamp switch; later reaches for the big button and stops short. */

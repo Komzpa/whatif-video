@@ -422,12 +422,12 @@ export default class Tease extends LitScene {
       this.torchHand(u, pose, light);
       this.heading(u, t, f);
       this.callout(u, t, homeLabel('tease'), T.s + 0.1, T.s + 2.0, () => this.onScreen(-10, 4, -46), { places: [city().home.name] });
-      this.callout(u, t, 'НЕДЕЛЯ ДОБРОТЫ', T.they + 3.4, T.they + 6.2, () => this.onScreen(POSTER[0] + 0.45, POSTER[1] + 0.5, POSTER[2]), { maybe: true });
-      const win = [[T.tease - 2.4, T.tease - 0.15], [T.tease + 0.15, T.tease + 2.15], [T.laugh + 0.2, T.call + 0.6]];
+      this.callout(u, t, 'НЕДЕЛЯ ДОБРОТЫ', T.they + 2.6, T.they + 5.4, () => this.onScreen(POSTER[0] + 0.45, POSTER[1] + 0.5, POSTER[2]), { maybe: true });
+      const win = [[T.tease - 3.25, T.tease - 0.4], [T.tease - 0.1, T.tease + 2.8], [T.tease + 3.1, T.tease + 6.0]]; // each ≥ 2.9 s: the maybe-translation must stay readable (A1)
       SAYS.forEach((sy, i) => {
         const [a, b] = win[i]!;
         const bub = this.speech(u, t, garble(sy.ru), a, b, this.kids[sy.kid]!, 40 + i);
-        this.callout(u, t, sy.tr, a + 0.45, b, () => bub, { maybe: true });
+        this.callout(u, t, sy.tr, a + 0.25, b, () => bub, { maybe: true });
       });
     }
     this.composite2D(this.ui, out);
