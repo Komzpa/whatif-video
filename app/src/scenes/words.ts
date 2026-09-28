@@ -28,7 +28,8 @@ const GW = PORTRAIT ? 1.35 : 1.45, GH = PORTRAIT ? 2.0 : 2.15; // one LED glyph 
 const SIT_Z = 1.3, SIT_Y = 0.8;
 const BUS_Z = -6.5;
 
-interface Glyph { m: THREE.Mesh; mat: THREE.MeshBasicMaterial; tex0?: THREE.Texture; tex1?: THREE.Texture; tb: number; slot: THREE.Vector3; tf: number; vx: number; vz: number; spin: THREE.Vector3; land: number; seed: number }
+interface Shard { m: THREE.Mesh; c: THREE.Vector3; v: THREE.Vector3; spin: THREE.Vector3 }
+interface Glyph { shards?: Shard[]; ts?: number; m: THREE.Mesh; mat: THREE.MeshBasicMaterial; tex0?: THREE.Texture; tex1?: THREE.Texture; tb: number; slot: THREE.Vector3; tf: number; vx: number; vz: number; spin: THREE.Vector3; land: number; seed: number }
 
 export default class Words extends LitScene {
   chapter = 'words';
@@ -41,6 +42,7 @@ export default class Words extends LitScene {
   bus!: THREE.Group; busSign = ''; busSignMesh!: THREE.Mesh; busLights: THREE.Light[] = [];
   panes!: WindowPanes;
   lampP: V3 = [0, 0, 0];
+  offMat!: THREE.MeshStandardMaterial;
 
   override init() {
     this.initLit();
@@ -143,6 +145,16 @@ export default class Words extends LitScene {
   buildScreen() {
     const S = this.three, T = this.T, r = mulberry32(151);
     // the screen first says it plainly, in its own language; each letter then breaks into mojibake before it falls
+    // a module switched off: black plastic, the dead dot grid (r2 author 7: modules go dark BEFORE they fall)
+    {
+      const cv = document.createElement('canvas'); cv.width = 80; cv.height = 120;
+      const c = cv.getContext('2d')!;
+      c.fillStyle = '#0d0c0b'; c.fillRect(0, 0, 80, 120);
+      for (let y = 0; y < 30; y++) for (let x = 0; x < 20; x++) { c.fillStyle = 'rgba(95,90,82,0.55)'; c.beginPath(); c.arc(x * 4 + 2, y * 4 + 2, 1.15, 0, Math.PI * 2); c.fill(); }
+      c.strokeStyle = 'rgba(190,185,175,0.75)'; c.lineWidth = 3; c.strokeRect(1, 1, 78, 118);
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      this.offMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45, metalness: 0.1, side: THREE.DoubleSide });
+    }
     const chars = [...this.plain], bad = [...this.text];
     const broken = (i: number) => (bad.length === chars.length ? bad[i]! : garble(chars[i]!));
     const rows = PORTRAIT ? [chars.slice(0, 2), chars.slice(3, 12), chars.slice(13)] : [chars];
@@ -182,7 +194,7 @@ export default class Words extends LitScene {
         m.position.copy(slot); S.add(m);
         const order = idx.indexOf(i);
         const tf = times[Math.min(order + 1, times.length - 1)]!;
-        this.glyphs.push({ m, mat, tex0, tex1, tb: Math.max(T.s + 2.7 + hash(i, 21) * 0.6, tf - 1.3 + hash(i, 22) * 0.4), slot, tf, vx: (r() - 0.5) * 2, vz: 6.2 + r() * 3.8, spin: new THREE.Vector3((r() - 0.5) * 7, (r() - 0.5) * 3, (r() - 0.5) * 5), land: 0, seed: i });
+        this.glyphs.push({ m, mat, tex0, tex1, tb: Math.max(T.s + 2.7 + hash(i, 21) * 0.6, tf - 1.3 + hash(i, 22) * 0.4), slot, tf, vx: (r() - 0.5) * 2, vz: 5.9 + r() * 1.6, spin: new THREE.Vector3((r() - 0.5) * 7, (r() - 0.5) * 3, (r() - 0.5) * 5), land: 0, seed: i });
       });
     });
     // the heart (two halves) to the left of the text
@@ -191,7 +203,7 @@ export default class Words extends LitScene {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(GW, GH), mat);
       const slot = new THREE.Vector3(-wTot / 2 + 1.25 * GW + side * GW / 2, SY, FZ + 0.27);
       m.position.copy(slot); S.add(m);
-      this.heart.push({ m, mat, tb: 1e9, slot, tf: times[0]! - 0.05 + (side > 0 ? 0.12 : 0), vx: side * 1.5, vz: 7.5, spin: new THREE.Vector3(2, 0, side * 3), land: 0, seed: 90 + side });
+      this.heart.push({ m, mat, tb: 1e9, slot, tf: times[0]! - 0.05 + (side > 0 ? 0.12 : 0), vx: side * 1.5, vz: 6.6, spin: new THREE.Vector3(2, 0, side * 3), land: 0, seed: 90 + side });
     }
   }
 
@@ -244,29 +256,83 @@ export default class Words extends LitScene {
       const want = e < 0 ? g.tex0 : e < 0.35 ? (hash(Math.floor(t * 24), g.seed + 40) < 0.5 ? g.tex0 : g.tex1) : g.tex1;
       if (g.mat.map !== want) { g.mat.map = want; g.mat.needsUpdate = true; }
     }
+    const off = (dark: boolean) => { const want = dark ? this.offMat : g.mat; if (g.m.material !== want) g.m.material = want; };
     if (d <= 0) {
-      // before the fall: a loose letter shivers
+      // before the fall: a loose letter shivers, stutters and switches OFF (dark, no dots) before it lets go
       const shiver = d > -0.5 ? Math.sin(t * 60 + g.seed) * 0.03 * (1 + d * 2) : 0;
       g.m.position.copy(g.slot); g.m.position.x += shiver; g.m.rotation.set(0, 0, shiver * 0.5);
-      g.mat.color.setScalar(1.25);
+      const dying = d > -0.32 && d <= -0.1, dead = d > -0.1;
+      off(dead || (dying && hash(Math.floor(t * 26), g.seed + 7) < 0.55));
+      g.mat.color.setScalar(dying ? 0.6 : 1.25);
       return;
     }
+    off(true);
     const gv = 9.8;
     const yLand = 0.05;
     const tLand = Math.sqrt((2 * (g.slot.y - yLand)) / gv);
     if (d < tLand) {
+      g.m.visible = true;
       g.m.position.set(g.slot.x + g.vx * d, g.slot.y - 0.5 * gv * d * d, g.slot.z + g.vz * d);
       g.m.rotation.set(g.spin.x * d, g.spin.y * d, g.spin.z * d);
-      g.mat.color.setScalar(1.25 * (0.75 + 0.25 * hash(Math.floor(t * 20), g.seed)));
-    } else {
-      // on the ground: lying flat, face up, the dots dying
-      const k = d - tLand;
-      const skid = (1 - Math.exp(-k * 2.5)) / 2.5 * 0.45;
-      g.m.position.set(g.slot.x + g.vx * (tLand + skid), yLand + 0.02 * Math.abs(Math.sin(k * 14)) * Math.exp(-k * 6), g.slot.z + g.vz * (tLand + skid));
-      g.m.rotation.set(-Math.PI / 2, 0, g.spin.z * 0.3);
-      g.mat.color.setScalar(Math.max(0.45, 1.1 * Math.exp(-k * 0.7)) * (hash(Math.floor(t * 12), g.seed) < 0.1 ? 0.3 : 1));
-      g.land = 1;
+      return;
     }
+    // on the ground: lying flat, face up, dead
+    const k = d - tLand;
+    const skid = (1 - Math.exp(-k * 2.5)) / 2.5 * 0.45;
+    g.m.position.set(g.slot.x + g.vx * (tLand + skid), yLand + 0.02 * Math.abs(Math.sin(k * 14)) * Math.exp(-k * 6), g.slot.z + g.vz * (tLand + skid));
+    g.m.rotation.set(-Math.PI / 2, 0, g.spin.z * 0.3);
+    g.land = 1;
+    // the bus runs over it: the module cracks and shatters into pieces that skitter along the asphalt
+    const ts = this.shatterAt(g);
+    if (ts === null || t < ts) { g.m.visible = true; if (g.shards) for (const q of g.shards) q.m.visible = false; return; }
+    g.m.visible = false;
+    if (!g.shards) g.shards = this.makeShards(g);
+    const e = t - ts;
+    g.m.updateMatrixWorld(true);
+    for (const q of g.shards) {
+      q.m.visible = true;
+      const home = q.c.clone().applyMatrix4(g.m.matrixWorld);
+      const fr = 1 - Math.exp(-e * 3.2); // sliding with friction
+      const up = Math.max(0, q.v.y * e - 4.9 * e * e);
+      q.m.position.set(home.x + q.v.x / 3.2 * fr, yLand + 0.01 + up, home.z + q.v.z / 3.2 * fr);
+      q.m.rotation.set(-Math.PI / 2 + (up > 0 ? q.spin.x * e : 0), up > 0 ? q.spin.y * e : 0, g.spin.z * 0.3 + q.spin.z * fr);
+    }
+  }
+
+  /** When the bus's front wheels reach a module lying in its lane (null: not in the lane). */
+  shatterAt(g: Glyph): number | null {
+    if (g.ts !== undefined) return g.ts < 0 ? null : g.ts;
+    const tLand = Math.sqrt((2 * (g.slot.y - 0.05)) / 9.8);
+    const x = g.slot.x + g.vx * (tLand + 0.18), z = g.slot.z + g.vz * (tLand + 0.18);
+    // front axle reaches it, or (if it landed just after the front passed) the rear axle 7 m behind
+    const front = this.T.bus - 2.7 + (70 - 3.6 - x) / 26, rear = front + 7 / 26, land = g.tf + tLand;
+    g.ts = Math.abs(z - BUS_Z) < 1.7 ? (land <= front ? front : land <= rear ? rear : -1) : -1;
+    return g.ts < 0 ? null : g.ts;
+  }
+
+  /** The module's plane fractured into triangles fanned from a crack point (real pieces of the same face). */
+  makeShards(g: Glyph): Shard[] {
+    const r = mulberry32(700 + g.seed), w = g.seed >= 89 ? GW : GW * 0.96, h = GH;
+    const cx = (r() - 0.5) * w * 0.4, cy = (r() - 0.5) * h * 0.4;
+    const rim: [number, number][] = [];
+    const per = [[-w / 2, -h / 2, w / 2, -h / 2], [w / 2, -h / 2, w / 2, h / 2], [w / 2, h / 2, -w / 2, h / 2], [-w / 2, h / 2, -w / 2, -h / 2]];
+    for (const [x0, y0, x1, y1] of per) { rim.push([x0!, y0!]); const n = 1 + Math.floor(r() * 2); for (let k = 1; k <= n; k++) { const u = (k + (r() - 0.5) * 0.6) / (n + 1); rim.push([lerp(x0!, x1!, u), lerp(y0!, y1!, u)]); } }
+    const out: Shard[] = [];
+    for (let i = 0; i < rim.length; i++) {
+      const a = rim[i]!, b = rim[(i + 1) % rim.length]!;
+      const mx = (a[0] + b[0] + cx) / 3, my = (a[1] + b[1] + cy) / 3;
+      const pos = [cx - mx, cy - my, 0, a[0] - mx, a[1] - my, 0, b[0] - mx, b[1] - my, 0];
+      const uv = [cx / w + 0.5, cy / h + 0.5, a[0] / w + 0.5, a[1] / h + 0.5, b[0] / w + 0.5, b[1] / h + 0.5];
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, this.offMat); m.visible = false; this.three.add(m);
+      // pieces fly outwards from the crack and are dragged along the bus's heading (-x)
+      const dx = mx, dz = -my, L = Math.hypot(dx, dz) || 1;
+      out.push({ m, c: new THREE.Vector3(mx, my, 0), v: new THREE.Vector3(dx / L * (1.5 + r() * 2.5) - 3 - r() * 4, 0.8 + r() * 1.6, dz / L * (1.5 + r() * 2.5)), spin: new THREE.Vector3((r() - 0.5) * 14, (r() - 0.5) * 10, (r() - 0.5) * 4) });
+    }
+    return out;
   }
 
   firstBreak() { return Math.min(...this.glyphs.map((g) => g.tb)); }
@@ -340,12 +406,14 @@ export default class Words extends LitScene {
     const gb = this.glow3D;
     gb.add(this.lampP[0], this.lampP[1], this.lampP[2], 0.45, 0.35, LIN.sodium, 2.2, 4);
     for (const hp of (this as unknown as { lampsX?: V3[] }).lampsX ?? []) gb.add(hp[0], hp[1], hp[2], 0.45, 0.35, LIN.sodium, 2.2, 4);
-    // the screen's halo while it talks; each falling letter trails a glow; sparks where they land
+    // the screen's halo while it talks
     if (lit0 > 0) gb.add(0, SY, FZ + 0.45, this.scrW * 0.56, this.scrH * 0.64, [1.0, 0.6, 0.2], 0.03 * lit0, 8); // a tight halo round the panel
+    // the modules switch off before they fall: no trails, no glow on the asphalt (r2 author 7)
     for (const g of [...this.glyphs, ...this.heart]) {
-      const d = t - g.tf;
-      if (d > 0 && !g.land) gb.add(g.m.position.x, g.m.position.y, g.m.position.z, 0.9, 0.9, g.seed >= 89 ? [1, 0.2, 0.25] : [1, 0.6, 0.2], 0.25, 2);
-      if (g.land) { const k = d - Math.sqrt((2 * (g.slot.y - 0.05)) / 9.8); if (k < 0.5) for (let s = 0; s < 6; s++) { const a = hash(g.seed, s) * 6.28, rr = k * (1 + hash(g.seed, s + 9) * 3); gb.add(g.m.position.x + Math.cos(a) * rr, 0.1 + (1 - k * 2) * 0.5 * hash(s, g.seed), g.m.position.z + Math.sin(a) * rr, 0.08, 0.08, [1, 0.7, 0.3], 2 * (1 - k * 2), 3); } else gb.add(g.m.position.x, 0.08, g.m.position.z, 0.8, 0.5, [1, 0.55, 0.15], 0.1 * Math.exp(-k * 0.8), 2); }
+      const ts = g.land ? this.shatterAt(g) : null;
+      if (ts === null || t < ts || t > ts + 0.3) continue;
+      const k = (t - ts) / 0.3; // cold glints of breaking plastic and glass under the wheel (not lit LEDs)
+      for (let q = 0; q < 7; q++) { const an = hash(g.seed, q + 30) * 6.28, rr = 0.2 + k * (0.6 + hash(g.seed, q + 40) * 1.4); gb.add(g.m.position.x + Math.cos(an) * rr - k * 1.2, 0.12 + 0.3 * hash(q, g.seed) * (1 - k), g.m.position.z + Math.sin(an) * rr, 0.05, 0.05, [0.85, 0.9, 1], 1.6 * (1 - k), 3); }
     }
     if (this.bus.visible) { gb.add(bx - 5.8, 0.9, BUS_Z + 0.9, 0.35, 0.35, [1, 0.95, 0.8], 3, 3); gb.add(bx - 5.8, 0.9, BUS_Z - 0.9, 0.35, 0.35, [1, 0.95, 0.8], 3, 3); gb.add(bx + 5.75, 0.8, BUS_Z + 1.0, 0.15, 0.15, [1, 0.1, 0.05], 2, 3); }
     this.flushGlow(out);

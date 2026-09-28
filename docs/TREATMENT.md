@@ -14,6 +14,12 @@ unfamiliar district's signs into shuffled Cyrillic («деръл бунд гюо
 - No Georgian or other real script stands in for the soup.
 - Checked by TESTPLAN A13: Latin/box glyphs appear only in 'garble' items, and each re-derives from its source.
 
+### r8 author notes 3–8 (2026-09-28, same round)
+- **7. words LED collapse.** Keep the broken mid-collapse fragment («й обну сь»). A letter module first stutters and
+  switches OFF (dark plastic, dead dot grid, no image, no glow) before it lets go; it falls and lands dark. When the
+  night bus's wheels reach a module lying in its lane, the module cracks and shatters into pieces that skitter along
+  the asphalt (cold glints, not lit LEDs). Modules that land after the bus has passed stay whole and dark.
+
 
 ## r7: Russian clip, Soviet city (author, 2026-09-27 01:15; overrides every English-text and grid-city item below)
 «надо клип делать весь на русском как книжка исходная. и город "советский" брать, не квадратно-гнездовой.»
