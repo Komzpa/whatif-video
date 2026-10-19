@@ -533,7 +533,9 @@ export default class Door extends LitScene {
   drawUI(u: CanvasRenderingContext2D, t: number, f: Frame) {
     const T = this.T;
     this.heading(u, t, f);
-    this.callout(u, t, homeLabel('door'), T.home + 0.15, T.alone + 0.85, () => this.onScreen(...this.home.our), { places: [city().home.name] });
+    // the label keeps off our lit window itself (light through its plate failed A9 once the cat inside became a subject)
+    const ourWin = (): Box[] => { const W0 = HOME.WIN, q = [[W0.x0, W0.y0], [W0.x1, W0.y0], [W0.x0, W0.y1], [W0.x1, W0.y1]].map(([x, y]) => this.onScreen(...this.home.toWorld([x!, y!, 0.3]))); if (q.some((v) => !v)) return []; const xs = q.map((v) => v!.x), ys = q.map((v) => v!.y); return [{ x: Math.min(...xs) - 8, y: Math.min(...ys) - 8, w: Math.max(...xs) - Math.min(...xs) + 16, h: Math.max(...ys) - Math.min(...ys) + 16 }]; };
+    this.callout(u, t, homeLabel('door'), T.home + 0.15, T.alone + 0.85, () => this.onScreen(...this.home.our), { places: [city().home.name], avoid: () => ourWin() });
   }
 
   /** The left hand: presses the lamp switch; later reaches for the big button and stops short. */

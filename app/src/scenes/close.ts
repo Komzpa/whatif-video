@@ -17,7 +17,7 @@ import { homeLabel, city } from '../city';
 import { drawOpenHand, pxAt, type Light } from './_hands';
 import {
   LitScene, KID, lit, canvasTex, speckle, blotches, asphalt, boxMesh, cyl, ground, concreteTex, streetLight,
-  panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, EYE, project, type Pov, type V3, type LitWindow,
+  panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, EYE, project, type Pov, type V3, type Box, type LitWindow,
 } from './_kit';
 import { Figure } from './_people';
 import { buildHome, HOME } from './_home';
@@ -310,7 +310,8 @@ export default class Close extends LitScene {
       const gk = prog(t, T.coat - 0.15, T.coat + 0.55, ease.outCubic) * 0.75, ga = (1 - smoothstep(T.coat + 0.5, T.coat + 1.2, t)) * 0.8;
       this.ghost(u, t, gk, ga);
       if (!this.third) { this.torchHand(u, pose, light); this.reach(u, t, light); }
-      this.callout(u, t, homeLabel('close'), T.open + 0.3, T.open + 2.3, () => this.onScreen(DOOR_X - 0.75, FY + 2.15, -RD + 0.02), { places: [city().home.name] }); // on the dark wall above and left of the doorway, clear of the child's head (author r1 item 4)
+      const doorway = (): Box[] => { const q = [[DOOR_X - 0.5, FY], [DOOR_X + 0.5, FY], [DOOR_X - 0.5, FY + 2.2], [DOOR_X + 0.5, FY + 2.2]].map(([x, y]) => this.onScreen(x!, y!, -RD)); if (q.some((v) => !v)) return []; const xs = q.map((v) => v!.x), ys = q.map((v) => v!.y); return [{ x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }]; }; // the lit doorway glares through the label's plate (A9)
+      this.callout(u, t, homeLabel('close'), T.open + 0.3, T.open + 2.3, () => this.onScreen(DOOR_X - 0.75, FY + 2.15, -RD + 0.02), { places: [city().home.name], avoid: () => doorway() }); // on the dark wall above and left of the doorway, clear of the child's head (author r1 item 4)
       this.callout(u, t, 'ПАЛЬТО', T.coat + 0.35, T.phone + 0.1, () => this.onScreen(HOOK[0] - 0.13, HOOK[1] - 0.45, HOOK[2]));
     }
     this.composite2D(this.ui, out);

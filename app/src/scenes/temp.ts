@@ -68,7 +68,7 @@ export default class Temp extends LitScene {
     // to −27°; from above in the snow as the cat jumps down; over the shoulder walking on with the cat
     this.shots = [
       [T.s, T.line1 + 1.6, { k: 'back', /* 23:47 readable ≥ 1.5 s after the snap to the beat */ d: 1.2, h: 1.5, side: -1, ahead: 1, aimY: PORTRAIT ? 0.9 : 0.6 }],
-      [T.line2, T.line2 + 1.2, { k: 'free', /* r9 note 3: with cuts on beats the board shot needs the earlier beat (A1: −27° ≥ 1.5 s) */ p: [1.6, 1.25, DOOR[2] + 4.2], p1: [1.4, 1.2, DOOR[2] + 3.6], look: [DOOR[0] + 0.4, 1.0, DOOR[2] - 0.2], look1: [PORTRAIT ? -0.3 : -1.2, 1.0, DOOR[2] - 1.6], fov: PORTRAIT ? 66 : 50 }],
+      [T.out, T.line2 + 1.2, { k: 'free', /* r9 note 3: with cuts on beats the board shot needs the earlier beat (A1: −27° ≥ 1.5 s) */ p: [1.6, 1.25, DOOR[2] + 4.2], p1: [1.4, 1.2, DOOR[2] + 3.6], look: [DOOR[0] + 0.4, 1.0, DOOR[2] - 0.2], look1: [PORTRAIT ? -0.3 : -1.2, 1.0, DOOR[2] - 1.6], fov: PORTRAIT ? 66 : 50 }],
       [T.line2 + 1.2, T.cold + 0.15, { k: 'back', d: 1.3, h: 0.8, side: 1, ahead: 1, aimY: PORTRAIT ? 1.7 : 2.4, yaw: PORTRAIT ? 0.1 : 0.3 }],
       [T.cold + 0.15, T.cold + 1.7, { k: 'high', d: 0.4, d1: 0.5, h: 0.6, side: -0.5, ahead: PORTRAIT ? 0 : 0.7 }],
       // portrait: a wide from behind, the child small under the sung line and the board clear above it (r9 note 4; r5 item 2)
