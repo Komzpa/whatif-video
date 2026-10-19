@@ -12,3 +12,6 @@ analysis/__pycache__/
 analysis/stems/
 analysis/work/
 analysis/qa/
+
+# the song is not published
+audio/*.mp3

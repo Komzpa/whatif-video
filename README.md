@@ -1,6 +1,7 @@
 # What if — a code-rendered music video
 
-Song: "What if" by komzpa (`audio/whatif.mp3`, lyrics in `lyrics/lyrics.txt`, the author's own text).
+Song: "What if" by komzpa (lyrics in `lyrics/lyrics.txt`, the author's own text). The track itself is not in this
+repository: put it at `audio/whatif.mp3` to preview or render; `data/audio.json` already holds its beat and lyric timing.
 Concept, palette, type and chapters: `docs/TREATMENT.md`. Build scope: `docs/BUILD-BRIEF.md`.
 
 The video is a web app (`app/`, TypeScript + three.js, bun + Vite). It renders any song time
