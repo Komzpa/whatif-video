@@ -730,7 +730,7 @@ export default class Lost extends CityScene {
     this.curtain.position.set(0, OPEN_H, CURT_Z);
     S.add(this.curtain);
     // the station board on the wall above the drum; the metro «М» on a post by the roof
-    this.vestBoard = new NeonSign({ kind: 'led', header: 'М', lines: [moji(exitStation().name, 1, 'cp1251>cp866')], pos: [0, 3.9, FACE_Z - 0.02], rotY: Math.PI, height: 0.42, color: 'sodium', garbled: true });
+    this.vestBoard = new NeonSign({ kind: 'led', header: 'М', lines: [moji(exitStation().name)], pos: [0, 3.9, FACE_Z - 0.02], rotY: Math.PI, height: 0.42, color: 'sodium', garbled: true });
     S.add(this.vestBoard.mesh);
     const mtex = new THREE.CanvasTexture(metroSignCanvas(256, 1)); mtex.colorSpace = THREE.SRGBColorSpace;
     const msign = new THREE.Mesh(new THREE.CircleGeometry(0.5, 40), new THREE.MeshBasicMaterial({ map: mtex, fog: true }));

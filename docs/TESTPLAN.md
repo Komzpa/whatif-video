@@ -49,7 +49,7 @@ Each check must fail on the rejected draft named in its row (baseline proof) and
 | A9 | WCAG contrast of readable text against its local background | ≥ 4.5:1 (≥ 3:1 for text ≥ 48 px) | — |
 | A10 | Loudness and sync: integrated LUFS −14 ± 1; each lyric line starts within ±60 ms of its aligned word | all | — |
 | A12 | Line-map labels intersecting a station dot, the line or the board edge; stations not evenly spaced on one straight line | 0 | lost r3 (≈9 s) |
-| A13 | Latin letters or box-drawing glyphs in any on-screen text outside glyph soup; every glyph-soup ('garble') string must re-derive from a Russian city.json name by a real codec transform (TREATMENT item 6 + r8) | 0 | lost r3, r2 author |
+| A13 | Latin letters or box-drawing glyphs in any on-screen text outside glyph soup; every glyph-soup ('garble') string must re-derive from its logged Russian source by CP1251 read as CP1252 only (TREATMENT r9 note 1: no UTF-8 or CP866 readings), garbled whole or word by word: each word either clean or garbled whole, never a word mixing Cyrillic and Latin letters | 0 | full r3 (`7767e7d`: «Ïрîсïåêт Строèтелей», «ЗаводсÐºÐ°я» on the `lost` board, CP866 «╨Ч╨Р╨Т╨Ю╨Ф») |
 | A14 | Continuity (`qa-continuity.ts`, static): child from `KID`, torch hand only via `drawTorchHand`, every cat `OUR_CAT`, the man in tease/alone/words/stranger from `STRANGER`, the home in door and close from `buildHome` (TREATMENT r8 continuity table; visual half `proof-continuity.py`) | 0 | r1 (252b4c1: 18 faults) |
 | A11 | Draft identity: file name carries rN, and a `…-rN.json` next to it holds the content sha of the render inputs (code, data, audio) | present, sha differs from r(N−1) | — |
 

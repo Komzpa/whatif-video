@@ -14,6 +14,7 @@ import { W, H, PORTRAIT } from '../engine/gl';
 import { clamp, ease, lerp, smoothstep, keys, mulberry32, hash } from '../engine/util';
 import { F, font } from '../engine/type';
 import { garble, homeLabel, city } from '../city';
+import { transcode } from '../mojibake';
 import { type Light } from './_hands';
 import {
   LitScene, lit, glowMat, canvasTex, speckle, blotches, asphalt, boxMesh, cyl, ground, concreteTex, streetLight,
@@ -35,7 +36,7 @@ interface Glyph { shards?: Shard[]; ts?: number; m: THREE.Mesh; mat: THREE.MeshB
 export default class Words extends LitScene {
   chapter = 'words';
   text = ''; plain = 'МЫ ЗАБОТИМСЯ О ВАС';
-  glyphs: Glyph[] = [];
+  glyphs: Glyph[] = []; wordTb: number[] = [];
   heart: Glyph[] = [];
   screenBox!: THREE.Mesh;
   scrLight!: THREE.SpotLight; scrSide: THREE.SpotLight[] = []; scrW = 10; scrH = 3;
@@ -200,6 +201,13 @@ export default class Words extends LitScene {
         this.glyphs.push({ m, mat, tex0, tex1, tb: Math.max(T.s + 2.7 + hash(i, 21) * 0.6, tf - 1.3 + hash(i, 22) * 0.4), slot, tf, vx: (r() - 0.5) * 2, vz: 5.9 + r() * 1.6, spin: new THREE.Vector3((r() - 0.5) * 7, (r() - 0.5) * 3, (r() - 0.5) * 5), land: 0, seed: i });
       });
     });
+    // r9 note 1: a word breaks into mojibake whole (all its letters switch together at the word's first break),
+    // never a Cyrillic word with single Latin letters in it; the letters still fall one by one afterwards
+    const wordOf = (i: number) => chars.slice(0, i).join('').split(' ').length - 1;
+    const wtb = new Map<number, number>();
+    for (const g of this.glyphs) { const w = wordOf(g.seed); wtb.set(w, Math.min(wtb.get(w) ?? Infinity, g.tb)); }
+    for (const g of this.glyphs) g.tb = wtb.get(wordOf(g.seed))!;
+    this.wordTb = this.plain.split(' ').map((_, w) => wtb.get(w) ?? Infinity);
     // the heart (two halves) to the left of the text
     for (const side of [-1, 1]) {
       const mat = new THREE.MeshBasicMaterial({ map: this.ledTex('', side), toneMapped: false, fog: true, side: THREE.DoubleSide });
@@ -432,7 +440,11 @@ export default class Words extends LitScene {
     if (sb && t < Math.min(...this.glyphs.map((g) => g.tf))) {
       const inFrame = sb.x >= 0 && sb.y >= 0 && sb.x + sb.w <= W && sb.y + sb.h <= H;
       if (t >= lastOn && t < firstBreak) logText('sign', this.plain, inFrame && sb.h > 14, sb, { id: 'sign:words-screen' });
-      else if (t >= firstBreak) logText('garble', this.text, inFrame && sb.h > 14, sb, { id: 'scenery:words-screen' });
+      else if (t >= firstBreak) { // what the screen shows now: each word plain or garbled whole
+        const now = this.plain.split(' ').map((w, k) => (t >= this.wordTb[k]! + 0.35 ? transcode(w, 'cp1251>cp1252') : w)).join(' ');
+        if (now === this.plain) logText('sign', now, inFrame && sb.h > 14, sb, { id: 'scenery:words-screen-plain' });
+        else logText('garble', now, inFrame && sb.h > 14, sb, { id: 'scenery:words-screen', moji: [{ src: this.plain, codec: 'cp1251>cp1252', level: 0.5 }] });
+      }
     }
     const tb0 = t >= this.firstBreak();
     this.logPlane(this.table, tb0 ? this.tableText : 'РАСПИСАНИЕ', tb0 ? 'garble' : 'sign', { frac: [0.05, 0.0, 0.95, 0.14], minPx: 10, id: 'scenery:words-table', scenery: true });

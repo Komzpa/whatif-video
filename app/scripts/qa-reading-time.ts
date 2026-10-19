@@ -28,6 +28,13 @@ import { chromium } from 'playwright-core';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { mojibake, type Codec } from '../src/mojibake';
+// r9 note 1 (TESTPLAN A13): the only codec glyph soup may use, and the word-by-word rule, kept here (not imported
+// from the app) so the check is the same oracle on old drafts' code
+const ALLOWED_CODECS = ['cp1251>cp1252'];
+const wordwise = (src: string, out: string, codec: Codec) => {
+  const a = src.split(/(\s+)/), b = out.split(/(\s+)/);
+  return a.length === b.length && a.every((p, i) => (i % 2 === 1 ? p === b[i] : b[i] === p || b[i] === mojibake(p, codec, 1)));
+};
 
 const argv = process.argv.slice(2);
 const opt = (k: string, d?: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : d; };
@@ -323,9 +330,18 @@ try {
   for (const fr of frames) for (const it of fr) {
     if (OBJECTS.includes(it.kind) || it.kind === 'prop' || a13.has(it.text)) continue;
     if (it.kind === 'garble') {
+      // r9 note 1: Win95 CP1251 read as CP1252 only; a string is garbled whole or word by word, never a Cyrillic
+      // word with Latin letters inside («Ïрîсïåêт», «ЗаводсÐºÐ°Ñ»)
       const parts = it.text.split(' / ');
-      const ok = parts.every((p, k) => { const m = it.moji?.[k]; return !!m && /[А-яЁё]/.test(m.src) && mojibake(m.src, m.codec, m.level) === p; });
-      if (!ok) a13.set(it.text, `garble ${JSON.stringify(it.text)} is not a codec transform of a logged Russian source`);
+      const why = parts.map((p, k) => {
+        const m = it.moji?.[k];
+        if (!m || !/[А-яЁё]/.test(m.src)) return 'is not a codec transform of a logged Russian source';
+        if (!ALLOWED_CODECS.includes(m.codec)) return `uses codec ${m.codec} (only ${ALLOWED_CODECS.join(', ')} is allowed)`;
+        if (p.split(/\s+/).some((w) => /[А-яЁё]/.test(w) && /[A-Za-z\u00C0-\u024F]/.test(w))) return 'has a word mixing Cyrillic and Latin letters';
+        if (m.level >= 1 ? mojibake(m.src, m.codec, 1) !== p : !wordwise(m.src, p, m.codec)) return `is not ${m.level >= 1 ? 'the whole-string' : 'a word-by-word'} ${m.codec} transform of ${JSON.stringify(m.src)}`;
+        return '';
+      }).find(Boolean);
+      if (why) a13.set(it.text, `garble ${JSON.stringify(it.text)} ${why}`);
       continue;
     }
     if (LATIN.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Latin letters outside glyph soup`); continue; }

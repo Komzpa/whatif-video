@@ -1,23 +1,20 @@
-// Glyph soup by real wrong-codec transforms (TREATMENT item 6 + r8, TESTPLAN A13). A Russian name is encoded
-// with one codec and decoded with another, exactly as a mis-configured sign controller would show it:
-//   «ПРОДУКТЫ» UTF-8 read as CP1252 -> «ÐŸÐ ÐžÐ”Ð£ÐšÐ¢Ð«»;  CP1251 read as CP866 -> «╧╨╬─╙╩╥█».
-// The point is the author's «смотрю, но как прочесть — не ебу»: the output must NOT read as Russian, so the
-// readings are Latin-1 and DOS box-drawing ones (mis-decoded Latin/Cyrillic fragments, box glyphs), never a
-// Cyrillic-to-Cyrillic shuffle (r7 did that and it read as Russian words; r8 reverts it).
+// Glyph soup by a real wrong-codec transform (TREATMENT item 6, r8, r9 note 1; TESTPLAN A13). A Russian name is
+// encoded as Windows-1251 and decoded as Windows-1252, exactly as a Win95 machine with the wrong code page showed
+// it: «Проспект Строителей» -> «Ïðîñïåêò Ñòðîèòåëåé». r9 (author): «как бы язык но как бы не тот и странный» —
+// one byte per letter, so the word keeps its length and rhythm and reads as some other European language. The
+// UTF-8 readings («ÐŸÐ ÐžÐ”») show the Unicode pattern and the DOS ones (CP866, «╧╨╬─») box glyphs: both removed.
+// Never a Cyrillic-to-Cyrillic shuffle (r7 did that and it read as Russian words; r8 reverted it).
 // The byte tables are the browser's own WHATWG decoders (TextDecoder); an encoder is the inverse of the decoder
 // over the 256 byte values, so nothing here is hand-drawn. Characters a codec cannot encode become '?', and
 // C0/C1 control characters produced by the wrong decoder are dropped (a display shows nothing there).
-// `level` < 1 transforms only some characters (a deterministic per-character choice), for names that degrade
-// step by step; each transformed character is still the codec's real output for that character.
+// `level` < 1 garbles only some WORDS (a deterministic per-word choice), for names that degrade step by step: a
+// word is either clean or garbled whole, never a Cyrillic word with single Latin letters inside (r9 note 1).
 
-export type Codec = 'utf8>cp1252' | 'cp1251>cp866' | 'utf8>cp866' | 'cp1251>cp1252';
-export const CODECS: Codec[] = ['utf8>cp1252', 'cp1251>cp866', 'utf8>cp866', 'cp1251>cp1252'];
-const LABEL: Record<string, string> = { cp1251: 'windows-1251', cp1252: 'windows-1252', cp866: 'ibm866' };
+export type Codec = 'cp1251>cp1252';
+export const CODECS: Codec[] = ['cp1251>cp1252'];
+const LABEL: Record<string, string> = { cp1251: 'windows-1251', cp1252: 'windows-1252' };
 /** How the codec is named for people (Russian, for captions). */
-export const CODEC_RU: Record<Codec, string> = {
-  'utf8>cp1252': 'юникод прочитан как латиница', 'cp1251>cp866': '1251 прочитан как ДОС',
-  'utf8>cp866': 'юникод прочитан как ДОС', 'cp1251>cp1252': '1251 прочитан как латиница',
-};
+export const CODEC_RU: Record<Codec, string> = { 'cp1251>cp1252': '1251 прочитан как латиница (Win95)' };
 
 const dec = new Map<string, TextDecoder>();
 const decoder = (cs: string) => { let d = dec.get(cs); if (!d) { d = new TextDecoder(LABEL[cs]!); dec.set(cs, d); } return d; };
@@ -55,11 +52,24 @@ function h(s: string, i: number) {
 /** The codec a given name gets on a broken sign (deterministic per name). */
 export function codecFor(name: string): Codec { return CODECS[Math.floor(h(name, 7) * CODECS.length)]!; }
 
-/** Mojibake of `s` (level 1 = the whole string; < 1 = only some characters, per-character deterministic). */
+/**
+ * Mojibake of `s`: level 1 = the whole string; < 1 = only some whole words. The words garble in a fixed
+ * per-string order (deterministic), so a rising level adds words and never takes one back.
+ */
 export function mojibake(s: string, codec: Codec = codecFor(s), level = 1): string {
   if (level >= 1) return transcode(s, codec);
   if (level <= 0) return s;
-  return [...s].map((ch, i) => (ch !== ' ' && h(s, i) < level ? transcode(ch, codec) : ch)).join('');
+  const parts = s.split(/(\s+)/), words = parts.map((p, i) => (i % 2 === 0 && p ? i : -1)).filter((i) => i >= 0);
+  const order = [...words].sort((a, b) => h(s, a) - h(s, b));
+  const n = Math.min(words.length, Math.ceil(level * words.length - 1e-9)); // any level > 0 garbles at least one word
+  const pick = new Set(order.slice(0, n));
+  return parts.map((p, i) => (pick.has(i) ? transcode(p, codec) : p)).join('');
+}
+/** True when `out` is `src` with each whitespace-separated word either kept or garbled whole by `codec` (A13). */
+export function wordwise(src: string, out: string, codec: Codec): boolean {
+  const a = src.split(/(\s+)/), b = out.split(/(\s+)/);
+  if (a.length !== b.length) return false;
+  return a.every((p, i) => (i % 2 === 1 ? p === b[i] : b[i] === p || b[i] === transcode(p, codec)));
 }
 
 // ---------------------------------------------------------------- the registry (for QA)

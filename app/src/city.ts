@@ -114,7 +114,7 @@ export function toWorld(p: XY, origin: XY): [number, number] { return [(p[0] - o
 // ------------------------------------------------------------------ broken encoding (r5 item 6, r7)
 /**
  * A name as the child sees it in the unfamiliar district: real codec mojibake of the Russian name
- * (src/mojibake.ts; the codec is chosen per name). `level` 0..1 degrades step by step, character by character.
+ * (src/mojibake.ts: Win95 CP1251 read as CP1252). `level` 0..1 degrades step by step, whole word by whole word.
  */
 export function garble(name: string, level = 1): string { return moji(name, level); }
 
