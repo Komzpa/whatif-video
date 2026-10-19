@@ -107,7 +107,7 @@ try {
 }
 
 // ------------------------------------------------------------------ A11 identity
-const m = path.basename(video).match(/-r(\d+)(-tiktok)?\.mp4$/);
+const m = path.basename(video).match(/-r(\d+)(?:-(?!tiktok)[a-z0-9]+)?(-tiktok)?\.mp4$/); // an optional copy tag: …-r4-hq-tiktok.mp4 -> …-r4-hq.json
 if (!m) bad.push(`A11      ${path.basename(video)} does not carry rN`);
 else {
   const N = +m[1]!, json = video.replace(/(-tiktok)?\.mp4$/, '.json');
