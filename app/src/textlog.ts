@@ -24,7 +24,9 @@ export type TextKind =
   | 'book' // the handbook as a picture (r6: must never be on screen)
   | 'hand' // the child's hand and sleeve in the POV (a prop: counts for the lower-frame coverage check)
   | 'drone' // the drone (TREATMENT r5 item 8: none; A6)
-  | 'map'; // the map card (a non-diegetic overlay; labels inside it belong to it)
+  | 'map' // the map card (a non-diegetic overlay; labels inside it belong to it)
+  | 'subject' // a beat's living subject on screen (child, stranger, person, dog, cat; `text` = which): r9 note 4
+  | 'cam'; // the camera this frame (`cam`): r9 note 3 (camera motion QA)
 
 export interface TextBox { x: number; y: number; w: number; h: number }
 export interface TextItem {
@@ -50,6 +52,8 @@ export interface TextItem {
   maybe?: boolean;
   /** Karaoke: how many letters are lit (sung) this frame (A10 sync). */
   lit?: number;
+  /** 'cam': world position, forward vector, vertical fov (deg), and the post zoom/shake of the frame. */
+  cam?: { p: [number, number, number]; f: [number, number, number]; fov: number; zoom?: number; shake?: [number, number] };
 }
 
 let frame: TextItem[] | null = null;

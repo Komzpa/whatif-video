@@ -20,7 +20,7 @@ import {
   LitScene, lit, glowMat, canvasTex, speckle, blotches, asphalt, boxMesh, cyl, ground, concreteTex, streetLight,
   panelBlock, WindowPanes, kaPlate, KA_WORDS, POST_BASE, LIN, scaleRGB, lin, EYE, type Pov, type V3, type Box,
 } from './_kit';
-import { logText } from './_motifs';
+import { logText, project } from './_motifs';
 import { Figure, STRANGER, faceTo } from './_people';
 
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
@@ -66,7 +66,7 @@ export default class Words extends LitScene {
     // onto the road; from above the shelter, the letters dying on the asphalt; behind again as the bus goes by
     this.shots = [
       [s, T.hurt + (PORTRAIT ? 0.12 : 0.3), { k: 'wide', d: 0.8, h: 1.0, side: 0.3, ahead: 2.2, aimY: PORTRAIT ? 5.8 : 3.4, fov: PORTRAIT ? 74 : 60 }],
-      [T.words + 0.6, T.say + 0.3, { k: 'free', p: PORTRAIT ? [1.3, 1.75, 4.4] : [3.5, 1.8, 4.7], p1: PORTRAIT ? [1.2, 1.7, 4.1] : [3.3, 1.75, 4.4], look: [PORTRAIT ? -5.8 : -0.6, PORTRAIT ? 3.6 : 3.0, -9], look1: [PORTRAIT ? -5.8 : -0.6, PORTRAIT ? 2.4 : 2.0, -9], fov: PORTRAIT ? 80 : 62 }], // portrait: swung left so the timetable (and its maybe-translation) stays in frame
+      [T.words + 0.6, T.say + 0.3, { k: 'free', p: PORTRAIT ? [1.3, 1.75, 4.4] : [3.5, 1.8, 4.7], p1: PORTRAIT ? [1.2, 1.7, 4.1] : [3.3, 1.75, 4.4], look: [PORTRAIT ? -5.8 : -0.6, PORTRAIT ? 2.6 : 2.4, -9], look1: [PORTRAIT ? -5.8 : -0.6, PORTRAIT ? 1.6 : 2.0, -9], fov: PORTRAIT ? 80 : 62 }], // portrait: swung left so the timetable (and its maybe-translation) stays in frame
       [T.say + 0.3, T.say + 2.5, { k: 'free', p: [2.6, 8.6, 4.8], p1: [2.1, 9.0, 3.8], look: PORTRAIT ? [-0.3, 0, 0.6] : [0.4, 0, -2.6], look1: PORTRAIT ? [-0.4, 0, 0.0] : [0.2, 0, -3.2], fov: PORTRAIT ? 74 : 58 }],
       [T.say + 2.5, T.end + 1, { k: 'free', p: PORTRAIT ? [1.2, 1.1, 4.2] : [3.1, 1.15, 4.4], p1: PORTRAIT ? [1.1, 1.05, 4.0] : [2.9, 1.1, 4.1], look: [-0.8, 0.8, -6.5], fov: PORTRAIT ? 78 : 60 }],
     ];
@@ -78,7 +78,7 @@ export default class Words extends LitScene {
     this.buildScreen();
     this.buildBus();
     this.man = new Figure(this.three, STRANGER, 56); // closer again: along the far pavement, then opposite the stop (r8 note 8)
-    this.obstacles = () => { const b = this.screenRect(); return b ? [b] : []; };
+    this.obstacles = (t: number) => [this.screenRect(), ...this.fixedSigns(t)].filter((b): b is Box => !!b);
   }
 
   build() {
@@ -255,6 +255,27 @@ export default class Words extends LitScene {
   busX(t: number) { const T = this.T; return 70 - 26 * (t - T.bus + 2.7); } // passes x = 0 at T.bus
 
   /** The union box of the screen's glyphs while they hang (for QA and the callout's clearance). */
+  /** The lettering as a pure function of t (the chapter line's slot is chosen once per shot, whatever frame comes
+   *  first): the screen's letters still in their slots at t, the timetable, the Georgian plates, the bus sign. */
+  override signBoxes(t: number): Box[] {
+    const pts: { x: number; y: number }[] = [];
+    for (const g of this.glyphs) {
+      if (t >= g.tb) continue;
+      const { width: w, height: h } = (g.m.geometry as THREE.PlaneGeometry).parameters;
+      for (const [dx, dy] of [[-w / 2, -h / 2], [w / 2, h / 2]]) { const q = project(this.cam, g.slot.x + dx!, g.slot.y + dy!, g.slot.z); if (!q.behind) pts.push(q); }
+    }
+    const scr: Box[] = pts.length ? [{ x: Math.min(...pts.map((q) => q.x)), y: Math.min(...pts.map((q) => q.y)), w: Math.max(...pts.map((q) => q.x)) - Math.min(...pts.map((q) => q.x)), h: Math.max(...pts.map((q) => q.y)) - Math.min(...pts.map((q) => q.y)) }] : [];
+    return [...scr, ...this.fixedSigns(t)];
+  }
+  /** The timetable, the Georgian plates and the bus's route sign where the bus is at t (r9 note 4: the chapter line
+   *  may hang from the top, and must not land on a sign there). */
+  fixedSigns(t: number): Box[] {
+    const bx = this.busX(t), on = bx > -70 && bx < 70, sx = this.bus.position.x, sv = this.bus.visible;
+    this.bus.position.x = bx; this.bus.visible = on; this.bus.updateMatrixWorld(true);
+    const bs = [this.planeBox(this.table), ...this.kaSigns.map(([m]) => this.planeBox(m)), on ? this.planeBox(this.busSignMesh) : null];
+    this.bus.position.x = sx; this.bus.visible = sv; this.bus.updateMatrixWorld(true);
+    return bs.filter((b): b is Box => !!b);
+  }
   screenRect(): Box | null {
     const bs = this.glyphs.filter((g) => g.m.visible).map((g) => this.planeBox(g.m)).filter((b): b is Box => !!b);
     if (!bs.length) return null;

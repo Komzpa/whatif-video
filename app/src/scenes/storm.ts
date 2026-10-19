@@ -64,8 +64,9 @@ export default class Storm extends LitScene {
     this.shots = [
       [T.s, T.weather + 1.2, { k: 'wide', d: 1.1, h: 1.4, side: -0.8, ahead: 2, aimY: 2.2 }],
       [T.turns + 0.85, T.unsafe - 0.15, { k: 'back', d: 1.5, h: 0.9, side: 1, ahead: 1.2, aimY: 1.0 }],
-      [T.unsafe + 1.15, T.end + 1, { k: 'ots', d: 1.7, h: 1.8, side: 1.1, ahead: 0.5, aimY: PORTRAIT ? -0.3 : -0.9, d1: PORTRAIT ? 2.4 : 1.7 }],
+      [T.unsafe + 1.15, T.end + 1, { k: 'ots', d: 1.7, h: 1.8, side: 1.1, ahead: 0.5, aimY: PORTRAIT ? 0.1 : -0.9, d1: PORTRAIT ? 2.4 : 1.7 }],
     ];
+    if (!PORTRAIT) this.headAt = [[T.unsafe - 0.15, T.unsafe + 1.15, 'top']]; // the cat crosses under the bottom slot in first person (r9 note 4)
     this.initKid(13);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
@@ -229,6 +230,8 @@ export default class Storm extends LitScene {
   }
   running(t: number) { const T = this.T; return smoothstep(T.turns, T.turns + 0.4, t) * (1 - smoothstep(T.unsafe - 0.4, T.unsafe + 0.1, t)); }
 
+  /** r9 note 4: the cat, for keeping text off it. */
+  override subjectsAt(t: number) { const c = this.catAt(t).pos; return [{ p: [c.x, c.y, c.z] as V3, h: 0.32, r: 0.32 }]; }
   catAt(t: number) {
     const T = this.T, z = this.camZ(t);
     const sitPt = new THREE.Vector3(-2.9, 0, DZ0 - 1.6); // by the wall under the tube

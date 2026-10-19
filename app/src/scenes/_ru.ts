@@ -7,6 +7,26 @@ import { clamp, smoothstep } from '../engine/util';
 import { rgba, mixRgba } from '../engine/palette';
 import { logText } from '../textlog';
 
+/** The chapter line's layout (wrap, rows, baselines, the plate box) with `c`'s font set for it; drawHeading and the
+ *  label placement (LitScene.headBoxAt) share it, so the reserved box is the drawn one. */
+export function layoutHeading(c: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, heading: string, o: { x: number; y: number; width: number; size: number; top?: boolean }) {
+  const size = o.size, fam = F.metro(900);
+  c.font = font(fam, size); c.letterSpacing = `${size * 0.02}px`; c.textBaseline = 'alphabetic';
+  const words = heading.split(' ');
+  const rows: string[] = [];
+  let cur = '';
+  for (const w of words) { const nx = cur ? `${cur} ${w}` : w; if (c.measureText(nx).width > o.width && cur) { rows.push(cur); cur = w; } else cur = nx; }
+  if (cur) rows.push(cur);
+  const lead = size * 1.02;
+  const cap = c.measureText('Н').actualBoundingBoxAscent;
+  const top = o.top ? o.y + cap : o.y - (rows.length - 1) * lead;
+  const yb = top + (rows.length - 1) * lead; // the last row's baseline
+  const bw = Math.max(...rows.map((r) => c.measureText(r).width));
+  // the plate holds every row whole (cap top to below the baseline) so no row fades into the ground behind it
+  const plate = { x: o.x - size * 0.4, y: top - cap - size * 0.32, w: bw + size * 0.8, h: yb - top + cap + size * 0.62 };
+  return { rows, lead, cap, top, yb, bw, plate };
+}
+
 /**
  * The chapter line: the Russian heading, lit letter by letter as the line is sung (first word to last word),
  * the letter at the front in red. `y` is the baseline of the LAST row (the block grows upwards from the
@@ -14,28 +34,19 @@ import { logText } from '../textlog';
  */
 export function drawHeading(c: CanvasRenderingContext2D, L: Line, heading: string, t: number, o: {
   x: number; y: number; width: number; size: number; until?: number; alpha?: number; plate?: number;
+  /** r9 note 4: `y` is the cap top of the first row (the line hangs from the top of the frame) instead of the last baseline. */
+  top?: boolean;
 }) {
   const w0 = L.words[0]!, w1 = L.words[L.words.length - 1]!;
   // staggered out/in (TESTPLAN gate 3: no double exposure): the previous line is gone 0.14 s before the next
   // line's first word, the next one fades in over the last 0.12 s before it
   const a = (o.alpha ?? 1) * smoothstep(w0.start - 0.12, w0.start - 0.01, t) * (o.until !== undefined ? 1 - smoothstep(o.until - 0.3, o.until - 0.14, t) : 1);
   if (a <= 0.001) return null;
-  const size = o.size, fam = F.metro(900);
+  const size = o.size;
   c.save();
-  c.font = font(fam, size); c.letterSpacing = `${size * 0.02}px`; c.textBaseline = 'alphabetic';
-  // wrap
-  const words = heading.split(' ');
-  const rows: string[] = [];
-  let cur = '';
-  for (const w of words) { const nx = cur ? `${cur} ${w}` : w; if (c.measureText(nx).width > o.width && cur) { rows.push(cur); cur = w; } else cur = nx; }
-  if (cur) rows.push(cur);
-  const lead = size * 1.02;
-  const top = o.y - (rows.length - 1) * lead;
-  const cap = c.measureText('Н').actualBoundingBoxAscent;
-  const bw = Math.max(...rows.map((r) => c.measureText(r).width));
+  const { rows, lead, cap, top, yb, bw, plate: pl } = layoutHeading(c, heading, o);
+  const plate = o.plate ? pl : null;
   c.globalAlpha *= a;
-  // the plate holds every row whole (cap top to below the baseline) so no row fades into the ground behind it
-  const plate = o.plate ? { x: o.x - size * 0.4, y: top - cap - size * 0.32, w: bw + size * 0.8, h: o.y - top + cap + size * 0.62 } : null;
   if (plate) { c.fillStyle = rgba('shadow', o.plate!); c.fillRect(plate.x, plate.y, plate.w, plate.h); }
   // progress over the sung line, in characters
   const total = rows.join('').length;
@@ -65,7 +76,7 @@ export function drawHeading(c: CanvasRenderingContext2D, L: Line, heading: strin
     }
   });
   c.restore();
-  const box = { x: o.x, y: top - cap, w: bw, h: o.y - top + cap + size * 0.22 };
+  const box = { x: o.x, y: top - cap, w: bw, h: yb - top + cap + size * 0.22 };
   logText('karaoke', heading, a >= 0.97, box, { cap, id: `karaoke:${heading}`, ink: a >= 0.97 ? ink : undefined, lit: Math.floor(lit) });
   return box;
 }

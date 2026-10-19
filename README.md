@@ -75,6 +75,7 @@ cd app
 bun scripts/qa-reading-time.ts --from 0 --to 26.4 [--aspect 9:16]   # A1-A8, A12, A13, B1, C1, A6 per frame
 bun scripts/qa-contrast.ts     --from 0 --to 26.4 [--aspect 9:16]   # A9 on the rendered pixels
 bun scripts/qa-drone.ts        [--rev <commit>]                     # A6 in the scene code (runs on old drafts too)
+bun scripts/qa-overlap.ts      [--from 0 --to 26.4] [--aspect 9:16] # A15: no text over the child, the stranger, dogs, the cat
 bun scripts/qa-av.ts --video ../out/whatif-video-draft-lost-YYYY-MM-DD-rN[-tiktok].mp4   # A10, A11 on the file
 bun scripts/identity.ts        [--rev <commit>]                     # the input sha behind A11
 ```

@@ -61,6 +61,8 @@ export default class Alone extends LitScene {
       [T.gone + 0.1, T.friend - 0.15, { k: 'back', h: 3.4, side: -1.6, ahead: 0.5, yaw: 0.1, aimY: PORTRAIT ? -0.6 : 0.7, d: PORTRAIT ? 2.2 : 1.6 }],
       [T.friend - 0.15, T.friend + 3.6, { k: 'free', p: [-1.55, 2.2, 3.8], p1: [-1.55, 2.0, 3.0], look: [6, PORTRAIT ? -1.6 : 2.8, -6], look1: [7, PORTRAIT ? -1.2 : 3.2, -7], fov: PORTRAIT ? 80 : 64 }],
     ];
+    // r9 note 4: in first person the cat goes up onto the wall top: the chapter line stays at the bottom
+    if (PORTRAIT) this.headAt = [[T.no1 + 0.2, T.top + 0.1, 'bottom']];
     this.initKid(17);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
@@ -152,6 +154,13 @@ export default class Alone extends LitScene {
   camZ(t: number) { const T = this.T, z0 = 1.3; const v = (z0 - STOP_Z) / (T.no1 - 0.1 - T.s); const walk2 = Math.max(0, t - (T.friend + 2.6)) * 0.55; return Math.max(STOP_Z, z0 - v * (t - T.s)) - walk2; }
   walking(t: number) { const T = this.T; return (1 - smoothstep(T.no1 - 0.5, T.no1, t)) + smoothstep(T.friend + 2.4, T.friend + 3.2, t) * 0.6; }
 
+  /** r9 note 4: the cat and (once it has gone) the man across the road, for keeping text off them. */
+  override subjectsAt(t: number) {
+    const c = this.catAt(t).pos;
+    const out: { p: V3; h: number; r: number }[] = [{ p: [c.x, c.y, c.z], h: 0.32, r: 0.32 }];
+    if (t > this.T.gone!) out.push({ p: [12.0, 0, -9.2], h: 1.9, r: 0.35 });
+    return out;
+  }
   catAt(t: number) {
     const T = this.T;
     const stand = new THREE.Vector3(WX + 0.55, 0, CZ);

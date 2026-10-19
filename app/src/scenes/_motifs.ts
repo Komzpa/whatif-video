@@ -14,6 +14,7 @@ import { LineBatch } from '../engine/lines';
 import { HEX, LIN, rgba, mixRgba, type PaletteKey } from '../engine/palette';
 import { F, font, measure, layout, assertGlyphs } from '../engine/type';
 import { Lyrics, type Line, type Word } from '../engine/lyrics';
+import { SUBJECTS } from './_beasts';
 import type { AudioData } from '../engine/audio';
 import { clamp, ease, frameIdx, hash, lerp, mulberry32, noise1, prog, smoothstep } from '../engine/util';
 import { CONTENTS, INTRO } from '../contents';
@@ -2039,6 +2040,19 @@ export abstract class CityScene extends Scene {
   protected get ly() { return this.ctx.lyrics; }
   protected get au() { return this.ctx.audio; }
 
+  /** QA (TREATMENT r9 notes 3, 4): log the camera and every living body of this scene that is shown this frame. */
+  logFrame(post?: { zoom?: number; shake?: [number, number] }) {
+    if (!textlog.on) return;
+    const c = this.cam, f = new THREE.Vector3(); c.getWorldDirection(f);
+    logText('cam', this.ctx.id, false, undefined, { id: `cam:${this.ctx.id}`, cam: { p: [c.position.x, c.position.y, c.position.z], f: [f.x, f.y, f.z], fov: c.fov, zoom: post?.zoom, shake: post?.shake } });
+    SUBJECTS.forEach((b, i) => {
+      let o: THREE.Object3D | null = b.mc, shown = true;
+      while (o && o !== this.three) { if (!o.visible) { shown = false; break; } o = o.parent; }
+      if (!shown || o !== this.three) return;
+      const box = b.screenBox(c, W, H);
+      if (box && box.x < W && box.y < H && box.x + box.w > 0 && box.y + box.h > 0) logText('subject', b.label, true, box, { id: `subject:${this.ctx.id}:${b.label}:${i}` });
+    });
+  }
   /** Begin a frame: clear batches and layers. */
   begin() {
     this.lines3D.clear(); this.lines2D.clear(); this.glow2D.clear(); this.glow3D.clear();

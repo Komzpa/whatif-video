@@ -71,7 +71,7 @@ export default class CatScene extends LitScene {
     this.shots = [
       [T.s, T.your - 0.3, { k: 'wide', d: 1.0, h: 1.2, side: 0.8, ahead: 1.4, aimY: 1.2 }],
       [T.stuck - 0.2, T.a - 0.05, { k: 'orbit', p: [lerp(pc.x, STAND[0], 0.35), 0, lerp(pc.z, STAND[2], 0.35)], d: 4.4, h: 2.6, a0: toKid + 1.2, a1: toKid + 0.25, look: [lerp(pc.x, STAND[0], 0.3), PORTRAIT ? 2.9 : 3.3, lerp(pc.z, STAND[2], 0.3)], fov: PORTRAIT ? 86 : 74 }],
-      [T.a - 0.05, T.a + 2.6, { k: 'back', d: 1.3, side: 1, ahead: 0.7, aimY: 0.4 }],
+      [T.a - 0.05, T.a + 2.6, { k: 'back', d: PORTRAIT ? 1.9 : 1.3, side: 1, ahead: 0.7, aimY: PORTRAIT ? 2.2 : 0.4 }],
       [T.a + 2.6, tEnd - 0.2, { k: 'high', d: 0.35, h: 0.55, side: 0.6, ahead: PORTRAIT ? 0 : 0.6 }],
     ];
     this.initKid(5);
@@ -184,6 +184,8 @@ export default class CatScene extends LitScene {
   }
 
   /** The cat's state at t: position, heading, pitch, the gait distance and the pose knobs. */
+  /** r9 note 4: the cat, for keeping text off it. */
+  override subjectsAt(t: number) { const c = this.catAt(t).pos; return [{ p: [c.x, c.y, c.z] as V3, h: 0.32, r: 0.32 }]; }
   catAt(t: number) {
     const P = this.path;
     let i = 0; while (i < P.length - 1 && t > P[i + 1]!.t) i++;
@@ -303,7 +305,7 @@ export default class CatScene extends LitScene {
       if (!this.third) this.pet(u, t, light);
       this.heading(u, t, f);
       this.callout(u, t, homeLabel('cat'), T.s + 0.3, T.your - 0.5, () => this.onScreen(TOWER[0], 12, TOWER[2]), { places: [city().home.name] });
-      this.callout(u, t, 'КОШКА · 1', T.found + 0.1, T.stuck - 0.15, () => { const h = this.cat.head.getWorldPosition(new THREE.Vector3()); return this.onScreen(h.x, h.y + 0.08, h.z); });
+      this.callout(u, t, 'КОШКА · 1', T.found + 0.1, T.stuck - 0.15, (tt) => { if (tt === t) { const h = this.cat.head.getWorldPosition(new THREE.Vector3()); return this.onScreen(h.x, h.y + 0.08, h.z); } const c = this.catAt(tt).pos; return this.onScreen(c.x, c.y + 0.4, c.z); }); // future frames from the cat's path (pickLabel places the label for the callout's whole life)
       this.callout(u, t, this.heightTxt, T.stuck + 0.5, T.tree - 0.2, () => this.onScreen(this.perch.x + 0.35, this.perch.y * 0.78, this.perch.z));
     }
     this.composite2D(this.ui, out);

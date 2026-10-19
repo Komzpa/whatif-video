@@ -70,8 +70,11 @@ export default class Temp extends LitScene {
       [T.line2, T.line2 + 1.7, { k: 'free', p: [1.6, 1.25, DOOR[2] + 4.2], p1: [1.4, 1.2, DOOR[2] + 3.6], look: [DOOR[0] + 0.4, 1.0, DOOR[2] - 0.2], look1: [PORTRAIT ? -0.3 : -1.2, 1.0, DOOR[2] - 1.6], fov: PORTRAIT ? 66 : 50 }],
       [T.line2 + 1.7, T.cold + (PORTRAIT ? 0.15 : -0.15), { k: 'back', d: 1.3, h: 0.8, side: 1, ahead: 1, aimY: PORTRAIT ? 1.7 : 2.4, yaw: PORTRAIT ? 0.1 : 0.3 }],
       [T.cold + (PORTRAIT ? 0.15 : -0.15), T.cold + 1.7, { k: 'high', d: 0.4, d1: 0.5, h: 0.6, side: -0.5, ahead: PORTRAIT ? 0 : 0.7 }],
-      [T.cold + 1.7, T.cold + 3.6, { k: 'ots', d: 2.0, h: 2.2, side: -1.3, ahead: 0.5, yaw: 0.2, aimY: PORTRAIT ? 0 : 1.6 }],
+      // portrait: a wide from behind, the child small under the sung line and the board clear above it (r9 note 4; r5 item 2)
+      [T.cold + 1.7, T.cold + 3.6, PORTRAIT ? { k: 'wide', d: 0.8, h: 1.0, side: -0.8, ahead: 0.8, aimY: 1.1 } : { k: 'ots', d: 2.0, h: 2.2, side: -1.3, ahead: 0.5, yaw: 0.2, aimY: 1.6 }],
     ];
+    // r9 note 4: the cat drops from the pipe at the top of the frame: the chapter line stays at the bottom
+    if (!PORTRAIT) this.headAt = [[T.cold - 0.15, T.cold + 1.7, 'bottom']];
     this.initKid(9);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
@@ -235,6 +238,8 @@ export default class Temp extends LitScene {
   camZ(t: number) { const T = this.T; const t1 = Math.min(Math.max(t, T.line2), T.cold); return DOOR[2] - 1.05 * (t1 - T.line2) - 0.6 * Math.max(0, t - T.cold); }
   camX(t: number) { const T = this.T; return lerp(DOOR[0] + 0.45, 0.2, ease.inOutCubic(smoothstep(T.line2, T.line2 + 1.8, t))); }
 
+  /** r9 note 4: the cat, for keeping text off it. */
+  override subjectsAt(t: number) { const c = this.catAt(t).pos; return [{ p: [c.x, c.y, c.z] as V3, h: 0.32, r: 0.32 }]; }
   catAt(t: number) {
     const T = this.T, z = this.camZ(t);
     // inside: curled up on the warm pump housing, watching the child
@@ -242,7 +247,7 @@ export default class Temp extends LitScene {
     // on the pipe, 2.5 m ahead of the child; on «cold» a jump down and then beside the child's left foot... right foot
     const jump0 = T.cold + 0.3, jump1 = jump0 + 0.45;
     const onPipe = new THREE.Vector3(PX, PY + PR, z - 4.6);
-    const ground0 = new THREE.Vector3(1.0, 0, z - 3.6), beside = new THREE.Vector3(PORTRAIT ? 0.3 : 0.45, 0, z - (PORTRAIT ? 4.2 : 2.6));
+    const ground0 = new THREE.Vector3(1.0, 0, z - 3.6), beside = new THREE.Vector3(PORTRAIT ? 0.3 : 1.25, 0, z - (PORTRAIT ? 4.2 : 3.0)); // 16:9: right of the chapter line (r9 note 4)
     const dist = (T.end - T.s) * 1.05 - (z - 6) * -1;
     if (t < jump0) return { pos: onPipe, heading: Math.PI / 2, pitch: 0, dist: (6 - z), speed: 1.05, jump: 0 };
     if (t < jump1) {

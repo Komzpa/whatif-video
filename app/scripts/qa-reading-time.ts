@@ -44,10 +44,10 @@ const LW = PORTRAIT ? 1080 : 1920, LH = PORTRAIT ? 1920 : 1080;
 const FPS = +opt('fps', '20')!, DT = 1 / FPS;
 const NV_EGL = '/usr/share/glvnd/egl_vendor.d/10_nvidia.json';
 
-type Kind = 'drone' | 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop' | 'book' | 'hand' | 'map';
+type Kind = 'drone' | 'karaoke' | 'note' | 'callout' | 'step' | 'system' | 'sign' | 'banner' | 'chip' | 'title' | 'place' | 'garble' | 'counter' | 'prop' | 'book' | 'hand' | 'map' | 'subject' | 'cam';
 type Box = { x: number; y: number; w: number; h: number };
 interface Item { id: string; text: string; kind: Kind; full: boolean; box?: Box; cap?: number; places?: string[]; poly?: [number, number][]; moji?: ({ src: string; codec: Codec; level: number } | null)[]; bad?: string; clip?: boolean; wristDeg?: number; maybe?: boolean }
-const OBJECTS: Kind[] = ['book', 'hand', 'map', 'drone'];
+const OBJECTS: Kind[] = ['book', 'hand', 'map', 'drone', 'subject', 'cam']; // subject/cam: probes for qa-overlap / qa-camera
 
 // ------------------------------------------------------------------ city names
 const cityFile = [path.join(ROOT, 'data/city.json'), path.join(APP, 'src/data-fallback/city.json')].find(existsSync);
@@ -82,7 +82,8 @@ const browser = await chromium.launch({
 let failed = false;
 try {
   const page = await browser.newPage({ viewport: { width: LW, height: LH } });
-  await page.goto(`${url}/?export=1${PORTRAIT ? '&aspect=9:16' : ''}`);
+  // a fresh vite server can drop the first navigation while it pre-bundles: retry before calling it broken
+  for (let k = 0; ; k++) { try { await page.goto(`${url}/?export=1${PORTRAIT ? '&aspect=9:16' : ''}`, { timeout: 120000 }); break; } catch (e) { if (k >= 3) throw e; await Bun.sleep(2000); } }
   await page.waitForFunction(() => (window as any).__video?.ready || (window as any).__video?.error, null, { timeout: 120000 });
   const err = await page.evaluate(() => (window as any).__video.error);
   if (err) throw new Error(err);
@@ -386,6 +387,7 @@ try {
   console.log(`qa-reading-time ${PORTRAIT ? '9:16' : '16:9'}  ${from.toFixed(2)}–${to.toFixed(2)}s  ${frames.length} frames @ ${FPS} fps  city: ${path.relative(ROOT, cityFile)}`);
   console.log(`text items: ${[...kinds].map(([k, n]) => `${k} ${n}`).join(', ')}`);
   console.log(frameLine);
+  if (!kinds.size) offenders.push('probe    no text logged at all: the probe is broken, not clean');
   if (offenders.length) { failed = true; console.log(`FAIL (${offenders.length})`); for (const o of offenders) console.log('  ' + o); }
   else console.log('PASS');
 } finally {

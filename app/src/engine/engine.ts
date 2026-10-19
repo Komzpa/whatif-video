@@ -341,6 +341,8 @@ export class Engine {
       }
       rec.lastT = t;
       post = { ...post, ...(e.post ?? {}), ...(ov ?? {}) };
+      // QA probes (texts(t)): the camera and the living subjects, after the scene has drawn its frame
+      (s as unknown as { logFrame?: (p: PostOverrides) => void }).logFrame?.({ ...(e.post ?? {}), ...(ov ?? {}) });
       if (idx > 0 && !s.handlesTransition && under) {
         // default: crossfade from the previous scene over the overlap
         this.xfade.u.a!.value = under;

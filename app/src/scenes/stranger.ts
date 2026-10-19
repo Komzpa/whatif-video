@@ -83,7 +83,7 @@ export default class Stranger extends LitScene {
     this.shots = [
       [T.fwd1, T.fwd2, { k: 'free', p: [-2.3, 1.45, cz(T.fwd2) - 6.2], p1: [-2.2, 1.4, cz(T.fwd2) - 5.6], look: [S_X + 0.6, 1.25, cz(T.fwd1) + 8], look1: [S_X + 0.6, 1.25, cz(T.fwd2) + 7], fov: PORTRAIT ? 70 : 50 }],
       [T.fwd2, T.run + 1.0, { k: 'free', p: [POLE_B[0] + 0.15, POLE_B[1] + 0.2, POLE_B[2] + 0.35], look: [PATH_X, 0.4, cz(T.fwd2) - 0.5], look1: [PATH_X, 0.4, cz(T.run + 0.8) - 1.5], fov: PORTRAIT ? 72 : 54 }],
-      [T.run + 1.0, T.arrive - 0.2, { k: 'back', d: 1.6, h: 1.8, side: -0.8, ahead: 1, aimY: PORTRAIT ? -0.7 : 0.3, fov: PORTRAIT ? 76 : 58 }],
+      [T.run + 1.0, T.arrive - 0.2, { k: 'back', d: 1.6, h: 1.8, side: -0.8, ahead: 1, aimY: PORTRAIT ? -1.25 : 0.3, fov: PORTRAIT ? 76 : 58 }],
       [T.glance + 0.4, T.end + 1, { k: 'free', p: [PORTRAIT ? 1.5 : 2.3, 2.9, KZ + 0.3], p1: [PORTRAIT ? 1.55 : 2.35, 3.0, KZ + 0.1], look: [PORTRAIT ? 0.9 : 1.0, 0.0, KZ + (PORTRAIT ? 6.5 : 5.2)], fov: PORTRAIT ? 80 : 62 }],
     ];
     this.initKid(23);
@@ -96,6 +96,7 @@ export default class Stranger extends LitScene {
     this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.012), new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(0.5, 0.65, 0.85, THREE.LinearSRGBColorSpace) }));
     this.three.add(this.phone);
     this.obstacles = () => [this.planeBox(this.sign), this.planeBox(this.glass)].filter((b): b is NonNullable<typeof b> => !!b);
+    this.signBoxes = () => [this.planeBox(this.sign)].filter((b): b is NonNullable<typeof b> => !!b); // the kiosk glass carries no lettering
     this.dist1 = Math.round(this.gap(T.back1 + 0.45));
     this.dist2 = Math.round(this.gap(T.back2 + 0.45));
   }
@@ -118,6 +119,8 @@ export default class Stranger extends LitScene {
   camX(t: number) { return lerp(PATH_X, STOP[0], smoothstep(STOP[2] + 9, STOP[2], this.camZ(t))); }
   running(t: number) { return smoothstep(1.6, 3.2, this.speed(t)); }
   /** The man: stands by the car, then walks after the child; stops when the child runs. */
+  /** r9 note 4: the man and the kiosk seller, for keeping text off them. */
+  override subjectsAt(t: number) { return [{ p: [S_X, 0, this.manZ(t)] as V3, h: 1.9, r: 0.35 }, { p: [KX + 0.35, 0, KZ - 1.55] as V3, h: 1.7, r: 0.35 }]; }
   manZ(t: number) {
     const T = this.T, v = 2.3, z0 = MAN_Z0;
     const tStop = T.run + 0.9;

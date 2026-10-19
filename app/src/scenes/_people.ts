@@ -5,7 +5,7 @@
 // film. Forward is +x in the figure's local frame (like the quadruped); `heading` is the rotation about y.
 import * as THREE from 'three';
 import { clamp, lerp, hash } from '../engine/util';
-import { lit } from './_kit';
+import { lit, KID } from './_kit';
 import { SdfBody, type RGB3 } from './_beasts';
 
 export interface FigureSpec {
@@ -46,6 +46,7 @@ export class Figure {
     this.u = H / (kid ? 4.6 : 7.4);
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
     this.sdf = new SdfBody(this.g, v(-0.34 * H, -0.01, -0.3 * H), v(0.5 * H, 1.1 * H, 0.3 * H), res, mat);
+    this.sdf.label = kid && S.coat === KID.coat ? 'child' : S.hat && S.longCoat ? 'stranger' : 'person'; // KID: our child (one spec)
     this.g.add(this.head);
     parent.add(this.g);
   }

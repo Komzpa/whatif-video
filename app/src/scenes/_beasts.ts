@@ -129,7 +129,11 @@ export interface QuadPose {
 // ---------------------------------------------------------------- an implicit (SDF) body, polygonised per frame
 /** One smooth closed skin: tapered capsules and ellipsoids joined with a smooth minimum (flesh blending into flesh:
  *  the thigh into the flank, the neck into the chest), polygonised with marching cubes inside a local box. */
+/** Every living body in the film (the child, the stranger, people, dogs, cats), for the subject-overlap QA
+ *  (TREATMENT r9 note 4): `label` says what it is; scenes log the visible ones each frame (CityScene.logSubjects). */
+export const SUBJECTS: SdfBody[] = [];
 export class SdfBody {
+  label = 'body';
   mc: MarchingCubes; d: Float32Array; col: Float32Array; n: number;
   lo: THREE.Vector3; step: THREE.Vector3;
   private tA = new THREE.Vector3(); private tB = new THREE.Vector3();
@@ -147,6 +151,22 @@ export class SdfBody {
     this.lo = c.clone().sub(ext);
     this.step = ext.clone().multiplyScalar(2 / res);
     parent.add(this.mc);
+    SUBJECTS.push(this);
+  }
+  /** The polygonised skin's box on screen (px) through `cam` (every 5th vertex projected), or null if behind. */
+  screenBox(cam: THREE.Camera, W: number, H: number) {
+    const m = this.mc, n = m.count; if (!n) return null;
+    m.updateMatrixWorld(true);
+    const a = m.positionArray as Float32Array, v = new THREE.Vector3();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, front = 0;
+    for (let i = 0; i < n; i += 5) {
+      v.set(a[i * 3]!, a[i * 3 + 1]!, a[i * 3 + 2]!).applyMatrix4(m.matrixWorld);
+      const c = v.clone().applyMatrix4(cam.matrixWorldInverse); if (c.z > -0.05) continue;
+      v.project(cam); front++;
+      const x = (v.x * 0.5 + 0.5) * W, y = (0.5 - v.y * 0.5) * H;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    return front ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
   }
   begin() { this.d.fill(0.25); this.col.fill(0); }
   private range(minv: number, maxv: number, axis: 'x' | 'y' | 'z'): [number, number] {
@@ -233,6 +253,7 @@ export class Quadruped {
     const w = S.withers;
     // the box: long enough for the head stretched forward and the tail, tall enough for a raised head
     this.sdf = new SdfBody(this.g, new THREE.Vector3(-w * 1.85, -0.01, -w * 0.6), new THREE.Vector3(w * 1.45, w * 1.6, w * 0.6), res, furMat());
+    this.sdf.label = S.withers < 0.4 ? 'cat' : 'dog';
     const nose = new THREE.Mesh(new THREE.SphereGeometry(S.muzzle[1] * 0.5, 10, 8), lit([0.015, 0.015, 0.015], { rough: 0.2 }));
     nose.position.set(S.skull[0] * 0.7 + S.muzzle[0] + S.muzzle[1] * 0.1, -S.skull[1] * 0.28, 0); this.head.add(nose);
     for (const side of [-1, 1]) {

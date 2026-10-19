@@ -9,7 +9,7 @@ import { W, H, PORTRAIT } from '../engine/gl';
 import { clamp, lerp, hash, mulberry32, frameIdx } from '../engine/util';
 import { F, font, measure, assertGlyphs } from '../engine/type';
 import { CityScene, LIN, POST_BASE, SAFE, scaleRGB, mixRGB, project, drawCallout, makeLamp, logText, rgba } from './_motifs';
-import { drawHeading } from './_ru';
+import { drawHeading, layoutHeading } from './_ru';
 import { torchPose, drawTorchHand, type Light, type TorchPose } from './_hands';
 import { entriesOf } from '../contents';
 import { Figure, type FigureSpec } from './_people';
@@ -28,6 +28,8 @@ export interface Pov { p: V3; yaw: number; pitch: number; walk: number; roll?: n
 export interface Shot { k: 'wide' | 'ots' | 'low' | 'high' | 'side' | 'back' | 'orbit' | 'free'; d?: number; d1?: number; h?: number; side?: number; ahead?: number; yaw?: number; a0?: number; a1?: number; fov?: number; p?: V3; p1?: V3; look?: V3; look1?: V3; aimY?: number }
 
 export const EYE = 1.12; // the child's eye height (m)
+/** The chapter line's top slot: the cap top of its first row (portrait: below TikTok's top 150 px). */
+const HEAD_TOP = PORTRAIT ? 205 : 92;
 export const lin = (hex: string): RGB => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }; // three parses hex as sRGB -> linear
 
 // ---------------------------------------------------------------- materials
@@ -229,6 +231,8 @@ export abstract class LitScene extends CityScene {
   /** The chapter's id (for the chapter line and ДОМ · x км). */
   abstract chapter: string;
   obstacles: (t: number) => Box[] = () => [];
+  /** The lettered boards among the obstacles (the chapter line never lands on one); scenes drop plain glass etc. */
+  signBoxes(t: number): Box[] { return this.obstacles(t); }
   labelCache = new Map<string, { dx: number; dy: number; side: 1 | -1 }>();
 
   /** The child seen from outside (TESTPLAN B2), used by the third-person shots. */
@@ -292,11 +296,8 @@ export abstract class LitScene extends CityScene {
     const kid = this.kid!;
     kid.visible = !!sh;
     if (!sh) return;
-    const { s, u } = sh;
     const floor = o.floor ?? 0;
     const feet = new THREE.Vector3(P.p[0], floor, P.p[2]);
-    const sy = P.yaw + (s.yaw ?? 0);
-    const f = new THREE.Vector3(-Math.sin(sy), 0, -Math.cos(sy)), r = new THREE.Vector3(Math.cos(sy), 0, -Math.sin(sy));
     const speed = o.speed ?? P.walk * 1.3;
     kid.pose({ pos: feet, heading: P.yaw + Math.PI / 2, t, speed, dist: o.dist ?? t * speed, film: o.film ?? (pose ? 0.85 : 0), phone: o.phone ?? 0, look: o.look ?? 0, headDown: o.headDown ?? -P.pitch * 0.5, sit: o.sit ?? 0, armL: o.armL ?? 0 });
     if (pose) { // the light leaves the figure's hand, along the same aim
@@ -305,6 +306,16 @@ export abstract class LitScene extends CityScene {
       this.torchL.target.position.copy(this.torchL.position).addScaledVector(dir, 7);
       this.torchL.target.updateMatrixWorld();
     }
+    const { p, q, fov } = this.shotCam(P, sh, floor);
+    this.setCam({ p, yaw: this.yawTo(p, q), pitch: this.pitchTo(p, q), walk: 0, fov }, t, 0.3);
+  }
+
+  /** The third-person camera of shot `sh` around the child standing at P (pure: also used to predict framing). */
+  shotCam(P: Pov, sh: { s: Shot; u: number }, floor = 0): { p: V3; q: V3; fov: number } {
+    const { s, u } = sh;
+    const feet = new THREE.Vector3(P.p[0], floor, P.p[2]);
+    const sy = P.yaw + (s.yaw ?? 0);
+    const f = new THREE.Vector3(-Math.sin(sy), 0, -Math.cos(sy)), r = new THREE.Vector3(Math.cos(sy), 0, -Math.sin(sy));
     const d = lerp(s.d ?? 1, s.d1 ?? s.d ?? 1, u), h = s.h ?? 1, sd = s.side ?? 1;
     const eye = feet.clone().add(new THREE.Vector3(0, EYE, 0));
     let cp: THREE.Vector3, look: THREE.Vector3, fov = s.fov;
@@ -328,10 +339,8 @@ export abstract class LitScene extends CityScene {
         cp = a.lerp(b, e); look = la.lerp(lb, e); fov ??= PORTRAIT ? 64 : 48;
       }
     }
-    const p: V3 = [cp.x, cp.y, cp.z], q: V3 = [look.x, look.y, look.z];
-    this.setCam({ p, yaw: this.yawTo(p, q), pitch: this.pitchTo(p, q), walk: 0, fov }, t, 0.3);
+    return { p: [cp.x, cp.y, cp.z], q: [look.x, look.y, look.z], fov: fov! };
   }
-
   // ---- camera
   setCam(c: Pov, t: number, moving = 0) {
     const cam = this.cam;
@@ -443,10 +452,12 @@ export abstract class LitScene extends CityScene {
 
   // ---- text in the world
   /** A mesh plane's box on screen, or null (behind the camera). */
-  planeBox(m: THREE.Mesh): Box | null {
+  /** Screen box of a textured plane, or of the part `frac` = (u0, v0, u1, v1), v down, of it; null when behind. */
+  planeBox(m: THREE.Mesh, frac: [number, number, number, number] = [0, 0, 1, 1]): Box | null {
     const { width: w, height: h } = (m.geometry as THREE.PlaneGeometry).parameters;
+    const [u0, v0, u1, v1] = frac;
     m.updateMatrixWorld(true);
-    const pts = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].map(([x, y]) => { const v = new THREE.Vector3(x, y, 0).applyMatrix4(m.matrixWorld); return project(this.cam, v.x, v.y, v.z); });
+    const pts = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => { const p = new THREE.Vector3((u! - 0.5) * w, (0.5 - v!) * h, 0).applyMatrix4(m.matrixWorld); return project(this.cam, p.x, p.y, p.z); });
     if (pts.some((q) => q.behind)) return null;
     const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
@@ -472,16 +483,77 @@ export abstract class LitScene extends CityScene {
   }
 
   // ---- the non-diegetic layer
-  lyricBox(): Box { return PORTRAIT ? { x: 30, y: 1416 - 100 * 3 - 90, w: W - 60, h: 440 } : { x: SAFE - 30, y: H - 96 - 64 * 2 - 70, w: 1080, h: 290 }; }
-  /** The chapter line(s): the handbook's heading lit as each line is sung (bottom left). */
+  /** Where the chapter line can be: its bottom-left slot (default) or its top-left slot (r9 note 4). */
+  lyricBox(top = false): Box {
+    if (top) return PORTRAIT ? { x: 30, y: HEAD_TOP - 40, w: W - 60, h: 440 } : { x: SAFE - 30, y: HEAD_TOP - 40, w: 1080, h: 290 };
+    return PORTRAIT ? { x: 30, y: 1416 - 100 * 3 - 90, w: W - 60, h: 440 } : { x: SAFE - 30, y: H - 96 - 64 * 2 - 70, w: 1080, h: 290 };
+  }
+  /** r9 note 4: [t0, t1, slot] where the scene puts the chapter line itself (per aspect); elsewhere `headTop` decides. */
+  headAt: [number, number, 'top' | 'bottom'][] = [];
+  private headCache = new Map<number, boolean>();
+  /**
+   * Text never covers the subject (r9 note 4): the chapter line hangs from the top of the frame for a third-person
+   * shot that would put the child under its bottom slot (predicted over the whole shot from pov() and shotCam(), so
+   * the line moves only on a cut), unless the scene placed it with `headAt`.
+   */
+  headTop(t: number): boolean {
+    for (const [a, b, w] of this.headAt) if (t >= a && t < b) return w === 'top';
+    // the camera segment holding t: a third-person shot, or the first-person stretch between two shots
+    const cuts = [...new Set([this.ctx.start, this.ctx.end, ...this.shots.flatMap(([a, b]) => [a, b])])].filter((x) => x >= this.ctx.start && x <= this.ctx.end).sort((x, y) => x - y);
+    let k = cuts.findIndex((x, i) => t >= x && t < (cuts[i + 1] ?? Infinity));
+    if (k < 0) k = 0;
+    let v = this.headCache.get(k);
+    if (v === undefined) {
+      const a = cuts[k]!, b = cuts[k + 1] ?? this.ctx.end;
+      const bot = this.lyricBox(false), top = this.lyricBox(true);
+      const ov = (x: Box, y: Box) => Math.max(0, Math.min(x.x + x.w, y.x + y.w) - Math.max(x.x, y.x)) * Math.max(0, Math.min(x.y + x.h, y.y + y.h) - Math.max(x.y, y.y));
+      let hb = 0, ht = 0;
+      for (let i = 0; i < 16; i++) {
+        const tt = lerp(a, b, (i + 0.5) / 16);
+        const seen = this.withCamAt(tt, () => ({ subj: this.subjectBoxes(tt), obst: this.signBoxes(tt) }));
+        // the top slot must not land on a sign or board either (the sung line never covers a sign, A4)
+        const tp = this.headBoxAt(tt, true) ?? top; // the line as it would hang there, padded
+        for (const ob of seen.obst) if (ov(ob, tp) > 0) ht = Infinity; // never onto a sign: then the shot must keep the subject clear of the bottom slot
+        for (const kb of seen.subj) {
+          const c = { x: Math.max(0, kb.x), y: Math.max(0, kb.y), w: Math.min(W, kb.x + kb.w) - Math.max(0, kb.x), h: Math.min(H, kb.y + kb.h) - Math.max(0, kb.y) };
+          const ar = Math.max(1, c.w * c.h);
+          if (ar < 600) continue; // a speck in the distance
+          // covered area, weighted towards the bigger (nearer) subject: a close child outweighs a far-off figure
+          hb += ov(c, bot) * Math.sqrt(ar); ht += ov(c, top) * Math.sqrt(ar);
+        }
+      }
+      v = hb > 0 && ht < hb * 0.5;
+      this.headCache.set(k, v);
+    }
+    return v;
+  }
+  /** The chapter line(s): the handbook's heading lit as each line is sung (bottom left, or top left: headTop). */
   heading(c: CanvasRenderingContext2D, t: number, f: Frame) {
     const es = entriesOf(this.chapter);
-    const hx = PORTRAIT ? 60 : SAFE, hy = PORTRAIT ? 1416 : H - 96, hw = PORTRAIT ? W - 210 : 1000, hs = PORTRAIT ? 100 : 64;
+    const o = this.headingGeom(t);
     es.forEach((e, i) => {
       const L = this.ly.get(e.line);
       const until = es[i + 1] ? this.ly.get(es[i + 1]!.line).words[0]!.start : f.end + 1;
-      drawHeading(c, L, e.heading, t, { x: hx, y: hy, width: hw, size: hs, until, plate: 0.93 }); // dense enough that glare behind the plate keeps A9 contrast
+      drawHeading(c, L, e.heading, t, { ...o, until, plate: 0.93 }); // dense enough that glare behind the plate keeps A9 contrast
     });
+  }
+  headingGeom(t: number, slot?: boolean) {
+    const top = slot ?? this.headTop(t);
+    return { x: PORTRAIT ? 60 : SAFE, y: top ? HEAD_TOP : PORTRAIT ? 1416 : H - 96, width: PORTRAIT ? W - 210 : 1000, size: PORTRAIT ? 100 : 64, top };
+  }
+  private headCtx = new OffscreenCanvas(8, 8).getContext('2d')!;
+  /** The chapter line's plate as drawn at t (null between lines), padded: what callout labels keep clear of. */
+  headBoxAt(t: number, slot?: boolean): Box | null {
+    const es = entriesOf(this.chapter);
+    let u: Box | null = null; // the outgoing line still fades while the next fades in: the union of both
+    for (let i = 0; i < es.length; i++) {
+      const s0 = this.ly.get(es[i]!.line).words[0]!.start - 0.12, s1 = es[i + 1] ? this.ly.get(es[i + 1]!.line).words[0]!.start - 0.14 : this.ctx.end + 1;
+      if (t < s0 || t >= s1) continue;
+      const p = layoutHeading(this.headCtx, es[i]!.heading, this.headingGeom(t, slot)).plate;
+      const b = { x: p.x - 16, y: p.y - 16, w: p.w + 32, h: p.h + 32 };
+      u = u ? { x: Math.min(u.x, b.x), y: Math.min(u.y, b.y), w: Math.max(u.x + u.w, b.x + b.w) - Math.min(u.x, b.x), h: Math.max(u.y + u.h, b.y + b.h) - Math.min(u.y, b.y) } : b;
+    }
+    return u;
   }
   labelBox(text: string | string[], size: number, lx: number, ly: number, side: 1 | -1): Box {
     const lines = Array.isArray(text) ? text : [text];
@@ -492,8 +564,39 @@ export abstract class LitScene extends CityScene {
     const x0 = 40, x1 = W - (PORTRAIT ? 145 : 40), y0 = PORTRAIT ? 155 : 40, y1 = H - (PORTRAIT ? 485 : 40);
     return { ...b, x: clamp(b.x, x0, x1 - b.w), y: clamp(b.y, y0, y1 - b.h) };
   }
-  /** Set the camera (and moving parts) as at t, run fn, restore. Scenes override `poseAt` to apply their motion. */
-  poseAt(t: number) { this.setCam(this.pov(t), t, 0); }
+  /** Set the camera (and moving parts) as at t, run fn, restore. Scenes override `poseAt` to apply their motion.
+   *  During a third-person shot the camera is the shot's (the first-person eyes would place labels for a view that
+   *  is not on screen). */
+  poseAt(t: number) {
+    const P = this.pov(t), sh = this.shotAt(t);
+    if (!sh) { this.setCam(P, t, 0); return; }
+    const c = this.shotCam(P, sh);
+    this.setCam({ p: c.p, yaw: this.yawTo(c.p, c.q), pitch: this.pitchTo(c.p, c.q), walk: 0, fov: c.fov }, t, 0.3);
+  }
+  /**
+   * The beat's living subjects at t as upright cylinders (feet, height, radius), pure functions of t (r9 note 4):
+   * scenes add their dogs, cat, stranger, people; the child is added here while a third-person shot is on.
+   * Used to keep the chapter line (headTop) and the callout labels (pickLabel) clear of them.
+   */
+  subjectsAt(t: number): { p: V3; h: number; r: number }[] { void t; return []; }
+  allSubjectsAt(t: number) {
+    const out = this.subjectsAt(t);
+    if (this.shotAt(t)) { const P = this.pov(t); out.push({ p: [P.p[0], 0, P.p[2]], h: KID.height + 0.06, r: 0.35 }); }
+    return out;
+  }
+  /** Screen boxes of the subjects at t through the current camera (call inside withCamAt). */
+  subjectBoxes(t: number): Box[] {
+    const out: Box[] = [];
+    for (const sb of this.allSubjectsAt(t)) {
+      const pts: { x: number; y: number; behind: boolean }[] = [];
+      for (const y of [sb.p[1], sb.p[1] + sb.h]) for (let k = 0; k < 4; k++) pts.push(project(this.cam, sb.p[0] + Math.cos(k * Math.PI / 2) * sb.r, y, sb.p[2] + Math.sin(k * Math.PI / 2) * sb.r));
+      if (pts.some((q) => q.behind)) continue;
+      const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+      const b = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+      if (b.x < W && b.y < H && b.x + b.w > 0 && b.y + b.h > 0) out.push(b);
+    }
+    return out;
+  }
   abstract pov(t: number): Pov;
   withCamAt<R>(t: number, fn: () => R): R {
     const cam = this.cam;
@@ -504,17 +607,18 @@ export abstract class LitScene extends CityScene {
     return r;
   }
   /** A label offset that stays clear of the obstacles and the chapter line over the callout's life (cached). */
-  pickLabel(text: string | string[], size: number, at: number, out: number, anchor: (t: number) => { x: number; y: number } | null) {
+  pickLabel(text: string | string[], size: number, at: number, out: number, anchor: (t: number) => { x: number; y: number } | null, avoid?: (t: number) => Box[]) {
     const key = `${JSON.stringify(text)}@${at.toFixed(3)}`;
     const hit = this.labelCache.get(key);
     if (hit) return hit;
-    const cands: [number, number, 1 | -1][] = [[50, -90, 1], [-50, -90, -1], [50, 120, 1], [-50, 120, -1], [110, -20, 1], [-110, -20, -1], [50, -180, 1], [-50, -180, -1], [60, 210, 1], [-60, 210, -1], [50, -280, 1], [-50, -280, -1]];
+    const cands: [number, number, 1 | -1][] = [[50, -90, 1], [-50, -90, -1], [50, 120, 1], [-50, 120, -1], [110, -20, 1], [-110, -20, -1], [50, -180, 1], [-50, -180, -1], [60, 210, 1], [-60, 210, -1], [50, -280, 1], [-50, -280, -1], [60, 320, 1], [-60, 320, -1], [200, 40, 1], [-200, 40, -1], [180, -200, 1], [-180, -200, -1], [220, 200, 1], [-220, 200, -1], [240, 320, 1], [-240, 320, -1], [300, 110, 1], [-300, 110, -1]]; // the far ones: room to clear a subject (r9 note 4)
     const samples: { a: { x: number; y: number }; obst: Box[] }[] = [];
     const t1 = Math.min(out, at + 5);
     for (let k = 0; k <= 16; k++) {
       const t = lerp(at + 0.1, t1, k / 16);
-      const r = this.withCamAt(t, () => ({ a: anchor(t), obst: this.obstacles(t) }));
-      if (r.a) samples.push({ a: r.a, obst: [this.lyricBox(), ...r.obst] });
+      const r = this.withCamAt(t, () => ({ a: anchor(t), obst: [...this.obstacles(t), ...this.subjectBoxes(t), ...(avoid?.(t) ?? [])] }));
+      const hb = this.headBoxAt(t);
+      if (r.a) samples.push({ a: r.a, obst: [...(hb ? [hb] : []), ...r.obst] });
     }
     let best = cands[0]!, bestA = Infinity;
     for (const cd of cands) {
@@ -538,10 +642,11 @@ export abstract class LitScene extends CityScene {
     return { lx: lx + c.x - b.x, ly: ly + c.y - b.y, side: o.side };
   }
   /** One callout: a ring on its object, a short dotted leader, the mono label (clear of signs and the chapter line). */
-  callout(c: CanvasRenderingContext2D, t: number, text: string | string[], at: number, out: number, anchor: (t: number) => { x: number; y: number } | null, extra: Partial<Parameters<typeof drawCallout>[2]> = {}) {
+  callout(c: CanvasRenderingContext2D, t: number, text: string | string[], at: number, out: number, anchor: (t: number) => { x: number; y: number } | null, opts: Partial<Parameters<typeof drawCallout>[2]> & { avoid?: (t: number) => Box[] } = {}) {
     if (t < at - 0.05 || t > out + 0.4) return;
     const S = PORTRAIT ? 34 : 26;
-    const o = this.pickLabel(text, S, at, out, anchor);
+    const { avoid, ...extra } = opts; // avoid: more boxes the label keeps clear of (screen space, at t; e.g. its own balloon)
+    const o = this.pickLabel(text, S, at, out, anchor, avoid);
     const a = anchor(t);
     if (!a) return;
     drawCallout(c, t, { ax: a.x, ay: a.y, ...this.placeLabel(text, S, a, o), text, at, cps: 150, out, size: S, plate: 0.93, ...extra });

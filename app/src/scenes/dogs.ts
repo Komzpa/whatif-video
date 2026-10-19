@@ -63,10 +63,12 @@ export default class Dogs extends LitScene {
     this.shots = [
       [T.s, T.s + 1.75, { k: 'wide', d: 0.9, h: 1.1, side: -0.6, ahead: 1.6 }],
       [T.stray + 0.85, T.cross, { k: 'back', d: 1.1, side: 1, ahead: 0.9 }],
-      [T.cross, T.path + 0.95, { k: 'high', d: 0.35, d1: 0.45, h: 0.75, ahead: PORTRAIT ? -0.5 : 0.8, side: 0.4 }],
-      [T.path + 0.95, T.at, { k: 'ots', d: 2.2, h: 2.6, side: -1.4, yaw: PORTRAIT ? 0 : 0.3 }],
-      [T.night + 1.15, T.night + 5, { k: 'ots', d: 2.2, h: 2.4, side: -1.4, ahead: 0.6 }],
+      [T.cross, T.path + 0.95, { k: 'high', d: 0.35, d1: 0.45, h: 0.75, ahead: PORTRAIT ? -0.5 : 0.8, side: PORTRAIT ? 0.4 : 1.4 }],
+      [T.path + 0.95, T.at, { k: 'ots', d: 2.2, h: 2.6, side: -1.4, yaw: PORTRAIT ? 0 : 0.3, aimY: PORTRAIT ? 1.7 : 0 }],
+      [T.night + 1.15, T.night + 5, { k: 'ots', d: 2.2, h: 2.4, side: -1.4, ahead: 0.6, aimY: PORTRAIT ? 1.5 : 0 }],
     ];
+    // r9 note 4: the chapter line hangs from the top while the child walks the lane centre-frame from behind
+    if (!PORTRAIT) this.headAt = [[T.stray + 0.85, T.cross, 'top']];
     this.initKid(3);
     this.buildLane();
     // three dogs: out of the gap on the left, across the lane, then away down its right side to the owner
@@ -173,6 +175,13 @@ export default class Dogs extends LitScene {
   }
 
   // ================================================================ the dogs' motion
+  /** r9 note 4: the three dogs and their owner under the far lamp, for keeping text off them. */
+  override subjectsAt(t: number) {
+    const out: { p: V3; h: number; r: number }[] = [];
+    this.runs.forEach((r, i) => { const a = this.dogAt(i, t); if (a.dist > 0.01 && a.dist < pathLen(r.path) - 0.1) out.push({ p: [a.pos.x, 0, a.pos.z], h: 0.8, r: 0.55 }); });
+    out.push({ p: [FAR[0] + 0.3, 0, FAR[2] + 0.5], h: 1.85, r: 0.35 });
+    return out;
+  }
   dogAt(i: number, t: number) {
     const r = this.runs[i]!;
     const s = r.s(t), s2 = r.s(t + 0.05);

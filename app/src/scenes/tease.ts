@@ -17,7 +17,7 @@ import { garble, homeLabel, city } from '../city';
 import { type Light } from './_hands';
 import {
   LitScene, lit, glowMat, canvasTex, blotches, speckle, asphalt, boxMesh, cyl, ground, concreteTex, corrugatedTex, streetLight,
-  panelBlock, WindowPanes, kaPlate, KA_WORDS, POST_BASE, LIN, scaleRGB, mixRGB, lin, EYE, type Pov, type V3, type RGB,
+  panelBlock, WindowPanes, kaPlate, KA_WORDS, POST_BASE, LIN, scaleRGB, mixRGB, lin, EYE, type Pov, type V3, type RGB, type Box,
 } from './_kit';
 import { makeLamp, logText } from './_motifs';
 import { Quadruped, OUR_CAT, type QuadSpec } from './_beasts';
@@ -77,7 +77,7 @@ export default class Tease extends LitScene {
     // child and the cat pressed to its boots
     this.shots = [
       [s, T.they + 2.0, { k: 'free', p: [0.9, 1.55, 9.4], p1: [0.7, 1.6, 8.0], look: [-0.4, 1.8, -8], look1: [-0.8, 1.9, -9], fov: PORTRAIT ? 74 : 58 }],
-      [T.they + 6.4, T.tease + 0.9, { k: 'free', p: [7.5, 10, 2.5], p1: [6.2, 11, -0.5], look: [-1.8, 0.3, -7.0], look1: [-2.6, 0.6, -9.5], fov: PORTRAIT ? 78 : 58 }],
+      [T.they + 6.4, T.tease + 0.9, { k: 'free', p: [7.5, 10, 2.5], p1: [6.2, 11, -0.5], look: [-1.8, PORTRAIT ? -1.6 : 0.3, -7.0], look1: [-2.6, PORTRAIT ? -1.3 : 0.6, -9.5], fov: PORTRAIT ? 78 : 58 }], // portrait: the child above the sung line, the balloons free at the top (r9 note 4)
       [T.tease + 0.9, T.call - 0.3, { k: 'back', d: 1.5, h: 3.6, side: -1.7, ahead: 1, aimY: PORTRAIT ? 1.4 : 1.1 }],
       [T.call + 2.6, T.name + 1.2, { k: 'back', d: 1.6, h: 3.6, side: 1, ahead: 1, aimY: PORTRAIT ? 0 : 0.5 }],
       [T.name + 1.2, T.end + 1, { k: 'free', p: [2.1, 3.0, STOP_Z + 1.5], p1: [1.8, 2.7, STOP_Z + 1.15], look: [0.45, 0.3, STOP_Z - 0.6], fov: PORTRAIT ? 62 : 44 }],
@@ -89,7 +89,7 @@ export default class Tease extends LitScene {
     this.man = new Figure(this.three, STRANGER, 56); // first seen here: far off by the rocket frame, watching (r8 note 8)
     { const hp = streetLight(this.three, MAN[0] + 1.6, MAN[2] - 0.6, { h: 5.5, arm: [-1.2, 0, 0.3] }); this.addLamp(hp, { k: 40, angle: 0.9, target: [MAN[0], 0, MAN[2]] }); this.manLamp = hp; }
     this.buildScrawls();
-    this.obstacles = () => { const b = this.planeBox(this.poster); return b ? [b] : []; };
+    this.obstacles = (t: number) => [this.planeBox(this.poster), this.planeBox(this.kaSign), ...this.chalkBoxes(t)].filter((b): b is Box => !!b);
   }
 
   build() {
@@ -225,10 +225,11 @@ export default class Tease extends LitScene {
     c.save();
     c.font = font(F.metro(900), S);
     const w = c.measureText(text).width + S * 1.1, h = S * 1.7;
-    // the balloon sits above the head, nudged into the frame
-    const side = q.x > W * 0.55 ? -1 : 1;
-    let bx = q.x + side * S * 0.6 - (side < 0 ? w : 0), by = q.y - S * 1.3 - h;
-    bx = clamp(bx, 24, W - w - 24); by = clamp(by, 80, H - h - 24);
+    // the balloon sits above the head, nudged into the frame, on the side and height (chosen once for its whole
+    // life) that keeps it off the other kids, the child and the cat (r9 note 4)
+    const pl = this.balloonPlace(text, w, h, a, b, k, S);
+    let bx = q.x + pl.side * S * 0.6 - (pl.side < 0 ? w : 0), by = q.y - pl.lift - h;
+    bx = clamp(bx, 24, W - w - 24); by = clamp(by, PORTRAIT ? 160 : 80, H - h - 24);
     const jit = (i: number) => (hash(seed * 31 + i, Math.floor(t * 12)) - 0.5) * 3;
     c.globalAlpha = 0.95 * pop * fade;
     c.translate(bx + w / 2, by + h / 2); c.scale(0.85 + 0.15 * pop, 0.85 + 0.15 * pop); c.translate(-(bx + w / 2), -(by + h / 2));
@@ -247,6 +248,70 @@ export default class Tease extends LitScene {
     return { x: bx + w / 2, y: by + h };
   }
 
+  balloonCache = new Map<string, { side: number; lift: number; w: number; h: number; S: number }>();
+  /** The balloon's box at tt through the current camera, from the speaker's resting head (call inside withCamAt). */
+  balloonBox(tt: number, w: number, h: number, side: number, lift: number, k: Kid, S: number): { b: Box; q: { x: number; y: number } } | null {
+    void tt;
+    const hp = k.pos.clone().setY(k.pos.y + k.f.S.height * (k.sit ? 0.72 : 0.97) + 0.12);
+    const q = this.onScreen(hp.x, hp.y, hp.z, -40); if (!q) return null;
+    let bx = q.x + side * S * 0.6 - (side < 0 ? w : 0), by = q.y - lift - h;
+    bx = clamp(bx, 24, W - w - 24); by = clamp(by, PORTRAIT ? 160 : 80, H - h - 24);
+    return { b: { x: bx, y: by, w, h }, q };
+  }
+  /** The three shouts' [start, end]: each ≥ 2.9 s, the maybe-translation must stay readable (A1). */
+  sayWindows(): [number, number][] { const T = this.T; return [[T.tease - 3.25, T.tease - 0.4], [T.tease - 0.1, T.tease + 2.8], [T.tease + 3.1, T.tease + 6.0]]; }
+  /** Every kids' balloon on screen at tt (callout labels keep off them, A4), padded. */
+  balloonBoxesAt(tt: number): Box[] {
+    const out: Box[] = [];
+    this.sayWindows().forEach(([a, b], i) => {
+      if (tt < a || tt > b + 0.3) return;
+      const pl = this.balloonCache.get(`${garble(SAYS[i]!.ru)}@${a}`); if (!pl) return;
+      const r = this.balloonBox(tt, pl.w, pl.h, pl.side, pl.lift, this.kids[SAYS[i]!.kid]!, pl.S);
+      if (r) out.push({ x: r.b.x - 10, y: r.b.y - 10, w: r.b.w + 20, h: r.b.h + 20 });
+    });
+    return out;
+  }
+  /** Where the balloon's callout hangs at tt (its bottom middle), predicted for the label placement (pickLabel). */
+  balloonAnchorAt(text: string, a: number, k: Kid, tt: number) {
+    const pl = this.balloonCache.get(`${text}@${a}`);
+    if (!pl) return null;
+    const r = this.balloonBox(tt, pl.w, pl.h, pl.side, pl.lift, k, pl.S);
+    return r ? { x: r.b.x + r.b.w / 2, y: r.b.y + r.b.h } : null;
+  }
+  /** The balloon's side and lift over its life [a, b], least covering of the subjects (sampled through the camera). */
+  balloonPlace(text: string, w: number, h: number, a: number, b: number, k: Kid, S: number) {
+    const key = `${text}@${a}`;
+    const hit = this.balloonCache.get(key); if (hit) return hit;
+    const ov = (x: Box, y: Box) => Math.max(0, Math.min(x.x + x.w, y.x + y.w) - Math.max(x.x, y.x)) * Math.max(0, Math.min(x.y + x.h, y.y + y.h) - Math.max(x.y, y.y));
+    let best = { side: 1, lift: S * 1.3, w, h, S }, bestC = Infinity;
+    for (const lift of [1.3, 2.4, 3.6, 5.0].map((m) => m * S)) for (const side of [1, -1]) {
+      let cost = lift * 0.5;
+      for (let i = 0; i < 8; i++) {
+        const tt = lerp(a, b, (i + 0.5) / 8);
+        cost += this.withCamAt(tt, () => {
+          const r = this.balloonBox(tt, w, h, side, lift, k, S); if (!r) return 0;
+          const hb = this.headBoxAt(tt); // and off the sung line (A4)
+          return this.subjectBoxes(tt).reduce((m, sb) => m + ov(r.b, sb) * 20, 0) + (hb ? ov(r.b, hb) * 40 : 0) + (r.b.y + h > r.q.y ? 5e4 : 0);
+        });
+      }
+      if (cost < bestC) { bestC = cost; best = { side, lift, w, h, S }; }
+    }
+    this.balloonCache.set(key, best);
+    return best;
+  }
+
+  /** Screen boxes of the first ПОТЕРЯШКА on each door once it is written by t (callout labels keep off them, A4). */
+  chalkBoxes(t: number): (Box | null)[] {
+    const out: (Box | null)[] = [];
+    for (let d = 0; d < this.doors.length; d++) {
+      const first = this.scrawls.findIndex((s) => s.door === d);
+      if (first < 0 || first >= 4 || t < this.scrawls[first]!.t) continue;
+      const s = this.scrawls[first]!;
+      const b = this.planeBox(this.doors[d]!.mesh, [s.x / 640, (s.y - s.size * 0.8) / 520, Math.min(1, (s.x + s.size * 5.6) / 640), (s.y + s.size * 0.2) / 520]);
+      if (b) out.push({ x: b.x - 12, y: b.y - 12, w: b.w + 24, h: b.h + 24 }); // a margin: the chalk is hand-drawn
+    }
+    return out;
+  }
   /** The chalk: on «call» one ПОТЕРЯШКА per beat across the doors, then faster and stacked until it doesn't read. */
   buildScrawls() {
     const T = this.T, r = mulberry32(71);
@@ -300,6 +365,14 @@ export default class Tease extends LitScene {
   camZ(t: number) { const T = this.T; const z0 = 5.6, v = (z0 - STOP_Z) / (T.tease - 0.2 - T.s); return Math.max(STOP_Z, z0 - v * (t - T.s)) - 0.1 * smoothstep(T.tease - 0.2, T.tease + 0.5, t); }
   walking(t: number) { return 1 - smoothstep(this.T.tease - 0.6, this.T.tease, t); }
 
+  /** r9 note 4: the cat, the older kids and (from «tease») the man far off, for keeping text off them. */
+  override subjectsAt(t: number) {
+    const c = this.catAt(t).pos;
+    const out: { p: V3; h: number; r: number }[] = [{ p: [c.x, c.y, c.z], h: 0.32, r: 0.32 }];
+    for (const k of this.kids) out.push({ p: [k.pos.x, k.pos.y, k.pos.z], h: k.f.S.height * (k.sit ? 0.75 : 1), r: 0.3 });
+    if (t > this.T.tease! - 2.6) out.push({ p: MAN, h: 1.9, r: 0.35 });
+    return out;
+  }
   catAt(t: number) {
     const T = this.T, z = this.camZ(t);
     const side = new THREE.Vector3(PORTRAIT ? 0.55 : 0.75, 0, z - (PORTRAIT ? 2.9 : 2.5));
@@ -426,11 +499,12 @@ export default class Tease extends LitScene {
       this.heading(u, t, f);
       this.callout(u, t, homeLabel('tease'), T.s + 0.1, T.s + 2.0, () => this.onScreen(-10, 4, -46), { places: [city().home.name] });
       this.callout(u, t, 'НЕДЕЛЯ ДОБРОТЫ', T.they + 2.6, T.they + 5.4, () => this.onScreen(POSTER[0] + 0.45, POSTER[1] + 0.5, POSTER[2]), { maybe: true });
-      const win = [[T.tease - 3.25, T.tease - 0.4], [T.tease - 0.1, T.tease + 2.8], [T.tease + 3.1, T.tease + 6.0]]; // each ≥ 2.9 s: the maybe-translation must stay readable (A1)
+      const win = this.sayWindows();
       SAYS.forEach((sy, i) => {
         const [a, b] = win[i]!;
         const bub = this.speech(u, t, garble(sy.ru), a, b, this.kids[sy.kid]!, 40 + i);
-        this.callout(u, t, sy.tr, a + 0.25, b, () => bub, { maybe: true });
+        // the label is placed for the balloon's whole life (where the camera will put it), drawn at today's balloon
+        this.callout(u, t, sy.tr, a + 0.25, b, (tt) => (tt === t ? bub : this.balloonAnchorAt(garble(sy.ru), a, this.kids[sy.kid]!, tt)), { maybe: true, avoid: (tt) => this.balloonBoxesAt(tt) });
       });
     }
     this.composite2D(this.ui, out);
