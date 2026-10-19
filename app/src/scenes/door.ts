@@ -64,11 +64,13 @@ export default class Door extends LitScene {
     const T: Record<string, number> = { s };
     T.lampOn = s + 0.42;
     T.home = w(/home/).start; T.alone = w(/alone/).start;
-    T.bell1 = w(/doorbell/).start; T.whip0 = T.bell1 + 0.08; T.whip1 = T.whip0 + 0.5;
-    T.up = T.whip1 + 0.35; T.walk0 = T.up + 0.25; T.walk1 = T.walk0 + 1.3;
+    // r9 note 3: the bell's punch, the whip and the cut land on the beat at or right after the sung word
+    const onBeat = (x: number) => this.au.timeOfBeat(Math.ceil(this.au.beatAt(x) - 0.05));
+    T.bell1 = onBeat(w(/doorbell/).start); T.whip0 = T.bell1; T.whip1 = this.au.timeOfBeat(this.au.beatAt(T.bell1) + 2); // the turn to the door eased over two beats
+    T.up = T.whip1 + 0.1; T.walk0 = T.up + 0.15; T.walk1 = T.walk0 + 0.8; // brisk: the screen must stay readable ≥ 1.5 s before the second ring (A1)
     T.openCall = T.walk1 - 0.3;
-    T.reach0 = T.walk1 + 0.15; T.reach1 = T.reach0 + 0.9;
-    T.bell2 = w(/rings/).start;
+    T.reach0 = T.walk1 + 0.1; T.reach1 = T.reach0 + 0.7;
+    T.bell2 = onBeat(w(/rings/).start);
     T.back0 = T.bell2 + 0.25; T.back1 = T.back0 + 0.55;
     T.leave0 = T.bell2 + 1.45; T.leave1 = T.leave0 + 1.0;
     this.T = T;
@@ -79,7 +81,7 @@ export default class Door extends LitScene {
       // far out there, as the child stares at it: our window on the home block, the lamp on, the cat waiting (a long lens)
       [T.home + 0.1, T.alone + 0.95, { k: 'free', p: [0.37, 1.3, -1.05], p1: [0.37, 1.3, -1.05], look: [HOME_P[0] - 0.3, 4.85, HOME_P[2] + 0.3], look1: [HOME_P[0], 5.0, HOME_P[2] + 0.3], fov: PORTRAIT ? 7 : 4.6 }],
       [T.alone + 0.95, T.bell1 + 0.05, { k: 'free', p: [0.75, 1.9, 1.15], p1: [0.6, 1.8, 0.95], look: [PORTRAIT ? 0.8 : -0.1, PORTRAIT ? 1.1 : 0.8, -1.3], look1: [PORTRAIT ? 0.9 : 0.0, PORTRAIT ? 1.1 : 0.8, -1.3], fov: PORTRAIT ? 90 : 72 }],
-      [T.bell1 + 0.05, T.walk1, { k: 'ots', d: 1.5, side: -1.2, h: 2.2, aimY: PORTRAIT ? -0.9 : 0 }],
+      [T.bell1 + 0.05, T.walk1 - 0.35, { k: 'ots', d: 1.5, side: -1.2, h: 2.2, aimY: PORTRAIT ? -0.9 : 0 }],
       [T.bell2, T.leave1 + 2, { k: 'free', p: [0.7, 1.55, 1.2], p1: [0.6, 1.5, 1.1], look: [WALL_X, 1.1, 0.1], look1: [WALL_X, 1.15, 0.05], fov: PORTRAIT ? 84 : 64 }],
     ];
     this.initKid(7);
@@ -328,12 +330,15 @@ export default class Door extends LitScene {
     // facing the window (yaw 0), the whip to the door (yaw +π/2 looks -x), a glance at the screen
     const toGlass = this.yawTo(p, [WALL_X, 1.5, (GL_Z0 + GL_Z1) / 2]), toScr = this.yawTo(p, SCR);
     const dy = PORTRAIT ? -0.34 : 0, dp = PORTRAIT ? -0.12 : 0;
-    const yaw = keys(t, [[T.s, -0.05 + dy], [T.alone, 0.04 + dy, E], [T.whip0, 0.04 + dy], [T.whip1, Math.PI / 2 - 0.1, ease.outCubic], [T.walk0, Math.PI / 2 - 0.05, E], [T.walk1 - 0.2, toScr + 0.25, E], [T.reach1, toScr + 0.18, E], [T.bell2, toScr + 0.2], [T.bell2 + 0.35, toGlass, ease.outCubic], [T.leave1 + 1, toGlass]]);
-    const pitch = keys(t, [[T.s, -0.18 + dp], [T.lampOn + 0.4, -0.08 + dp, E], [T.alone, -0.02 + dp, E], [T.whip0, -0.02 + dp], [T.whip1, 0.2, ease.outCubic], [T.walk1 - 0.2, 0.06, E], [T.reach1, 0.02, E], [T.bell2, 0.02], [T.bell2 + 0.35, 0.28, ease.outCubic], [T.leave1 + 1, 0.22]]);
+    const yaw = keys(t, [[T.s, -0.05 + dy], [T.alone, 0.04 + dy, E], [T.whip0, 0.04 + dy], [T.whip1, Math.PI / 2 - 0.1, ease.inOutSine], [T.walk0, Math.PI / 2 - 0.05, E], [T.walk1 - 0.2, toScr + 0.25, E], [T.reach1, toScr + 0.18, E], [T.bell2, toScr + 0.2], [T.bell2 + 0.6, toGlass, E], [T.leave1 + 1, toGlass]]);
+    const pitch = keys(t, [[T.s, -0.18 + dp], [T.lampOn + 0.4, -0.08 + dp, E], [T.alone, -0.02 + dp, E], [T.whip0, -0.02 + dp], [T.whip1, 0.2, ease.inOutSine], [T.walk1 - 0.2, 0.06, E], [T.reach1, 0.02, E], [T.bell2, 0.02], [T.bell2 + 0.6, 0.28, E], [T.leave1 + 1, 0.22]]);
+    // r9 note 3: the jump cut that ends the stretch skips only half a metre of a short cross, which read as a nudge;
+    // the head looks 15° aside during the slow cross and the cut restores it (over easePov's 0.25 rad break, so it is not smoothed away) (eased in before), so the cut reads as a cut
+    const ja = T.bell1 + 0.9, jb = this.nearBeat(T.walk1 - 0.5);
+    const jcut = t < jb ? 0.27 * ease.inOutSine(prog(t, ja, ja + 0.6)) : 0; // after the cut the framing is the old one (the screen stays readable, A1)
     const walk = (wk > 0 && wk < 1) || (back > 0 && back < 1) ? 1 : 0;
-    // the bell shakes the frame a little (the child flinches)
-    const flinch = Math.exp(-Math.max(0, t - T.bell1) * 5) * (t > T.bell1 ? 1 : 0) + 0.7 * Math.exp(-Math.max(0, t - T.bell2) * 5) * (t > T.bell2 ? 1 : 0);
-    return { p, yaw: yaw + 0.02 * flinch * Math.sin(t * 60), pitch: pitch + 0.015 * flinch * Math.sin(t * 47), walk };
+    // the bell's shake is the post shake of the ring's punches (memPost), not a jerk of the view (r9 note 3)
+    return { p, yaw: yaw + jcut, pitch, walk };
   }
 
   /** The visitor behind the glass: horizontal offset (m on the glass), nearness 0..1, presence 0..1. */
@@ -426,15 +431,24 @@ export default class Door extends LitScene {
     const stut = (a: number, b: number) => (tr >= a && tr < b ? a + Math.floor((tr - a) * 6) / 6 + (hash(Math.floor((tr - a) * 6), 9) < 0.25 ? -1 / 6 : 0) : null);
     const s1 = stut(T.bell1 + 0.12, T.bell1 + 0.9); if (s1 !== null) return Math.max(T.bell1 + 0.12, s1);
     const s2 = stut(T.bell2 + 0.2, T.bell2 + 1.4); if (s2 !== null) return Math.max(T.bell2 + 0.2, s2);
-    const a = T.bell1 + 0.9, b = T.walk1 - 0.5; // the jump lands mid-cross, before the intercom comes up
-    if (tr >= a && tr < b) return a + 0.6 * (tr - a);
+    return this.camClock(tr);
+  }
+  /** The camera's share of the flashback clock (r9 note 3): the stretch and its jump cut (on a beat), no stutter; the
+   *  held frames are the world's (the shape, the lamp, the hammer), so the camera never snaps between them. */
+  camClock(tr: number) {
+    const T = this.T;
+    const a = T.bell1 + 0.9, b = this.nearBeat(T.walk1 - 0.5); // the jump lands mid-cross, before the intercom comes up
+    if (tr >= a && tr < b) { // the slow-down eases in over 0.3 s (no snap)
+      const k = 0.6, w = 0.3, u = tr - a; // TREATMENT: time stretched to 0.6×
+      return a + (u < w ? u - (1 - k) * u * u / (2 * w) : w - (1 - k) * w / 2 + k * (u - w));
+    }
     return tr;
   }
   /** The flashback's grade and its intrusions (world only; the HUD keeps its colours): hard cut in (a white frame and a punch), the memory grade (washed out,
    *  overexposed, cold, heavy grain, a breathing vignette), each ring repeated as decaying punches, a snap back out. */
   memPost(tr: number) {
     const T = this.T, s = this.ctx.start, e = this.ctx.end;
-    const echoes = (b: number) => { let k = 0; for (let i = 0; i < 4; i++) { const d = tr - (b + i * 0.21); if (d >= 0 && d < 0.2) k = Math.max(k, (1 - d / 0.2) * (1 - i * 0.22)); } return k; };
+    const echoes = (b: number) => { let k = 0; for (let i = 0; i < 4; i++) { const d = tr - (b + i * 0.21); if (d >= 0 && d < 0.26) k = Math.max(k, (1 - d / 0.26) * (1 - i * 0.22)); } return k; }; // the four decays overlap: one punch train starting on the ring (r9 note 3)
     const ring = Math.max(echoes(T.bell1), echoes(T.bell2));
     const inK = 1 - smoothstep(s, s + 0.3, tr), outK = tr >= e - 1 / 60 ? 1 : 0; // one white frame: the snap back to the present
     const breathe = 0.5 + 0.5 * Math.sin((tr - s) * 2 * Math.PI * 0.9);
@@ -448,10 +462,10 @@ export default class Door extends LitScene {
 
   render(f: Frame, out: THREE.WebGLRenderTarget) {
     const tr = f.t, T = this.T, { renderer } = this.ctx;
-    const t = PROOF ? tr : this.memT(tr);
+    const t = PROOF ? tr : this.memT(tr), tc = PROOF ? tr : this.camClock(tr);
     this.begin();
-    const P = this.pov(t);
-    this.setCam(P, t, 0);
+    const P = this.pov(tc);
+    this.setCam(P, tc, 0);
     if (!PROOF) this.cut(t, P, null, { sit: 1 - prog(t, T.up, T.up + 0.5), speed: P.walk * 1.1, look: 0 });
     const cam = this.cam;
     // the desk lamp: comes on with a stutter
@@ -530,18 +544,20 @@ export default class Door extends LitScene {
       const e = project(cam, pt.x, pt.y, pt.z);
       if (e.behind) return;
       const s = 0.055 * pxAt(cam, 0.5);
-      const from = { x: W * fromX, y: H + s * 3 };
-      const tip = { x: lerp(from.x + s, e.x, k), y: lerp(H + s, e.y, k) };
+      // portrait: the chapter plate spans nearly the whole width under the desk and the screen, so the arm comes in
+      // from the right edge above it instead of up through it (A15 counts POV hands)
+      const from = PORTRAIT ? { x: W + s * 2, y: H * 0.5 } : { x: W * fromX, y: H + s * 3 };
+      const tip = PORTRAIT ? { x: lerp(W + s, e.x, k), y: lerp(H * 0.48, e.y, k) } : { x: lerp(from.x + s, e.x, k), y: lerp(H + s, e.y, k) };
       drawOpenHand(c, tip, from, s, light, 'point', { curl });
     };
     // the lamp switch on the lamp's base
     const sw = prog(t, T.s, T.lampOn, ease.outCubic) * (1 - prog(t, T.lampOn + 0.35, T.lampOn + 0.9, ease.inOutCubic));
-    arm(new THREE.Vector3(LAMP[0] + 0.1, 0.8, LAMP[2] + 0.18), sw, PORTRAIT ? 0.62 : 0.66, 0.35);
+    arm(new THREE.Vector3(LAMP[0] + 0.1, 0.8, LAMP[2] + 0.18), sw, 0.66, 0.35);
     // the big green button: the hand comes up, hovers a few centimetres short, curls and drops
     const reach = prog(t, T.reach0, T.reach1, ease.inOutCubic) * (1 - prog(t, T.bell2 + 0.05, T.bell2 + 0.4, ease.inCubic));
     const hover = 0.06 * (1 - prog(t, T.reach1 - 0.2, T.reach1 + 0.4, ease.outCubic));
     const btn = BTN.clone().setZ(hover).applyMatrix4(this.scr.matrixWorld);
-    arm(btn, reach, PORTRAIT ? 0.2 : 0.3, 0.2 + 0.6 * prog(t, T.reach1 + 0.1, T.bell2, ease.inOutQuad));
+    arm(btn, reach, 0.6, /* 16:9: up from the right of the chapter plate, not through it (A15) */ 0.2 + 0.6 * prog(t, T.reach1 + 0.1, T.bell2, ease.inOutQuad));
     void lamp;
   }
 }

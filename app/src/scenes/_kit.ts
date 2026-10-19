@@ -8,7 +8,7 @@ import type { Frame } from '../engine/scene';
 import { W, H, PORTRAIT } from '../engine/gl';
 import { clamp, lerp, hash, mulberry32, frameIdx } from '../engine/util';
 import { F, font, measure, assertGlyphs } from '../engine/type';
-import { CityScene, LIN, POST_BASE, SAFE, scaleRGB, mixRGB, project, drawCallout, makeLamp, logText, rgba } from './_motifs';
+import { CityScene, walkMotion, easePov, LIN, POST_BASE, SAFE, scaleRGB, mixRGB, project, drawCallout, makeLamp, logText, rgba } from './_motifs';
 import { drawHeading, layoutHeading } from './_ru';
 import { torchPose, drawTorchHand, type Light, type TorchPose } from './_hands';
 import { entriesOf } from '../contents';
@@ -224,6 +224,12 @@ export const KID: FigureSpec = { height: 1.24, kid: true, coat: [0.6, 0.47, 0.08
 
 export abstract class LitScene extends CityScene {
   hemi = new THREE.HemisphereLight(0x6f7e92, 0x1a1612, 0.35);
+  constructor(ctx: ConstructorParameters<typeof CityScene>[0]) {
+    super(ctx);
+    // r9 note 3: every first-person view is eased (the scene's pov is the target, easePov the camera)
+    const raw = this.pov;
+    this.pov = (t: number) => easePov((q) => raw.call(this, q), t);
+  }
   torchL = new THREE.SpotLight(0xffe8b5, 0, 0, 0.36, 0.7, 2);
   fogE = new THREE.FogExp2(0x10151b, 0.03);
   T: Record<string, number> = {};
@@ -281,7 +287,18 @@ export abstract class LitScene extends CityScene {
     this.kid.visible = false;
     return this.kid;
   }
+  private snapped: unknown = null;
+  /** r9 note 3: a cut lands on the beat nearest to where the scene put it (the chapter's own ends stay). */
+  onBeat(x: number) { return x <= this.ctx.start + 0.05 || x >= this.ctx.end - 0.05 ? x : this.nearBeat(x); }
+  private snapCuts() {
+    if (this.snapped === this.shots) return;
+    this.shots = this.shots.map(([a, b, s]) => [this.onBeat(a), this.onBeat(b), s] as [number, number, Shot]);
+    this.headAt = this.headAt.map(([a, b, w]) => [this.onBeat(a), this.onBeat(b), w] as [number, number, 'top' | 'bottom']);
+    this.snapped = this.shots;
+    this.headCache.clear();
+  }
   shotAt(t: number): { s: Shot; u: number } | null {
+    this.snapCuts();
     for (const [a, b, s] of this.shots) if (t >= a && t < b) return { s, u: (t - a) / Math.max(b - a, 1e-3) };
     return null;
   }
@@ -299,7 +316,7 @@ export abstract class LitScene extends CityScene {
     const floor = o.floor ?? 0;
     const feet = new THREE.Vector3(P.p[0], floor, P.p[2]);
     const speed = o.speed ?? P.walk * 1.3;
-    kid.pose({ pos: feet, heading: P.yaw + Math.PI / 2, t, speed, dist: o.dist ?? t * speed, film: o.film ?? (pose ? 0.85 : 0), phone: o.phone ?? 0, look: o.look ?? 0, headDown: o.headDown ?? -P.pitch * 0.5, sit: o.sit ?? 0, armL: o.armL ?? 0 });
+    kid.pose({ pos: feet, heading: P.yaw + Math.PI / 2, t, speed, steps: this.steps(t), film: o.film ?? (pose ? 0.85 : 0), phone: o.phone ?? 0, look: o.look ?? 0, headDown: o.headDown ?? -P.pitch * 0.5, sit: o.sit ?? 0, armL: o.armL ?? 0 });
     if (pose) { // the light leaves the figure's hand, along the same aim
       const dir = pose.target.clone().sub(pose.head).normalize();
       this.torchL.position.copy(kid.hR).addScaledVector(dir, 0.08);
@@ -344,11 +361,10 @@ export abstract class LitScene extends CityScene {
   // ---- camera
   setCam(c: Pov, t: number, moving = 0) {
     const cam = this.cam;
-    const bob = c.walk * Math.abs(Math.sin(t * 7.4)) * 0.03, sway = c.walk * Math.sin(t * 3.7) * 0.012;
-    const swayY = Math.sin(t * 7.3) * 0.006 * moving + Math.sin(t * 1.3) * 0.003;
+    const { bob, sway, swayY, roll: wr } = walkMotion(c.walk, this.steps(t), t, moving);
     cam.position.set(c.p[0] + sway * Math.cos(c.yaw), c.p[1] + bob + swayY, c.p[2] - sway * Math.sin(c.yaw));
     const dir = new THREE.Vector3(-Math.sin(c.yaw) * Math.cos(c.pitch), Math.sin(c.pitch), -Math.cos(c.yaw) * Math.cos(c.pitch));
-    const roll = (c.roll ?? 0) + c.walk * Math.sin(t * 3.7) * 0.01 + Math.sin(t * 5.3) * 0.004 * moving;
+    const roll = (c.roll ?? 0) + wr;
     cam.up.set(Math.sin(roll) * Math.cos(c.yaw), Math.cos(roll), -Math.sin(roll) * Math.sin(c.yaw));
     cam.lookAt(cam.position.clone().add(dir));
     cam.up.set(0, 1, 0);
@@ -369,7 +385,7 @@ export abstract class LitScene extends CityScene {
   torch(t: number, o: { raise?: number; on?: number; walk?: number; beat?: number; aimAt?: THREE.Vector3 | null; aimK?: number; spot?: number; angle?: number }) {
     const cam = this.cam, raise = o.raise ?? 1;
     if (raise <= 0.001) { this.torchL.intensity = 0; return null; }
-    let pose = torchPose(cam, t, { raise, walk: o.walk ?? 0, beat: o.beat ?? 0 });
+    let pose = torchPose(cam, t, { raise, walk: o.walk ?? 0, beat: o.beat ?? 0, steps: this.steps(t) });
     if (o.aimAt && (o.aimK ?? 1) > 0.001) {
       const k = o.aimK ?? 1;
       let aim = { x: 0, y: 0 };
@@ -378,7 +394,7 @@ export abstract class LitScene extends CityScene {
         const got = pose.tailC.clone().sub(pose.headC).negate().normalize();
         const dx = Math.atan2(want.x, -want.z) - Math.atan2(got.x, -got.z), dy = Math.asin(clamp(want.y, -1, 1)) - Math.asin(clamp(got.y, -1, 1));
         aim = { x: aim.x + dx * k, y: aim.y + dy * k };
-        pose = torchPose(cam, t, { raise, walk: o.walk ?? 0, beat: o.beat ?? 0, aim });
+        pose = torchPose(cam, t, { raise, walk: o.walk ?? 0, beat: o.beat ?? 0, steps: this.steps(t), aim });
       }
     }
     const on = (o.on ?? 1) * (raise > 0.5 ? 1 : 0);
@@ -490,13 +506,14 @@ export abstract class LitScene extends CityScene {
   }
   /** r9 note 4: [t0, t1, slot] where the scene puts the chapter line itself (per aspect); elsewhere `headTop` decides. */
   headAt: [number, number, 'top' | 'bottom'][] = [];
-  private headCache = new Map<number, boolean>();
+  headCache = new Map<number, boolean>();
   /**
    * Text never covers the subject (r9 note 4): the chapter line hangs from the top of the frame for a third-person
    * shot that would put the child under its bottom slot (predicted over the whole shot from pov() and shotCam(), so
    * the line moves only on a cut), unless the scene placed it with `headAt`.
    */
   headTop(t: number): boolean {
+    this.snapCuts();
     for (const [a, b, w] of this.headAt) if (t >= a && t < b) return w === 'top';
     // the camera segment holding t: a third-person shot, or the first-person stretch between two shots
     const cuts = [...new Set([this.ctx.start, this.ctx.end, ...this.shots.flatMap(([a, b]) => [a, b])])].filter((x) => x >= this.ctx.start && x <= this.ctx.end).sort((x, y) => x - y);
@@ -507,13 +524,15 @@ export abstract class LitScene extends CityScene {
       const a = cuts[k]!, b = cuts[k + 1] ?? this.ctx.end;
       const bot = this.lyricBox(false), top = this.lyricBox(true);
       const ov = (x: Box, y: Box) => Math.max(0, Math.min(x.x + x.w, y.x + y.w) - Math.max(x.x, y.x)) * Math.max(0, Math.min(x.y + x.h, y.y + y.h) - Math.max(x.y, y.y));
-      let hb = 0, ht = 0;
+      let hb = 0, ht = 0, botSign = false;
       for (let i = 0; i < 16; i++) {
         const tt = lerp(a, b, (i + 0.5) / 16);
         const seen = this.withCamAt(tt, () => ({ subj: this.subjectBoxes(tt), obst: this.signBoxes(tt) }));
         // the top slot must not land on a sign or board either (the sung line never covers a sign, A4)
         const tp = this.headBoxAt(tt, true) ?? top; // the line as it would hang there, padded
         for (const ob of seen.obst) if (ov(ob, tp) > 0) ht = Infinity; // never onto a sign: then the shot must keep the subject clear of the bottom slot
+        const bp = this.headBoxAt(tt, false) ?? bot;
+        for (const ob of seen.obst) if (ov(ob, bp) > 0) botSign = true; // nor the bottom one: a sign there sends the line up when the top is free (A4)
         for (const kb of seen.subj) {
           const c = { x: Math.max(0, kb.x), y: Math.max(0, kb.y), w: Math.min(W, kb.x + kb.w) - Math.max(0, kb.x), h: Math.min(H, kb.y + kb.h) - Math.max(0, kb.y) };
           const ar = Math.max(1, c.w * c.h);
@@ -522,7 +541,7 @@ export abstract class LitScene extends CityScene {
           hb += ov(c, bot) * Math.sqrt(ar); ht += ov(c, top) * Math.sqrt(ar);
         }
       }
-      v = hb > 0 && ht < hb * 0.5;
+      v = (hb > 0 && ht < hb * 0.5) || (botSign && ht !== Infinity && ht < Math.max(hb, 1) * 0.5);
       this.headCache.set(k, v);
     }
     return v;
@@ -612,13 +631,13 @@ export abstract class LitScene extends CityScene {
     const hit = this.labelCache.get(key);
     if (hit) return hit;
     const cands: [number, number, 1 | -1][] = [[50, -90, 1], [-50, -90, -1], [50, 120, 1], [-50, 120, -1], [110, -20, 1], [-110, -20, -1], [50, -180, 1], [-50, -180, -1], [60, 210, 1], [-60, 210, -1], [50, -280, 1], [-50, -280, -1], [60, 320, 1], [-60, 320, -1], [200, 40, 1], [-200, 40, -1], [180, -200, 1], [-180, -200, -1], [220, 200, 1], [-220, 200, -1], [240, 320, 1], [-240, 320, -1], [300, 110, 1], [-300, 110, -1]]; // the far ones: room to clear a subject (r9 note 4)
-    const samples: { a: { x: number; y: number }; obst: Box[] }[] = [];
+    const samples: { a: { x: number; y: number }; obst: Box[]; subj: Box[] }[] = [];
     const t1 = Math.min(out, at + 5);
     for (let k = 0; k <= 16; k++) {
-      const t = lerp(at + 0.1, t1, k / 16);
-      const r = this.withCamAt(t, () => ({ a: anchor(t), obst: [...this.obstacles(t), ...this.subjectBoxes(t), ...(avoid?.(t) ?? [])] }));
+      const t = lerp(at, t1, k / 16); // both ends: the label is on screen from its first frame
+      const r = this.withCamAt(t, () => ({ a: anchor(t), obst: [...this.obstacles(t), ...(avoid?.(t) ?? [])], subj: this.subjectBoxes(t) }));
       const hb = this.headBoxAt(t);
-      if (r.a) samples.push({ a: r.a, obst: [...(hb ? [hb] : []), ...r.obst] });
+      if (r.a) samples.push({ a: r.a, obst: [...(hb ? [hb] : []), ...r.obst], subj: r.subj });
     }
     let best = cands[0]!, bestA = Infinity;
     for (const cd of cands) {
@@ -627,7 +646,9 @@ export abstract class LitScene extends CityScene {
         const b = this.labelBox(text, size, sm.a.x + cd[0], sm.a.y + cd[1], cd[2]);
         const c = this.clampLabel(b);
         a += 40 * (Math.abs(c.x - b.x) + Math.abs(c.y - b.y));
-        for (const o of sm.obst) a += Math.max(0, Math.min(c.x + c.w, o.x + o.w) - Math.max(c.x, o.x) + 6) * Math.max(0, Math.min(c.y + c.h, o.y + o.h) - Math.max(c.y, o.y) + 6);
+        const ov = (o: Box) => Math.max(0, Math.min(c.x + c.w, o.x + o.w) - Math.max(c.x, o.x) + 6) * Math.max(0, Math.min(c.y + c.h, o.y + o.h) - Math.max(c.y, o.y) + 6);
+        for (const o of sm.obst) a += 20 * ov(o); // signs, the sung line: never (A4)
+        for (const o of sm.subj) a += 20 * ov(o); // a small far subject (a kid on the roof) must still win over a nudge (A15)
       }
       if (a < bestA) { bestA = a; best = cd; }
       if (a === 0) break;

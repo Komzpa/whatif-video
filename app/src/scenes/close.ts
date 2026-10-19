@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import type { Frame } from '../engine/scene';
 import { W, H, PORTRAIT } from '../engine/gl';
-import { clamp, ease, lerp, smoothstep, keys, mulberry32, hash, prog } from '../engine/util';
+import { clamp, ease, lerp, smoothstep, keys, angleKeys, mulberry32, hash, prog } from '../engine/util';
 import { homeLabel, city } from '../city';
 import { drawOpenHand, pxAt, type Light } from './_hands';
 import {
@@ -74,7 +74,7 @@ export default class Close extends LitScene {
     this.T = T;
     this.shots = [
       [s, T.in1 + 0.1, { k: 'free', p: [0.05, FY + 0.72, -0.35], p1: [0.1, FY + 0.74, -0.7], look: [DOOR_X - 0.05, FY + 0.95, -RD], look1: [DOOR_X - 0.2, FY + 0.85, -RD + 0.6], /* at the child's own eye level: a low camera stretched the legs into adult proportions (author r1 item 5) */ fov: PORTRAIT ? 78 : 58 }],
-      [T.coat - 0.1, T.phone - 0.2, { k: 'free', p: [-1.3, FY + 0.7, -0.35], p1: [-1.25, FY + 0.75, -0.5], look: [HOOK[0] - 0.25, FY + 1.25, HOOK[2]], fov: PORTRAIT ? 78 : 60 }],
+      [T.coat - 0.1, T.phone + 0.15, { k: 'free', /* r9 note 3: holds over the turn to the phone (A1: ПАЛЬТО ≥ 1.5 s) */ p: [-1.3, FY + 0.7, -0.35], p1: [-1.25, FY + 0.75, -0.5], look: [HOOK[0] - 0.25, FY + 1.25, HOOK[2]], fov: PORTRAIT ? 78 : 60 }],
     ];
     this.initKid(31);
     this.build();
@@ -223,13 +223,13 @@ export default class Close extends LitScene {
     const z = lerp(-RD - 1.35, -2.25, ease.inOutCubic(prog(t, T.in0, T.in1 + 0.3)));
     const x = lerp(DOOR_X + 0.12, 0.55, ease.inOutCubic(prog(t, T.in0, T.in1 + 0.3)));
     const y = FY + lerp(EYE, 0.55, ease.inOutCubic(prog(t, T.crouch, T.crouch + 0.8)) - ease.inOutCubic(prog(t, T.click + 0.35, T.coat + 0.5)) * 0.8);
-    const zz = z + 0.9 * ease.inOutCubic(prog(t, T.phone - 0.3, T.phone + 0.6));
-    const back = ease.inOutCubic(prog(t, T.click + 0.3, T.coat + 0.4)) * (1 - ease.inOutCubic(prog(t, T.phone - 0.3, T.phone + 0.6)));
-    return [x - 0.75 * back + 0.25 * ease.inOutCubic(prog(t, T.phone - 0.3, T.phone + 0.6)), y, zz + 0.6 * back];
+    const zz = z + 0.9 * ease.inOutSine(prog(t, T.phone - 0.3, T.phone + 0.8));
+    const back = ease.inOutCubic(prog(t, T.click + 0.3, T.coat + 0.4)) * (1 - ease.inOutSine(prog(t, T.phone - 0.3, T.phone + 0.8)));
+    return [x - 0.75 * back + 0.25 * ease.inOutSine(prog(t, T.phone - 0.3, T.phone + 0.8)), y, zz + 0.6 * back];
   }
 
   pov(t: number): Pov {
-    const T = this.T, P = PORTRAIT, E = ease.inOutCubic;
+    const T = this.T, P = PORTRAIT, E = ease.inOutSine; // r9 note 3: the gentlest in-out for the head turns
     if (PROOF === 'room') { const p: V3 = [-0.9, FY + 1.9, -RD + 0.3]; return { p, yaw: this.yawTo(p, [0.6, FY + 0.6, -0.6]), pitch: -0.35, walk: 0, fov: P ? 80 : 66 }; }
     if (PROOF === 'phone') { const p: V3 = [PHONE[0] - 0.55, PHONE[1] + 0.35, PHONE[2] - 0.5]; return { p, yaw: this.yawTo(p, PHONE), pitch: -0.45, walk: 0, fov: P ? 50 : 36 }; }
     if (PROOF === 'nightlight') { const p: V3 = [NL[0] - 0.8, NL[1] + 0.3, NL[2] + 0.5]; return { p, yaw: this.yawTo(p, NL), pitch: -0.3, walk: 0, fov: P ? 50 : 36 }; }
@@ -242,8 +242,8 @@ export default class Close extends LitScene {
       const toCoat = this.yawTo(cam, [HOOK[0] - 0.13, HOOK[1] - 0.4, HOOK[2]]), upCoat = this.pitchTo(cam, [HOOK[0] - 0.13, HOOK[1] - 0.35, HOOK[2]]);
       const toPhone = this.yawTo(cam, PHONE), upPhone = this.pitchTo(cam, PHONE);
       const wy = this.yawTo(cam, toWin);
-      const yaw = keys(t, [[T.s, Math.PI + 0.02], [T.in1, wy + (P ? 0 : 0.05), E], [T.crouch + 0.7, toNL + (P ? 0.1 : 0.25), E], [T.click + 0.2, toNL + (P ? 0.08 : 0.2), E], [T.coat + 0.5, toCoat + (P ? 0.1 : 0.3), E], [T.phone - 0.3, toCoat + (P ? 0.12 : 0.34), E], [T.phone + 0.5, toPhone + (P ? -0.05 : -0.15), E], [T.cut, toPhone + (P ? -0.05 : -0.2), E]]);
-      const pitch = keys(t, [[T.s, 0.0], [T.in1, 0.02, E], [T.crouch + 0.7, upNL + (P ? 0.12 : 0.2), E], [T.click + 0.2, upNL + (P ? 0.12 : 0.22), E], [T.coat + 0.5, upCoat, E], [T.phone - 0.3, upCoat, E], [T.phone + 0.5, upPhone + (P ? 0.12 : 0.2), E], [T.cut, upPhone + (P ? 0.14 : 0.24), E]]);
+      const yaw = angleKeys(t, [[T.s, Math.PI + 0.02], [T.in1, wy + (P ? 0 : 0.05), E], [T.crouch + 0.95, toNL + (P ? 0.1 : 0.25), E], [T.click + 0.1, toNL + (P ? 0.08 : 0.2), E], [T.coat + 1.0, toCoat + (P ? 0.1 : 0.3), E], [T.phone - 0.3, toPhone + (P ? -0.05 : -0.15), E], [T.phone + 0.8, toPhone + (P ? -0.05 : -0.15), E] /* r9 note 3: the coat→phone turn (120°) happens under the coat insert; after its cut the head only drifts */, [T.cut, toPhone + (P ? -0.05 : -0.2), E]]);
+      const pitch = keys(t, [[T.s, 0.0], [T.in1, 0.02, E], [T.crouch + 0.95, upNL + (P ? 0.12 : 0.2), E], [T.click + 0.1, upNL + (P ? 0.12 : 0.22), E], [T.coat + 1.0, upCoat, E], [T.phone - 0.3, upPhone + (P ? 0.12 : 0.2), E], [T.phone + 0.8, upPhone + (P ? 0.12 : 0.2), E], [T.cut, upPhone + (P ? 0.14 : 0.24), E]]);
       const walk = smoothstep(T.in0, T.in0 + 0.2, t) * (1 - smoothstep(T.in1, T.in1 + 0.3, t));
       return { p: cam, yaw, pitch, walk, fov: P ? 76 : 60 };
     }
@@ -311,7 +311,7 @@ export default class Close extends LitScene {
       this.ghost(u, t, gk, ga);
       if (!this.third) { this.torchHand(u, pose, light); this.reach(u, t, light); }
       this.callout(u, t, homeLabel('close'), T.open + 0.3, T.open + 2.3, () => this.onScreen(DOOR_X - 0.75, FY + 2.15, -RD + 0.02), { places: [city().home.name] }); // on the dark wall above and left of the doorway, clear of the child's head (author r1 item 4)
-      this.callout(u, t, 'ПАЛЬТО', T.coat + 0.35, T.phone - 0.1, () => this.onScreen(HOOK[0] - 0.13, HOOK[1] - 0.45, HOOK[2]));
+      this.callout(u, t, 'ПАЛЬТО', T.coat + 0.35, T.phone + 0.1, () => this.onScreen(HOOK[0] - 0.13, HOOK[1] - 0.45, HOOK[2]));
     }
     this.composite2D(this.ui, out);
     this.glow2D.render(renderer, out);

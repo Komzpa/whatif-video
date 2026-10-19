@@ -2016,6 +2016,43 @@ export class NeonSign {
 // =====================================================================================================
 
 /**
+ * The first-person view eased (r9 note 3: no snaps except deliberate cuts): a stateless low-pass of a scene's own
+ * view over ±`half` s (a raised-cosine window over 2n+1 samples) on yaw, pitch, roll and field of view; the position
+ * is left alone (walking is already smooth). Samples past a discontinuity (another space, or neighbouring samples
+ * 0.05 s apart more than 0.25 rad or 6° of field of view apart: a deliberate cut) are left out, so a cut stays a cut.
+ */
+export function easePov<P extends { yaw: number; pitch: number; roll?: number; fov?: number; space?: string }>(raw: (t: number) => P, t: number, half = 0.3, n = 6): P {
+  const c = raw(t);
+  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+  let w = 1, dy = 0, dp = 0, dr = 0, df = 0;
+  // walk out from the centre on each side; stop at a discontinuity between neighbouring samples (a deliberate cut)
+  for (const side of [-1, 1]) {
+    let prev = c;
+    for (let k = 1; k <= n; k++) {
+      const q = raw(t + side * (k / n) * half);
+      if (q.space !== c.space || Math.abs(wrap(q.yaw - prev.yaw)) > 0.25 || Math.abs(q.pitch - prev.pitch) > 0.25 || Math.abs((q.fov ?? 0) - (prev.fov ?? 0)) > 6) break;
+      const wk = 0.5 + 0.5 * Math.cos((Math.PI * k) / (n + 1));
+      w += wk; dy += wk * wrap(q.yaw - c.yaw); dp += wk * (q.pitch - c.pitch); dr += wk * ((q.roll ?? 0) - (c.roll ?? 0)); df += wk * ((q.fov ?? 0) - (c.fov ?? 0));
+      prev = q;
+    }
+  }
+  return { ...c, yaw: c.yaw + dy / w, pitch: c.pitch + dp / w, ...(c.roll !== undefined ? { roll: c.roll + dr / w } : {}), ...(c.fov !== undefined ? { fov: c.fov + df / w } : {}) };
+}
+
+/** Walking cadence (r9 note 3): a step on every half-beat (2.47 steps/s at the song's 74 BPM, a child's walk). */
+export const STEPS_PER_BEAT = 2;
+/** The first-person walk: bob (lowest at each footfall), side sway and roll (one left-right per two steps), from the
+ *  step count (`steps`), plus the handheld drift of a `moving` camera. One owner for every first-person camera. */
+export function walkMotion(walk: number, steps: number, t: number, moving = 0) {
+  const s = Math.PI * steps;
+  return {
+    bob: walk * Math.abs(Math.sin(s)) * 0.03, sway: walk * Math.sin(s) * 0.012,
+    swayY: Math.sin(s + 0.4) * 0.006 * moving + Math.sin(t * 1.3) * 0.003,
+    roll: walk * Math.sin(s) * 0.01 + Math.sin(t * 5.3) * 0.004 * moving,
+  };
+}
+
+/**
  * Base class for chapter scenes. Render order the chapters follow:
  *   sky -> three.js solids (fog) -> lit wireframes -> lamp cone -> world 2D (figures, signs)
  *   -> glows (screen and 3D) -> rain -> UI 2D (entry, panel, callouts, page counter)
@@ -2039,6 +2076,9 @@ export abstract class CityScene extends Scene {
   get sctx() { return this.ctx; }
   protected get ly() { return this.ctx.lyrics; }
   protected get au() { return this.ctx.audio; }
+  /** Steps taken by t on the song's beat grid (r9 note 3): STEPS_PER_BEAT per beat of data/audio.json, a footfall on
+   *  every beat and half-beat. Drives the child's gait (Figure), the first-person bob (setCam) and the torch bob. */
+  steps(t: number) { return STEPS_PER_BEAT * this.au.beatAt(t); }
 
   /** QA (TREATMENT r9 notes 3, 4): log the camera and every living body of this scene that is shown this frame. */
   logFrame(post?: { zoom?: number; shake?: [number, number] }) {

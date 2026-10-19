@@ -433,7 +433,7 @@ export default class Words extends LitScene {
     { // the man: along the far pavement while the letters fall, stops opposite the stop; there when the bus has gone
       const u = smoothstep(T.words, T.say + 0.6, t), mp = new THREE.Vector3(lerp(-16, 3.2, u), 0, -10.6);
       this.man.g.visible = t > T.words - 0.2;
-      this.man.pose({ pos: mp, heading: u < 1 ? faceTo(mp, { x: 20, z: -10.6 }) * (1 - smoothstep(T.say + 0.3, T.say + 0.9, t)) + faceTo(mp, { x: 0.15, z: 1.3 }) * smoothstep(T.say + 0.3, T.say + 0.9, t) : faceTo(mp, { x: 0.15, z: 1.3 }), t, speed: u < 1 ? 1.2 : 0, dist: u * 19, look: 0, headDown: 0.05 });
+      this.man.pose({ pos: mp, heading: u < 1 ? faceTo(mp, { x: 20, z: -10.6 }) * (1 - smoothstep(T.say + 0.3, T.say + 0.9, t)) + faceTo(mp, { x: 0.15, z: 1.3 }) * smoothstep(T.say + 0.3, T.say + 0.9, t) : faceTo(mp, { x: 0.15, z: 1.3 }), t, speed: u < 1 ? 1.2 : 0, steps: this.steps(t), look: 0, headDown: 0.05 });
     }
     for (const l of this.busLights) l.intensity = this.bus.visible ? (l instanceof THREE.SpotLight ? 90 : 5) : 0;
     const P = this.pov(t);

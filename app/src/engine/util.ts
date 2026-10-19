@@ -29,6 +29,8 @@ export const ease = {
   linear: (t: number) => t,
   inQuad: (t: number) => t * t,
   outQuad: (t: number) => 1 - (1 - t) * (1 - t),
+  /** The gentlest in-out (peak speed π/2 × the average, cubic's is 3 ×): camera turns (r9 note 3). */
+  inOutSine: (t: number) => 0.5 - 0.5 * Math.cos(Math.PI * t),
   inOutQuad: (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2),
   inCubic: (t: number) => t * t * t,
   outCubic: (t: number) => 1 - Math.pow(1 - t, 3),
@@ -125,6 +127,11 @@ export function fbm2(x: number, y: number, oct = 4, seed = 0) {
 // ---- keyframes ----
 export type Key = [time: number, value: number, easeFn?: (t: number) => number];
 /** Piecewise interpolation through keyframes; the ease on key i shapes the segment ending at key i. */
+/** r9 note 3: angle keyframes. keys() lerps linearly, so a yaw key across ±π swung the long way round (a 250° whip in close at 162.5 s); each key here is shifted by 2π to lie within π of the one before it. */
+export function angleKeys(t: number, ks: Key[]): number {
+  let prev = ks[0]?.[1] ?? 0;
+  return keys(t, ks.map((k) => { let v = k[1]; while (v - prev > Math.PI) v -= 2 * Math.PI; while (v - prev < -Math.PI) v += 2 * Math.PI; prev = v; return [k[0], v, k[2]] as Key; }));
+}
 export function keys(t: number, ks: Key[]): number {
   if (ks.length === 0) return 0;
   if (t <= ks[0]![0]) return ks[0]![1];

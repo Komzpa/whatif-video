@@ -58,6 +58,7 @@ export default class Temp extends LitScene {
     T.line1 = all(/^It/)[0]!.start; // the board reads +41° from the first sung word of «far too hot» (the clock only before it)
     T.line2 = all(/^It/)[1]!.start; // «It's far too cold»: the board flips as this line starts (the sung line must not sit under +41°)
     T.end = s + 13;
+    T.out = this.au.timeOfBeat(Math.floor(this.au.beatAt(T.line2) + 1e-3)); // r9 note 3: the door bangs open on the beat at or before «It's far too cold» (the cut on a beat; the line's heading never hangs over the unzip hand inside)
     this.T = T;
     // shots: the road along the main from high behind, the cat on the pipe; the board flipping to +41° and the
     // steam jet in first person; low behind the child, the board high on its pole over the road as it slams to −27°;
@@ -66,15 +67,15 @@ export default class Temp extends LitScene {
     // and looking down to unzip; the door bangs open: low behind the child stepping out onto the road as the board slams
     // to −27°; from above in the snow as the cat jumps down; over the shoulder walking on with the cat
     this.shots = [
-      [T.s, T.line1 + 1.25, { k: 'back', d: 1.2, h: 1.5, side: -1, ahead: 1, aimY: PORTRAIT ? 0.9 : 0.6 }],
-      [T.line2, T.line2 + 1.7, { k: 'free', p: [1.6, 1.25, DOOR[2] + 4.2], p1: [1.4, 1.2, DOOR[2] + 3.6], look: [DOOR[0] + 0.4, 1.0, DOOR[2] - 0.2], look1: [PORTRAIT ? -0.3 : -1.2, 1.0, DOOR[2] - 1.6], fov: PORTRAIT ? 66 : 50 }],
-      [T.line2 + 1.7, T.cold + (PORTRAIT ? 0.15 : -0.15), { k: 'back', d: 1.3, h: 0.8, side: 1, ahead: 1, aimY: PORTRAIT ? 1.7 : 2.4, yaw: PORTRAIT ? 0.1 : 0.3 }],
-      [T.cold + (PORTRAIT ? 0.15 : -0.15), T.cold + 1.7, { k: 'high', d: 0.4, d1: 0.5, h: 0.6, side: -0.5, ahead: PORTRAIT ? 0 : 0.7 }],
+      [T.s, T.line1 + 1.6, { k: 'back', /* 23:47 readable ≥ 1.5 s after the snap to the beat */ d: 1.2, h: 1.5, side: -1, ahead: 1, aimY: PORTRAIT ? 0.9 : 0.6 }],
+      [T.line2, T.line2 + 1.2, { k: 'free', /* r9 note 3: with cuts on beats the board shot needs the earlier beat (A1: −27° ≥ 1.5 s) */ p: [1.6, 1.25, DOOR[2] + 4.2], p1: [1.4, 1.2, DOOR[2] + 3.6], look: [DOOR[0] + 0.4, 1.0, DOOR[2] - 0.2], look1: [PORTRAIT ? -0.3 : -1.2, 1.0, DOOR[2] - 1.6], fov: PORTRAIT ? 66 : 50 }],
+      [T.line2 + 1.2, T.cold + 0.15, { k: 'back', d: 1.3, h: 0.8, side: 1, ahead: 1, aimY: PORTRAIT ? 1.7 : 2.4, yaw: PORTRAIT ? 0.1 : 0.3 }],
+      [T.cold + 0.15, T.cold + 1.7, { k: 'high', d: 0.4, d1: 0.5, h: 0.6, side: -0.5, ahead: PORTRAIT ? 0 : 0.7 }],
       // portrait: a wide from behind, the child small under the sung line and the board clear above it (r9 note 4; r5 item 2)
       [T.cold + 1.7, T.cold + 3.6, PORTRAIT ? { k: 'wide', d: 0.8, h: 1.0, side: -0.8, ahead: 0.8, aimY: 1.1 } : { k: 'ots', d: 2.0, h: 2.2, side: -1.3, ahead: 0.5, yaw: 0.2, aimY: 1.6 }],
     ];
     // r9 note 4: the cat drops from the pipe at the top of the frame: the chapter line stays at the bottom
-    if (!PORTRAIT) this.headAt = [[T.cold - 0.15, T.cold + 1.7, 'bottom']];
+    if (!PORTRAIT) this.headAt = [[T.cold + 0.15, T.cold + 1.7, 'bottom']];
     this.initKid(9);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
@@ -225,13 +226,13 @@ export default class Temp extends LitScene {
     this.frost = cv;
   }
 
-  inside(t: number) { return t < this.T.line2; }
+  inside(t: number) { return t < this.T.out; }
   heat(t: number) { const T = this.T; return this.inside(t) ? 0.55 + 0.45 * smoothstep(T.too1, T.hot + 0.1, t) : 0; }
-  cold(t: number) { const T = this.T; return 0.45 * smoothstep(T.line2, T.line2 + 0.5, t) + 0.55 * smoothstep(T.too2, T.cold + 0.1, t); }
+  cold(t: number) { const T = this.T; return 0.45 * smoothstep(T.out, T.out + 0.5, t) + 0.55 * smoothstep(T.too2, T.cold + 0.1, t); }
   /** Condensation on the view: builds in the heat, freezes into the frost outside. */
-  fogged(t: number) { const T = this.T; return this.inside(t) ? smoothstep(T.line1 + 1.0, T.hot, t) : 1 - smoothstep(T.line2, T.line2 + 0.9, t); }
+  fogged(t: number) { const T = this.T; return this.inside(t) ? smoothstep(T.line1 + 1.0, T.hot, t) : 1 - smoothstep(T.out, T.out + 0.9, t); }
   /** The coat's zip: 0 done up, 1 open (unzipped inside, still open outside). */
-  unzip(t: number) { const T = this.T; return smoothstep(T.hot + 0.3, T.line2 - 0.08, t); }
+  unzip(t: number) { const T = this.T; return smoothstep(T.hot + 0.3, Math.min(T.out, T.line2) - 0.08, t); }
   dialValue(t: number) { const T = this.T; return keys(t, [[T.s, 22], [T.too1 - 0.05, 31], [T.too1 + 0.1, 46, ease.outCubic], [T.too1 + 0.28, 39], [T.hot + 0.1, 41.5], [T.hot + 0.3, 41]]); }
 
   /** Outside: out of the heat point's door, onto the road, along it; the cold slows the child down. */
@@ -271,7 +272,8 @@ export default class Temp extends LitScene {
     const E = ease.inOutCubic;
     if (this.inside(t)) {
       // at the dial, then looking down at the coat to unzip it
-      const down = smoothstep(T.hot + 0.02, T.hot + 0.32, t);
+      const d0 = this.nearBeat(T.hot); // r9 note 3: the look down at the coat starts on the beat and takes a second
+      const down = prog(t, d0, d0 + 1.0, ease.inOutSine);
       const lookD = this.yawTo([IX + 0.2, EYE, 1.0], DIAL);
       return { p: [IX + 0.2, EYE, 1.0], yaw: lookD + 0.04 * Math.sin(t * 1.3) + (PORTRAIT ? 0 : 0.06), pitch: lerp(0.2 + 0.02 * Math.sin(t * 1.7), PORTRAIT ? -1.0 : -1.08, down), walk: 0 };
     }
@@ -288,7 +290,7 @@ export default class Temp extends LitScene {
     const T = this.T, c = this.boardCv.getContext('2d')!;
     const w = 512, h = 256;
     c.fillStyle = '#070606'; c.fillRect(0, 0, w, h);
-    const hot = false, cold = t >= T.line2 - 0.02;
+    const hot = false, cold = t >= Math.min(T.out, T.line2) - 0.02; // flipped by the time the door bangs open on the beat (r9 note 3)
     const main = cold ? '−27°' : '23:47';
     this.boardText = main;
     // LED dots: draw the text into a mask, then sample a dot grid

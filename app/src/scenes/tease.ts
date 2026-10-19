@@ -286,8 +286,8 @@ export default class Tease extends LitScene {
     let best = { side: 1, lift: S * 1.3, w, h, S }, bestC = Infinity;
     for (const lift of [1.3, 2.4, 3.6, 5.0].map((m) => m * S)) for (const side of [1, -1]) {
       let cost = lift * 0.5;
-      for (let i = 0; i < 8; i++) {
-        const tt = lerp(a, b, (i + 0.5) / 8);
+      for (let i = 0; i <= 16; i++) { // its whole life, pop to the end of the fade, both ends included (r9 note 3 moved cuts onto beats)
+        const tt = lerp(a, b + 0.3, i / 16);
         cost += this.withCamAt(tt, () => {
           const r = this.balloonBox(tt, w, h, side, lift, k, S); if (!r) return 0;
           const hb = this.headBoxAt(tt); // and off the sung line (A4)

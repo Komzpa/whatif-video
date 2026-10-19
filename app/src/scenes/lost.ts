@@ -26,6 +26,7 @@ import { F, font, measure } from '../engine/type';
 import {
   CityScene, LitLines, NeonSign, FogCards, LIN, POST_BASE, SAFE, rgba, mixRgba, scaleRGB, mixRGB, solid, col3, project,
   drawCallout, makeLamp, flicker, rain, logText, textlog,
+  walkMotion, easePov,
 } from './_motifs';
 import { drawHeading, stencilText, noticeCanvas, metroSignCanvas } from './_ru';
 import { torchPose, drawTorchHand, drawOpenHand, pxAt, type Light } from './_hands';
@@ -64,6 +65,12 @@ const GATE_X = 2.5; // the promzona gate (3 m wide)
 const PROOF = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('proof') : null;
 
 export default class Lost extends CityScene {
+  constructor(ctx: ConstructorParameters<typeof CityScene>[0]) {
+    super(ctx);
+    // r9 note 3: the first-person view eased (pov is the target; a change of space, car/world, stays a cut)
+    const raw = this.pov;
+    this.pov = (t: number) => easePov((q) => raw.call(this, q), t);
+  }
   // district
   dLines = new LitLines();
   curtLines = new LitLines();
@@ -792,13 +799,16 @@ export default class Lost extends CityScene {
     x = lerp(x, GATE_X - 0.2, ease.inOutQuad(run2)); z = lerp(z, FENCE_Z + 2.6, ease.inOutQuad(run2));
     x = lerp(x, GATE_X - 0.3, ease.outQuad(inn)); z = lerp(z, FENCE_Z + 2.0, ease.outQuad(inn));
     const toGate = -Math.atan2(GATE_X - 0.1, -(FENCE_Z + 1.7 - (GATE_Z - 1.0)));
-    const yaw = keys(t, [[T.cut, 0.65], [T.turnBack - 0.1, 0.15, E], [T.turnBack + 0.7, -Math.PI + 0.02, E], [T.turnZone, -Math.PI + 0.02, E], [T.turnZone + 0.65, -2 * Math.PI + toGate * 0.6, E], [T.run2b, -2 * Math.PI + toGate, E], [T.walkIn + 1.5, -2 * Math.PI - 0.12, E]]);
+    // r9 note 3: the two about-turns are cuts on the beat, not 180° whip pans
+    const cutB = this.au.nearestBeat(T.turnBack + 0.35), cutZ = this.au.nearestBeat(T.turnZone + 0.33);
+    const yE = PORTRAIT ? 0.0 : 0.15; // portrait: the gate's sign whole in frame while the child stands before the about-turn cut (C1)
+    const yaw = keys(t, [[T.cut, 0.65], [T.turnBack - 0.1, yE, E], [cutB - 0.001, yE], [cutB, -Math.PI + 0.02], [T.turnZone, -Math.PI + 0.02], [cutZ - 0.001, -Math.PI + 0.02], [cutZ, -2 * Math.PI + toGate * 0.6], [T.run2b, -2 * Math.PI + toGate, E], [T.walkIn + 1.5, -2 * Math.PI - 0.12, E]]);
     const pS = PORTRAIT ? 0.14 : 0.08;
-    const pitch = keys(t, [[T.cut, 0.1], [T.turnBack + 0.7, pS, E], [T.run1, PORTRAIT ? 0.05 : 0.12, E], [T.turnZone + 0.65, 0.06, E], [T.walkIn + 1.5, 0.02, E]]);
+    const pitch = keys(t, [[T.cut, 0.1], [cutB - 0.001, 0.1], [cutB, pS], [T.run1, PORTRAIT ? 0.05 : 0.12, E], [cutZ - 0.001, PORTRAIT ? 0.05 : 0.12], [cutZ, 0.06], [T.walkIn + 1.5, 0.02, E]]);
     const walk = (w0 > 0 && w0 < 1) || (run > 0 && run < 1) || (run2 > 0 && run2 < 1) || (inn > 0 && inn < 1) ? 1 : 0;
     // across the road the eyes stay on the gate
     const head = -2 * Math.PI - Math.atan2(GATE_X - 0.1 - x, -(FENCE_Z - z));
-    const k = smoothstep(T.turnZone + 0.5, T.turnZone + 0.75, t);
+    const k = t >= cutZ ? 1 : 0; // after the cut the eyes are on the gate
     return { space: 'world', p: [x, EYE, z], yaw: lerp(yaw, head, k), pitch, walk };
   }
 
@@ -814,11 +824,9 @@ export default class Lost extends CityScene {
 
   setCam(c: Pov, t: number, moving = 0) {
     const cam = this.cam;
-    const bob = c.walk * Math.abs(Math.sin(t * 7.4)) * 0.03, sway = c.walk * Math.sin(t * 3.7) * 0.012;
-    const swayY = Math.sin(t * 7.3) * 0.006 * moving + Math.sin(t * 1.3) * 0.003;
+    const { bob, sway, swayY, roll } = walkMotion(c.walk, this.steps(t), t, moving);
     cam.position.set(c.p[0] + sway * Math.cos(c.yaw), c.p[1] + bob + swayY, c.p[2] - sway * Math.sin(c.yaw));
     const dir = new THREE.Vector3(-Math.sin(c.yaw) * Math.cos(c.pitch), Math.sin(c.pitch), -Math.cos(c.yaw) * Math.cos(c.pitch));
-    const roll = c.walk * Math.sin(t * 3.7) * 0.01 + Math.sin(t * 5.3) * 0.004 * moving;
     cam.up.set(Math.sin(roll) * Math.cos(c.yaw), Math.cos(roll), -Math.sin(roll) * Math.sin(c.yaw));
     cam.lookAt(cam.position.clone().add(dir));
     cam.up.set(0, 1, 0);
@@ -1078,22 +1086,22 @@ export default class Lost extends CityScene {
     // the torch: up on "lost", on the whole time after (a flicker as it comes on)
     const lit = PROOF ? 1 : t > T.lost ? clamp(prog(t, T.lost + 0.2, T.lost + 0.3)) * flicker(t, t < T.lost + 0.35 ? 0.8 : 0.02, 5) : 0;
     const raise = PROOF ? 1 : prog(t, T.lost, T.lost + 0.4);
-    const beat = ((t - this.B(0)) / 0.811) % 1;
-    let pose = raise > 0 ? torchPose(cam, t, { raise, walk: P.walk, beat }) : null;
+    const beat = ((this.au.beatAt(t) % 1) + 1) % 1, steps = this.steps(t);
+    let pose = raise > 0 ? torchPose(cam, t, { raise, walk: P.walk, beat, steps }) : null;
     const mapAim = !PROOF && P.space === 'car' && pose ? this.mapAimPoint(t) : null;
     if (pose && mapAim) {
       // aim the beam at a point of the wall map (camera-space angles relative to the torch's resting aim)
       const pc = cam.worldToLocal(mapAim.p.clone()).sub(pose.headC).normalize();
       const ax = Math.atan2(pc.x, -pc.z), ay = Math.asin(clamp(pc.y, -1, 1));
       let aim = { x: (ax + 0.2) * mapAim.k, y: (ay + 0.1) * mapAim.k };
-      pose = torchPose(cam, t, { raise, walk: P.walk, beat, aim });
+      pose = torchPose(cam, t, { raise, walk: P.walk, beat, steps, aim });
       for (let it = 0; it < 2; it++) {
         // where the beam actually points (camera space) vs where it should: correct the aim by the difference
         const want = cam.worldToLocal(mapAim.p.clone()).sub(pose.headC).normalize();
         const got = pose.tailC.clone().sub(pose.headC).negate().normalize();
         const dx = Math.atan2(want.x, -want.z) - Math.atan2(got.x, -got.z), dy = Math.asin(clamp(want.y, -1, 1)) - Math.asin(clamp(got.y, -1, 1));
         aim = { x: aim.x + dx * mapAim.k, y: aim.y + dy * mapAim.k };
-        pose = torchPose(cam, t, { raise, walk: P.walk, beat, aim });
+        pose = torchPose(cam, t, { raise, walk: P.walk, beat, steps, aim });
       }
     }
     if (P.space === 'world') this.renderDistrict(out, t, pose && raise > 0.5 ? [pose.head, pose.target] : null, lit);
@@ -1121,14 +1129,17 @@ export default class Lost extends CityScene {
   /** The left hand: grabbing at the closing door edge in (a); flat on the shutter's slats in (d). */
   drawFreeHand(c: CanvasRenderingContext2D, t: number, light: Light) {
     const T = this.T, cam = this.cam;
+    // portrait: the fingertips stay under the chapter line's plate (hy 1416 + its bottom edge), never behind it (r9 note 4, gate review)
+    const CLEAR_Y = 1500;
     if (PROOF === 'shutter-closed' || PROOF === 'shutter-half' || PROOF === 'vestibule' || PROOF === 'street') return;
     const grab = prog(t, T.shut0 - 0.35, T.shut0 - 0.05, ease.outCubic) * (1 - prog(t, T.shut1 + 0.02, T.shut1 + 0.3, ease.inCubic));
     if (grab > 0.001 && t < T.cut) {
       const e = project(cam, DOOR_X - 0.02, 1.32, WALL_Z - 0.03);
       const depth = Math.max(0.3, e.depth ?? cam.position.distanceTo(new THREE.Vector3(DOOR_X, 1.32, WALL_Z)));
       const s = 0.055 * pxAt(cam, Math.min(depth, 0.5)); // the hand is drawn at arm's length, the same scale as the torch hand
-      const from = { x: W * (PORTRAIT ? 0.12 : 0.28), y: H + s * 3 };
-      const tip = { x: lerp(from.x + s, e.x, grab), y: lerp(H + s, e.y, grab) };
+      const from = { x: W * (PORTRAIT ? 0.12 : 0.6), y: H + s * 3 }; // 16:9: right of the chapter plate (A15)
+      const tip = { x: lerp(from.x + s, e.x, grab), y: lerp(H + s, PORTRAIT ? Math.max(e.y, CLEAR_Y) : e.y, grab) };
+      if (!PORTRAIT) tip.x = Math.max(tip.x, W * 0.56); // 16:9: the fingers stay right of the chapter plate
       drawOpenHand(c, tip, from, s, light, 'grab', { curl: 0.8 });
     }
     const touch = prog(t, T.touch0 - 0.2, T.touch0 + 0.05, ease.outCubic) * (1 - prog(t, T.touch1, T.touch1 + 0.25, ease.inCubic));
@@ -1137,8 +1148,9 @@ export default class Lost extends CityScene {
       const e = project(cam, pt.x, pt.y, pt.z);
       const depth = Math.max(0.3, cam.position.distanceTo(pt));
       const s = 0.055 * pxAt(cam, Math.min(depth, 0.5)); // the hand is drawn at arm's length, the same scale as the torch hand
-      const from = { x: W * (PORTRAIT ? 0.1 : 0.25), y: H + s * 3 };
-      const tip = { x: lerp(from.x + s, e.x, touch), y: lerp(H + s, e.y, touch) };
+      const from = { x: W * (PORTRAIT ? 0.1 : 0.6), y: H + s * 3 }; // 16:9: right of the chapter plate (A15)
+      const tip = { x: lerp(from.x + s, e.x, touch), y: lerp(H + s, PORTRAIT ? Math.max(e.y, CLEAR_Y) : e.y, touch) };
+      if (!PORTRAIT) tip.x = Math.max(tip.x, W * 0.56);
       drawOpenHand(c, tip, from, s, light, 'flat');
     }
   }
@@ -1149,7 +1161,7 @@ export default class Lost extends CityScene {
     const [e1, e2] = entriesOf('lost');
     const S = PORTRAIT ? 34 : 26;
     // ---- the chapter line: the handbook's Russian heading, lit as the line is sung (bottom left)
-    const hx = PORTRAIT ? 60 : SAFE, hy = PORTRAIT ? 1416 : H - 96, hw = PORTRAIT ? W - 210 : 1000, hs = PORTRAIT ? 100 : 64;
+    const hx = PORTRAIT ? 60 : SAFE, hy = PORTRAIT ? 1416 : H - 96, hw = PORTRAIT ? W - 210 : 800, /* 16:9: «…ВАГОНА» wraps, the plate ends left of the torch hand at the map (A15) */ hs = PORTRAIT ? 100 : 64;
     drawHeading(c, L1, e1!.heading, t, { x: hx, y: hy, width: hw, size: hs, until: L2.words[0]!.start, plate: 0.85 });
     drawHeading(c, L2, e2!.heading, t, { x: hx, y: hy, width: hw, size: hs, until: f.end + 1, plate: 0.85 });
     // ---- one callout at a time; each label rides a short leader next to its object, clear of signs and boards

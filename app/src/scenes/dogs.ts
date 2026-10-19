@@ -55,7 +55,7 @@ export default class Dogs extends LitScene {
     T.stray = w(/Stray/).start; T.dogs = w(/dogs/).start; T.cross = w(/cross/).start; T.path = w(/path/).start;
     T.night = w(/night/).start; T.at = w(/^at$/).start;
     T.lower = T.cross - 0.2; T.raise = T.night - 0.15;
-    T.ownerCall = T.path; T.signCall = T.night + 0.5;
+    T.ownerCall = T.path; T.signCall = T.night + (PORTRAIT ? 0.5 : 1.1); // 16:9: once the head turn has brought the sign in (its label was clamped onto it at the frame's edge, A4)
     this.T = T;
     // shots: the lane from high behind, the child small with the torch sweeping; the eyes in the gap in first
     // person; beside the child as the first dog steps out; from above while the three cross and the torch is
@@ -201,7 +201,7 @@ export default class Dogs extends LitScene {
     const z = 1.5 - 2.3 * walk1 - 3 * walk2;
     const lookDog = (i: number) => { const d = this.dogAt(i, t); return this.yawTo([0, EYE, z], [d.pos.x, 0.5, d.pos.z]); };
     const follow = lookDog(0);
-    const yaw = keys(t, [[T.s, 0.12], [T.eyes, 0.02, E], [T.s + 1.9, 0.02], [T.s + 2.5, this.yawTo([0, EYE, z], [LX, 0.5, -4.2]) * 0.4, E], [T.stray + 0.3, follow * 0.55, E], [T.cross + 0.3, PORTRAIT ? 0 : lookDog(1) * 0.25, E], [T.night - 0.9, PORTRAIT ? 0 : lookDog(1) * 0.25], [T.night - 0.1, lookDog(2) - (PORTRAIT ? 0.05 : 0.38), E], [T.night + 1.2, lookDog(2) - (PORTRAIT ? 0.05 : 0.38), E], [T.night + 2.0, this.yawTo([0, EYE, z], [RX, 2.4, -3.2]) * (PORTRAIT ? 0.97 : 0.62), E]]);
+    const yaw = keys(t, [[T.s, 0.12], [T.eyes, 0.02, E], [T.s + 1.9, 0.02], [T.s + 2.5, this.yawTo([0, EYE, z], [LX, 0.5, -4.2]) * 0.4, E], [T.stray + 0.3, follow * 0.55, E], [T.cross + 0.3, PORTRAIT ? 0 : lookDog(1) * 0.25, E], [T.night - 0.9, PORTRAIT ? 0 : lookDog(1) * 0.25], [T.night - 0.1, lookDog(2) - (PORTRAIT ? 0.05 : 0.38), E], [T.night + (PORTRAIT ? 0.9 : 1.2), lookDog(2) - (PORTRAIT ? 0.05 : 0.38), E], [T.night + (PORTRAIT ? 2.3 : 2.0), this.yawTo([0, EYE, z], [RX, 2.4, -3.2]) * (PORTRAIT ? 0.97 : 0.62), E] /* r9 note 3: the portrait turn is wider, so slower (it ran 138°/s through the over-the-shoulder) */]);
     const pitch = keys(t, [[T.s, -0.05], [T.eyes, -0.02, E], [T.lower, -0.04], [T.lower + 0.6, -0.2, E], [T.raise, -0.2], [T.raise + 0.6, -0.1, E], [T.night + 1.2, -0.1], [T.night + 1.9, PORTRAIT ? -0.02 : 0.1, E]]) + (PORTRAIT ? 0.04 - 0.24 * smoothstep(T.s + 1.9, T.s + 2.6, t) * (1 - smoothstep(T.night + 1.2, T.night + 2.2, t)) : 0);
     const moving = (walk1 > 0 && walk1 < 1) || (walk2 > 0 && walk2 < 1) ? 1 : 0;
     // breath held: a tiny tremor while standing still
@@ -320,7 +320,7 @@ export default class Dogs extends LitScene {
     const T = this.T;
     this.heading(u, t, f);
     this.callout(u, t, homeLabel('dogs'), T.s + 0.3, T.stray - 0.2, () => this.onScreen(FAR[0], 9, -110), { places: [city().home.name] });
-    this.callout(u, t, 'ХОЗЯИН', T.ownerCall, T.night - 0.3, () => { const h = this.owner.headPos(); return this.onScreen(h.x, h.y + 0.1, h.z); });
+    this.callout(u, t, 'ХОЗЯИН', T.ownerCall, T.night - 0.15, () => { const h = this.owner.headPos(); return this.onScreen(h.x, h.y + 0.1, h.z); });
     this.callout(u, t, 'ВЫГУЛ ЗАПРЕЩЁН', T.signCall, f.end + 1, () => this.onScreen(RX - 0.17, 2.3, -2.8), { maybe: true });
   }
 }

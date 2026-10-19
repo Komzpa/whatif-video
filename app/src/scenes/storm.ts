@@ -66,7 +66,7 @@ export default class Storm extends LitScene {
       [T.turns + 0.85, T.unsafe - 0.15, { k: 'back', d: 1.5, h: 0.9, side: 1, ahead: 1.2, aimY: 1.0 }],
       [T.unsafe + 1.15, T.end + 1, { k: 'ots', d: 1.7, h: 1.8, side: 1.1, ahead: 0.5, aimY: PORTRAIT ? 0.1 : -0.9, d1: PORTRAIT ? 2.4 : 1.7 }],
     ];
-    if (!PORTRAIT) this.headAt = [[T.unsafe - 0.15, T.unsafe + 1.15, 'top']]; // the cat crosses under the bottom slot in first person (r9 note 4)
+    if (!PORTRAIT) this.headAt = [[T.weather + 1.2, T.turns + 0.85, 'top'], [T.unsafe - 0.15, T.unsafe + 1.15, 'top']]; // first person: the torch's forearm swings through the bottom slot's right end (A15 counts POV hands); // the cat crosses under the bottom slot in first person (r9 note 4)
     this.initKid(13);
     this.build();
     this.cat = new Quadruped(this.catSpec, this.three, 80);
@@ -271,10 +271,10 @@ export default class Storm extends LitScene {
     const z = this.camZ(t), run = this.running(t);
     const E = ease.inOutCubic;
     // walk looking a little left (the screen, the lamps), run straight, then turn round under the deck
-    const turn0 = T.unsafe + 0.25, turn1 = turn0 + 1.4;
+    const turn0 = T.unsafe + 0.25, turn1 = turn0 + 1.4, tc = this.onBeat(T.unsafe + 1.15);
     const back = Math.PI - (PORTRAIT ? 0.04 : 0.1);
-    const yaw = keys(t, [[T.s, PORTRAIT ? 0.3 : 0.14], [T.weather, PORTRAIT ? 0.36 : 0.18, E], [T.turns + 0.3, PORTRAIT ? 0.3 : 0.1, E], [T.feels, PORTRAIT ? 0.06 : 0.02, E], [T.unsafe - 0.2, 0.0, E], [turn0, 0.08, E], [turn1, back, E], [T.end, back + 0.05, E]]);
-    const pitch = keys(t, [[T.s, 0.05], [T.weather, 0.07, E], [T.turns, 0.0, E], [T.unsafe, 0.03, E], [turn0, 0.02, E], [turn1, PORTRAIT ? -0.27 : 0.07, E], [T.end, PORTRAIT ? -0.25 : 0.08, E]]);
+    const yaw = keys(t, [[T.s, PORTRAIT ? 0.3 : 0.14], [T.weather, PORTRAIT ? 0.36 : 0.18, E], [T.turns + 0.3, PORTRAIT ? 0.3 : 0.1, E], [T.feels, PORTRAIT ? 0.06 : 0.02, E], [T.unsafe - 0.2, 0.0, E], [turn0, 0.08, E], [tc - 0.001, 0.12, E], [tc, back], [T.end, back + 0.05, E]]); // the about-turn is the cut to the shot (on a beat), not a whip (r9 note 3)
+    const pitch = keys(t, [[T.s, 0.05], [T.weather, 0.07, E], [T.turns, 0.0, E], [T.unsafe, 0.03, E], [turn0, 0.02, E], [tc - 0.001, 0.02], [tc, PORTRAIT ? -0.27 : 0.07], [T.end, PORTRAIT ? -0.25 : 0.08, E]]);
     const sh = this.shake(t);
     return { p: [0.2 + Math.sin(t * 61) * sh, EYE - 0.04 * run, z], yaw: yaw + Math.sin(t * 47) * sh, pitch: pitch + Math.cos(t * 53) * sh, walk: 1 + 1.2 * run, fov: (PORTRAIT ? 74 : 56) + (PORTRAIT ? 0 : 6) * smoothstep(turn0, turn1, t) };
   }

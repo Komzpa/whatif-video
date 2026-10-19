@@ -22,6 +22,9 @@ export const faceTo = (a: { x: number; z: number }, b: { x: number; z: number })
 export interface FigurePose {
   pos: THREE.Vector3; heading: number; t: number;
   dist?: number; speed?: number; // distance walked (m) drives the gait; speed 0 = standing
+  /** Steps on the song's beat grid (CityScene.steps): when given the gait runs on it, a footfall on every beat and
+   *  half-beat, instead of on the distance (r9 note 3: walking cadence locked to the tempo). */
+  steps?: number;
   phone?: number; // 0..1 hand with phone raised in front of the chest, head bowed
   film?: number; // 0..1 arm stretched forward at eye height (filming)
   look?: number; // head yaw (rad) relative to the body
@@ -60,7 +63,8 @@ export class Figure {
     const thigh = legL * 0.5, shin = legL * 0.5;
     const shY0 = kid ? H * 0.74 : H * 0.815, hipW = u * (kid ? 0.46 : 0.5) * bulk, shW = u * (kid ? 0.66 : 0.95) * bulk;
     const speed = p.speed ?? 0, stride = legL * 1.3;
-    const ph = ((p.dist ?? 0) / stride) * Math.PI * 2 + (S.seed ?? 0);
+    // a leg is furthest forward (heel strike) at phase π/2: with `steps` that lands on the beats and half-beats
+    const ph = p.steps !== undefined ? Math.PI * p.steps - Math.PI / 2 : ((p.dist ?? 0) / stride) * Math.PI * 2 + (S.seed ?? 0);
     const wk = clamp(speed / 1.0) * (1 - sit);
     const bobY = -Math.abs(Math.cos(ph)) * 0.025 * H * wk + 0.012 * H * wk + (p.bob ? Math.abs(Math.sin(p.t * 17)) * 0.012 * H * p.bob : 0);
     const breath = Math.sin(p.t * 1.7 + (S.seed ?? 0)) * 0.003 * H;

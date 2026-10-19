@@ -322,7 +322,7 @@ export default class CatScene extends LitScene {
     const e = project(this.cam, h.x, h.y + 0.05, h.z);
     if (e.behind) return;
     const s = 0.055 * pxAt(this.cam, 0.5);
-    const from = { x: W * (PORTRAIT ? 0.3 : 0.36), y: H + s * 3 };
+    const from = { x: W * (PORTRAIT ? 0.3 : 0.58), y: H + s * 3 }; // 16:9: right of the chapter plate (A15)
     const stroke = Math.sin(Math.max(0, t - tEnd - 0.7) * 5) * s * 0.25;
     const tip = { x: lerp(from.x + s, e.x + stroke, k), y: lerp(H + s, e.y - s * 0.2, k) };
     drawOpenHand(c, tip, from, s, light, 'flat', { curl: 0.25 });

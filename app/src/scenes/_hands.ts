@@ -39,17 +39,17 @@ export interface TorchPose {
  * Where the torch is this frame. `raise` 0..1 brings it up into the frame; `walk` adds the step bob; the
  * beam sways a little on the beats (`beat` = beat phase 0..1). `aim` nudges the beam (camera-space radians).
  */
-export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: number; walk?: number; beat?: number; aim?: { x: number; y: number } } = {}): TorchPose {
-  const raise = clamp(o.raise ?? 1), walk = o.walk ?? 0, beat = o.beat ?? 0;
-  const bob = walk * Math.sin(t * 7.4) * 0.012;
+export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: number; walk?: number; beat?: number; steps?: number; aim?: { x: number; y: number } } = {}): TorchPose {
+  const raise = clamp(o.raise ?? 1), walk = o.walk ?? 0, beat = o.beat ?? 0, st = Math.PI * (o.steps ?? 0);
+  const bob = walk * Math.sin(st) * 0.012; // one up-down per two steps: the arm swings with the stride (r9 note 3)
   const sway = Math.sin(beat * Math.PI * 2) * 0.018 + Math.sin(t * 1.1) * 0.006;
   // the arm (B7): the torch lies along the forearm, so on screen the forearm is the torch axis continued back past
   // the fist. For that forearm to come up from below the frame (the child's own arm, not one reaching in from the
   // side), the axis from the fist to where the beam points must climb at least ~20°: when the aim would break that,
   // the whole hand moves (lower, or across towards the aim) instead of the wrist bending.
-  const ax = -0.2 + (o.aim?.x ?? 0) + sway, ay = -0.1 + (o.aim?.y ?? 0) + walk * Math.sin(t * 7.4 + 1) * 0.02;
+  const ax = -0.2 + (o.aim?.x ?? 0) + sway, ay = -0.1 + (o.aim?.y ?? 0) + walk * Math.sin(st + 1) * 0.02;
   const dirC = new THREE.Vector3(Math.sin(ax), Math.sin(ay), -Math.cos(ax) * Math.cos(ay)).normalize();
-  const home = PORTRAIT ? new THREE.Vector3(0.035, -0.19, -0.5) : new THREE.Vector3(0.05, -0.085, -0.5);
+  const home = PORTRAIT ? new THREE.Vector3(0.035, -0.215, -0.5) : new THREE.Vector3(0.05, -0.085, -0.5); // portrait: low enough that the torch head stays under the chapter line plate (gate review, A15 counts POV hands)
   const D = -home.z, tv = Math.tan((cam.fov * Math.PI) / 360), th = tv * cam.aspect;
   // screen units: u, w in -1..1 (w up); v = where the beam's direction vanishes, p = the fist
   const vz = Math.max(0.15, -dirC.z), v = { u: dirC.x / vz / th, w: dirC.y / vz / tv };
@@ -62,7 +62,7 @@ export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: 
   // right at a shallow angle, but never from the left, so an aim to the right of the fist must climb steeply (the
   // arm reaches out from the shoulder, the fist moves under the aim) while an aim to the left may be flatter
   const CL = Math.tan((16 * Math.PI) / 180) * (th / tv), CR = Math.tan((58 * Math.PI) / 180) * (th / tv);
-  const W_MIN = PORTRAIT ? -0.78 : -0.62, U_LO = PORTRAIT ? -0.35 : -0.02, U_HI = PORTRAIT ? 0.7 : 0.8;
+  const W_MIN = PORTRAIT ? -0.78 : -0.62, U_LO = PORTRAIT ? -0.35 : 0.06, /* 16:9: the torch head, tilted left, must clear the chapter plate's right end too (A15 counts POV hands) */ U_HI = PORTRAIT ? 0.7 : 0.8;
   const climb = (fu: number) => (v.u > fu ? CR : CL) * Math.abs(v.u - fu);
   if (v.u > p.u) p.u += 0.75 * (Math.min(v.u, U_HI) - p.u); // aimed right: the fist goes out under the aim
   if (p.w > v.w - climb(p.u)) {
@@ -76,7 +76,7 @@ export function torchPose(cam: THREE.PerspectiveCamera, t: number, o: { raise?: 
   const vMin = p.w + climb(p.u);
   if (v.w < vMin) { v.w = vMin; dirC.set(v.u * th, v.w * tv, -1).normalize(); }
   const headC = new THREE.Vector3(p.u * th * D, p.w * tv * D, -D)
-    .add(new THREE.Vector3(0.1, -0.3, 0.1).multiplyScalar(1 - easeOut(raise))).add(new THREE.Vector3(sway * 0.4, bob, 0));
+    .add(new THREE.Vector3(0.18, -0.3, 0.1).multiplyScalar(1 - easeOut(raise))) /* comes up from the lower right, clear of the chapter plate (A15) */.add(new THREE.Vector3(sway * 0.4, bob, 0));
   const tailC = headC.clone().sub(dirC.clone().multiplyScalar(0.14));
   cam.updateMatrixWorld();
   const head = cam.localToWorld(headC.clone()), tail = cam.localToWorld(tailC.clone());

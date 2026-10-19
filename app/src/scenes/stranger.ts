@@ -84,7 +84,7 @@ export default class Stranger extends LitScene {
       [T.fwd1, T.fwd2, { k: 'free', p: [-2.3, 1.45, cz(T.fwd2) - 6.2], p1: [-2.2, 1.4, cz(T.fwd2) - 5.6], look: [S_X + 0.6, 1.25, cz(T.fwd1) + 8], look1: [S_X + 0.6, 1.25, cz(T.fwd2) + 7], fov: PORTRAIT ? 70 : 50 }],
       [T.fwd2, T.run + 1.0, { k: 'free', p: [POLE_B[0] + 0.15, POLE_B[1] + 0.2, POLE_B[2] + 0.35], look: [PATH_X, 0.4, cz(T.fwd2) - 0.5], look1: [PATH_X, 0.4, cz(T.run + 0.8) - 1.5], fov: PORTRAIT ? 72 : 54 }],
       [T.run + 1.0, T.arrive - 0.2, { k: 'back', d: 1.6, h: 1.8, side: -0.8, ahead: 1, aimY: PORTRAIT ? -1.25 : 0.3, fov: PORTRAIT ? 76 : 58 }],
-      [T.glance + 0.4, T.end + 1, { k: 'free', p: [PORTRAIT ? 1.5 : 2.3, 2.9, KZ + 0.3], p1: [PORTRAIT ? 1.55 : 2.35, 3.0, KZ + 0.1], look: [PORTRAIT ? 0.9 : 1.0, 0.0, KZ + (PORTRAIT ? 6.5 : 5.2)], fov: PORTRAIT ? 80 : 62 }],
+      [T.glance + 0.4, T.end + 1, { k: 'free', p: [PORTRAIT ? 1.5 : 2.3, 2.9, KZ + 0.3], p1: [PORTRAIT ? 1.55 : 2.35, 3.0, KZ + 0.1], look: [PORTRAIT ? 0.9 : 1.0, 0.0, KZ + (PORTRAIT ? 7.4 : 5.2)], fov: PORTRAIT ? 80 : 62 }], // portrait: tilted up a little so the stranger walking away stays under the chapter line (A15)
     ];
     this.initKid(23);
     this.build();
@@ -285,7 +285,8 @@ export default class Stranger extends LitScene {
     const cam: V3 = [this.camX(t), EYE, this.camZ(t)];
     const man: V3 = [S_X, 1.35, this.manZ(t)];
     const toMan = this.yawTo(cam, man); // ~ +pi (behind)
-    const back = (a: number, b: number) => E(prog(t, a, a + 0.42)) * (1 - E(prog(t, b, b + 0.4)));
+    // r9 note 3: each look back is a cut to it and a cut away, both on beats (a 180° turn in 0.4 s was a whip)
+    const back = (a: number, b: number) => (t >= this.onBeat(a + 0.2) && t < this.onBeat(b + 0.2) ? 1 : 0);
     const k1 = back(T.back1, T.fwd1), k2 = back(T.back2, T.fwd2);
     const fwdYaw = keys(t, [[T.s, P ? -0.28 : -0.34], [T.back1, P ? -0.2 : -0.26, E], [T.back2, P ? 0.0 : -0.06, E], [T.fwd2 + 0.5, P ? 0.02 : -0.02, E], [T.run + 1.5, 0.02, E], [STOP_T(this), 0.0, E]]);
     const toWin = this.yawTo(cam, [KX, 1.4, KZ - 1]);
@@ -297,7 +298,7 @@ export default class Stranger extends LitScene {
     const fwdPitch = keys(t, [[T.s, P ? 0.06 : 0.05], [T.fwd2, P ? 0.1 : 0.08, E], [T.fwd2 + 2.4, P ? 0.08 : 0.06, E], [T.run + 0.6, -0.04, E]]);
     let pitch = lerp(fwdPitch, P ? -0.2 : 0.0, Math.max(k1, k2));
     pitch = lerp(pitch, P ? -0.06 : 0.1, kWin);
-    const k3 = E(prog(t, T.glance, T.glance + 0.55));
+    const k3 = t >= this.onBeat(T.glance + 0.25) ? 1 : 0;
     yaw = lerp(yaw, backYaw, k3); pitch = lerp(pitch, P ? -0.16 : 0.0, k3);
     const run = this.running(t);
     return { p: cam, yaw, pitch, walk: 1 - smoothstep(STOP[2] + 1.2, STOP[2] + 0.1, this.camZ(t)), fov: (P ? 74 : 56) + run * 4 - Math.max(k1, k2) * (P ? 12 : 10) * (1 - kWin), roll: run * Math.sin(t * 9.5) * 0.02 };
@@ -311,7 +312,7 @@ export default class Stranger extends LitScene {
     const mz = this.manZ(t), mv = (this.manZ(t - 0.05) - this.manZ(t + 0.05)) / 0.1;
     const armUp = smoothstep(T.back2 + 0.2, T.back2 + 0.7, t) * (1 - smoothstep(T.fwd2 + 0.6, T.fwd2 + 1.2, t));
     const turnK = ease.inOutCubic(prog(t, T.turn, T.turn + 0.7));
-    this.man.pose({ pos: new THREE.Vector3(S_X, 0, mz), heading: Math.PI / 2 + 0.04 + turnK * Math.PI, t, dist: MAN_Z0 - mz + 2 * Math.max(0, t - T.turn - 0.5) * 1.6, speed: Math.abs(mv), armL: armUp * 0.8, look: 0, headDown: 0.05 });
+    this.man.pose({ pos: new THREE.Vector3(S_X, 0, mz), heading: Math.PI / 2 + 0.04 + turnK * Math.PI, t, steps: this.steps(t), speed: Math.abs(mv), armL: armUp * 0.8, look: 0, headDown: 0.05 });
     // the kiosk woman: on her phone; as the child arrives she looks up and leans to the window
     const arr = smoothstep(STOP[2] + 3.5, STOP[2] + 0.3, this.camZ(t));
     const camNow = new THREE.Vector3(this.camX(t), EYE, this.camZ(t));
