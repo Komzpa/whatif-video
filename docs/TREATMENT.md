@@ -1,4 +1,26 @@
-# What if — treatment and style bible (r8)
+# What if — treatment and style bible (r9)
+
+## r9: author review of the full r3 (2026-10-19; overrides r8 where they touch)
+Reviewed file: `out/draft-full-20260928-r3-tiktok.mp4` (9:16, sha256 `eeb9e20b50791425…`). Many earlier fixes look lost
+in it; re-check r5–r8 items against the next render, not against the commit log.
+1. **Mojibake is Win95 CP1251 read as Latin-1 only.** «когда мы говорим про кракозябры ты берёшь юникодные. а надо
+   что-то типа cp1251<>latin1 или как там было во времена win95. в юникодных паттерн юникодный торчит, а в этих как
+   бы язык но как бы не тот и странный.» Glyph soup uses `cp1251>cp1252` only («Ïðîñïåêò Ñòðîèòåëåé»): no UTF-8
+   readings («ÐŸÐ ÐžÐ”», «ЗаводсÐºÐ°Ñ») and no DOS box glyphs («╧╨╬─»). A garbled string is garbled whole; step-by-step
+   degradation goes word by word, never a Cyrillic word with single Latin letters inside («Ïрîсïåêт»). This replaces
+   r8 item 6's codec list; TESTPLAN A13 follows.
+2. **Georgia where it is easy.** «грузия тбилиси что всё переходит в грузиницу» / «не обязательно тащить грузию.
+   тащи где легко». Optional touches only: a few background shop signs, a lettered wall or the late unfamiliar
+   district in Mkhedruli (real Georgian words, a Georgian-capable font), never on the main readable sign of a beat,
+   never a replacement for the CP1251 soup on garbled signs. r8's "no Georgian" bullet is lifted to this extent.
+3. **Camera and steps follow the beat.** «очень резкие движения камеры пока что. и шаги нереально быстрые. понятно
+   что всё ускорено, надо как-то что ли в бит попадать?» Camera moves ease in and out (no snaps except deliberate
+   cuts), and cuts, punches and move starts land on beats from the song analysis. Walking cadence is locked to the
+   tempo (one step per beat or per half-beat), so the speed reads as musical, not fast-forwarded.
+4. **Text never covers the subject.** «где "собаки" - надпись собаку закрывает. вообще посмотри чтобы надпись с
+   основным контентом не пересекалась». Callouts, signs-as-overlays, karaoke and headings stay clear of each beat's
+   main subject (child, dogs, cat, stranger, the key prop) in both 16:9 and 9:16; checked by a projected-box
+   overlap QA over every frame, not by eye on a few stills.
 
 ## r8: glyph soup is back (author, 2026-09-28 ~15:35; overrides the r7 mojibake bullet and any later rule that touches item 6)
 «договаривались брать нечитаемые кракозябры... верни кракозябры». r7's "every word on screen is Russian" turned the
