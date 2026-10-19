@@ -2,7 +2,8 @@
 // QA (TREATMENT r9 note 4, TESTPLAN A15): text never covers the beat's main subject. Renders the timeline frame by
 // frame in headless Chrome (window.__video.texts(t), src/textlog.ts) and reads, per frame:
 //   subjects : every living body the scene shows (the child, the stranger, people, dogs, cats), as the screen box
-//              of its polygonised skin through the scene camera (CityScene.logFrame, SdfBody.screenBox);
+//              of its polygonised skin through the scene camera (CityScene.logFrame, SdfBody.screenBox), and the
+//              child's own POV hands (torch hand, free hand: kind 'hand'), measured on their outline polygon;
 //   overlays : the callouts (label box), the sung line and its heading, chips, banners, system lines, steps,
 //              titles, the map card, and the kids' speech balloons in `tease`.
 // A frame fails when an overlay box covers ≥ --min-frac (default 4%) of a subject's on-screen box and ≥ 100 px²;
@@ -24,7 +25,7 @@ const MIN_FRAC = +opt('min-frac', '0.04')!;
 const NV_EGL = '/usr/share/glvnd/egl_vendor.d/10_nvidia.json';
 
 type Box = { x: number; y: number; w: number; h: number };
-interface Item { id: string; text: string; kind: string; full: boolean; box?: Box }
+interface Item { id: string; text: string; kind: string; full: boolean; box?: Box; poly?: [number, number][] }
 const OVERLAY = ['karaoke', 'note', 'callout', 'chip', 'banner', 'system', 'step', 'title', 'map'];
 const isOverlay = (it: Item) => OVERLAY.includes(it.kind) || /^garble:tease-say/.test(it.id);
 
@@ -59,22 +60,44 @@ try {
   const frames: Item[][] = [];
   for (let i = 0; i < times.length; i += 40) {
     const batch = times.slice(i, i + 40);
-    frames.push(...await page.evaluate((ts) => ts.map((t: number) => (window as any).__video.texts(t).filter((it: any) => it.box && it.kind !== 'cam')), batch));
+    frames.push(...await page.evaluate((ts) => ts.map((t: number) => { const all = (window as any).__video.texts(t); const cam = all.find((it: any) => it.kind === 'cam'); return all.filter((it: any) => it.box && it.kind !== 'cam').map((it: any) => it.kind === 'hand' ? { ...it, id: `${it.id}:${cam?.text ?? '?'}`, text: it.text } : it); }), batch));
   }
   const clip = (b: Box): Box => { const x0 = Math.max(0, b.x), y0 = Math.max(0, b.y), x1 = Math.min(LW, b.x + b.w), y1 = Math.min(LH, b.y + b.h); return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) }; };
   const inter = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  // a POV hand is measured on its outline: the polygon clipped to a box (Sutherland–Hodgman), then its area
+  const polyArea = (q: [number, number][]) => { let a = 0; for (let i = 0; i < q.length; i++) { const [x0, y0] = q[i]!, [x1, y1] = q[(i + 1) % q.length]!; a += x0 * y1 - x1 * y0; } return Math.abs(a) / 2; };
+  const clipPoly = (q: [number, number][], b: Box) => {
+    const edges: [(p: [number, number]) => number][] = [[(p) => p[0] - b.x], [(p) => b.x + b.w - p[0]], [(p) => p[1] - b.y], [(p) => b.y + b.h - p[1]]];
+    let out = q;
+    for (const [f] of edges) {
+      const inp = out; out = [];
+      for (let i = 0; i < inp.length; i++) {
+        const P = inp[i]!, Q = inp[(i + 1) % inp.length]!, fp = f(P), fq = f(Q);
+        if (fp >= 0) out.push(P);
+        if ((fp >= 0) !== (fq >= 0)) { const u = fp / (fp - fq); out.push([P[0] + u * (Q[0] - P[0]), P[1] + u * (Q[1] - P[1])]); }
+      }
+      if (!out.length) break;
+    }
+    return out;
+  };
+  const SCREEN: Box = { x: 0, y: 0, w: LW, h: LH };
   interface Hit { n: number; a: number; b: number; worst: number; worstT: number; text: string; subj: string }
   const hits = new Map<string, Hit>();
   let subjFrames = 0, ovFrames = 0;
   frames.forEach((fr, i) => {
-    const subs = fr.filter((it) => it.kind === 'subject').map((it) => ({ it, b: clip(it.box!) })).filter((s) => s.b.w * s.b.h >= 600);
+    const subs = fr.filter((it) => it.kind === 'subject' || (it.kind === 'hand' && !!it.poly && it.poly.length > 2)).map((it) => {
+      const b = clip(it.box!);
+      if (it.kind !== 'hand') return { it, b, area: b.w * b.h, cover: (o: Box) => inter(clip(o), b) };
+      const q = it.poly as [number, number][];
+      return { it, b, area: polyArea(clipPoly(q, SCREEN)), cover: (o: Box) => polyArea(clipPoly(q, clip(o))) };
+    }).filter((s) => s.area >= 600);
     const ovs = fr.filter(isOverlay);
     if (subs.length) subjFrames++;
     if (ovs.length) ovFrames++;
     for (const s of subs) for (const o of ovs) {
-      const a = inter(clip(o.box!), s.b), frac = a / (s.b.w * s.b.h);
+      const a = s.cover(o.box!), frac = a / s.area;
       if (a < 100 || frac < MIN_FRAC) continue;
-      const chap = s.it.id.split(':')[1];
+      const chap = s.it.kind === 'hand' ? s.it.id.split(':')[2] : s.it.id.split(':')[1];
       const k = `${chap}|${o.id}|${s.it.id}`;
       const h = hits.get(k) ?? { n: 0, a: times[i]!, b: times[i]!, worst: 0, worstT: times[i]!, text: o.text, subj: `${s.it.text} (${chap})` };
       h.n++; h.b = times[i]! + 1 / FPS;
