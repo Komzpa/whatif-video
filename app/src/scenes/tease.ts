@@ -17,7 +17,7 @@ import { garble, homeLabel, city } from '../city';
 import { type Light } from './_hands';
 import {
   LitScene, lit, glowMat, canvasTex, blotches, speckle, asphalt, boxMesh, cyl, ground, concreteTex, corrugatedTex, streetLight,
-  panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, mixRGB, lin, EYE, type Pov, type V3, type RGB,
+  panelBlock, WindowPanes, kaPlate, KA_WORDS, POST_BASE, LIN, scaleRGB, mixRGB, lin, EYE, type Pov, type V3, type RGB,
 } from './_kit';
 import { makeLamp, logText } from './_motifs';
 import { Quadruped, OUR_CAT, type QuadSpec } from './_beasts';
@@ -50,7 +50,7 @@ export default class Tease extends LitScene {
   kids: Kid[] = [];
   doors: { mesh: THREE.Mesh; cv: HTMLCanvasElement; tex: THREE.CanvasTexture; z: number }[] = [];
   scrawls: Scrawl[] = [];
-  poster!: THREE.Mesh; posterText = '';
+  poster!: THREE.Mesh; posterText = ''; kaSign!: THREE.Mesh;
   panes!: WindowPanes;
   swing!: THREE.Group;
   grain!: HTMLCanvasElement;
@@ -138,6 +138,8 @@ export default class Tease extends LitScene {
       this.doors.push({ mesh: m, cv, tex, z });
     }
     void cor;
+    // r9 note 2: the far garage's painted plate in Georgian («სახელოსნო», workshop), background lettering only
+    this.kaSign = kaPlate(S, KA_WORDS.workshop, 1.7, [GX + 0.05, 2.33, G_Z0 - GW / 2 - (NG - 1) * GW], { ry: Math.PI / 2, bg: '#33465a', glow: 0.55 }); // faintly lit by the yard's lamps
     // the poster on the row's end wall: a printed sheet with a smiley and mojibake
     const pc = document.createElement('canvas'); pc.width = 420; pc.height = 560;
     const c = pc.getContext('2d')!;
@@ -398,6 +400,7 @@ export default class Tease extends LitScene {
       this.cone.render(renderer, out, cam, makeLamp(k.L.position.clone(), k.L.target.position.clone(), 9, 14, 0.5 * tk), t, { density: 0.02, floorY: 0, maxDist: 12, pool: 0 });
     }
     // ---- QA text
+    this.logPlane(this.kaSign, KA_WORDS.workshop, 'sign', { frac: [0.05, 0.1, 0.95, 0.9], minPx: 10, id: 'scenery:ka-tease-workshop', scenery: true });
     this.logPlane(this.poster, this.posterText, 'garble', { frac: [0.05, 0.02, 0.95, 0.24], minPx: 10, id: 'scenery:tease-poster', scenery: true });
     for (let d = 0; d < this.doors.length; d++) {
       const first = this.scrawls.findIndex((s) => s.door === d);

@@ -29,6 +29,8 @@ DEFS.push({ family: 'Metro-900', file: 'ru/NotoSansDisplay-SemiCondensedBlack.tt
 DEFS.push({ family: 'Stencil-900', file: 'ru/NotoSansDisplay-CondensedBlack.ttf' });
 DEFS.push({ family: 'Typewriter-400', file: 'ru/FreeMono.ttf' });
 DEFS.push({ family: 'Typewriter-700', file: 'ru/FreeMonoBold.ttf' });
+// TREATMENT r9 note 2: Mkhedruli for a few background signs (licence in public/fonts/ka/LICENSES.md)
+DEFS.push({ family: 'Georgian-700', file: 'ka/NotoSansGeorgian-SemiCondensedBold.ttf' });
 
 /** Convenience family names. */
 export const F = {
@@ -50,6 +52,8 @@ export const F = {
   stencil(): string { return 'Stencil-900'; },
   /** Typewriter for taped notices. */
   typewriter(weight = 400): string { return `Typewriter-${weight < 550 ? 400 : 700}`; },
+  /** Georgian (Mkhedruli) for background signs only (r9 note 2); strings go through `assertGlyphs` first. */
+  georgian(): string { return 'Georgian-700'; },
   mono(weight = 400, italic = false): string {
     if (italic) return 'PlexItalic-400';
     return `Plex-${nearest([300, 400, 500, 600, 700], weight)}`;
@@ -91,6 +95,14 @@ export function ot(family: string): opentype.Font {
     otCache.set(family, f);
   }
   return f;
+}
+
+/** Throws unless every non-space character of `text` has a real glyph in `family` (no tofu boxes on screen). */
+export function assertGlyphs(family: string, text: string) {
+  const f = ot(family);
+  const miss = [...text].filter((ch) => !/\s/.test(ch) && f.charToGlyphIndex(ch) <= 0);
+  if (miss.length) throw new Error(`font ${family} has no glyph for ${JSON.stringify(miss.join(''))} in ${JSON.stringify(text)}`);
+  return text;
 }
 
 export interface Glyph {

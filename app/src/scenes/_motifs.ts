@@ -12,7 +12,7 @@ import { FSPass, Layer2D, W, H, rtScale } from '../engine/gl';
 import { GLSL_COMMON } from '../engine/glsl/common';
 import { LineBatch } from '../engine/lines';
 import { HEX, LIN, rgba, mixRgba, type PaletteKey } from '../engine/palette';
-import { F, font, measure, layout } from '../engine/type';
+import { F, font, measure, layout, assertGlyphs } from '../engine/type';
 import { Lyrics, type Line, type Word } from '../engine/lyrics';
 import type { AudioData } from '../engine/audio';
 import { clamp, ease, frameIdx, hash, lerp, mulberry32, noise1, prog, smoothstep } from '../engine/util';
@@ -1905,8 +1905,8 @@ export class NeonSign {
     groundY?: number; bright?: number; flicker?: number; seed?: number; vertical?: boolean; reflect?: number; wall?: 'left' | 'right';
     /** 'led': a dot-matrix board (r5 item 6): a clean `header` strip over dot-matrix body lines. */
     header?: string;
-    /** Typeface: the metro-sign grotesque (default) or the mono face. */
-    face?: 'metro' | 'mono';
+    /** Typeface: the metro-sign grotesque (default), the mono face, or Georgian (r9 note 2: background signs only). */
+    face?: 'metro' | 'mono' | 'ka';
     /** QA: the lines are broken-encoding glyph soup (exempt from reading time and the name check). */
     garbled?: boolean;
   }) {
@@ -1925,7 +1925,8 @@ export class NeonSign {
       return;
     }
     // r7: Cyrillic signage in the metro-sign grotesque (the mono face only where asked)
-    const fam = o.face === 'mono' ? F.mono(600) : F.metro(700), fs = 120, tr = fs * (o.face === 'mono' ? 0.12 : 0.04);
+    if (o.face === 'ka') for (const l of o.lines) assertGlyphs(F.georgian(), l);
+    const fam = o.face === 'mono' ? F.mono(600) : o.face === 'ka' ? F.georgian() : F.metro(700), fs = 120, tr = fs * (o.face === 'mono' ? 0.12 : o.face === 'ka' ? 0.02 : 0.04);
     const lines = o.vertical ? o.lines[0]!.split('') : o.lines;
     // measure with the canvas itself (what it draws is what we size for)
     const mc = document.createElement('canvas').getContext('2d')!;

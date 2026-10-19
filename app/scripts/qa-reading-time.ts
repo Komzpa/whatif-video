@@ -326,7 +326,7 @@ try {
   // A13: Latin letters and box-drawing glyphs appear only in glyph soup (TREATMENT item 6 + r8): every 'garble'
   // item must re-derive from a Russian source by its logged codec; everything else on screen stays Cyrillic
   const a13 = new Map<string, string>();
-  const LATIN = /[A-Za-z\u00C0-\u024F]/, BOXDRAW = /[\u2500-\u259F]/;
+  const LATIN = /[A-Za-z\u00C0-\u024F]/, BOXDRAW = /[\u2500-\u259F]/, GEORGIAN = /[\u10A0-\u10FF\u1C90-\u1CBF\u2D00-\u2D2F]/;
   for (const fr of frames) for (const it of fr) {
     if (OBJECTS.includes(it.kind) || it.kind === 'prop' || a13.has(it.text)) continue;
     if (it.kind === 'garble') {
@@ -344,6 +344,8 @@ try {
       if (why) a13.set(it.text, `garble ${JSON.stringify(it.text)} ${why}`);
       continue;
     }
+    // r9 note 2: Georgian only on background signs (scenery), never on a beat's readable sign, an overlay or soup
+    if (GEORGIAN.test(it.text) && !(it.kind === 'sign' && it.id.startsWith('scenery:'))) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Georgian outside a background sign`); continue; }
     if (LATIN.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has Latin letters outside glyph soup`); continue; }
     if (BOXDRAW.test(it.text)) { a13.set(it.text, `${it.kind} ${JSON.stringify(it.text)} has box-drawing glyphs outside glyph soup`); continue; }
   }

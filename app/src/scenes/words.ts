@@ -18,7 +18,7 @@ import { transcode } from '../mojibake';
 import { type Light } from './_hands';
 import {
   LitScene, lit, glowMat, canvasTex, speckle, blotches, asphalt, boxMesh, cyl, ground, concreteTex, streetLight,
-  panelBlock, WindowPanes, POST_BASE, LIN, scaleRGB, lin, EYE, type Pov, type V3, type Box,
+  panelBlock, WindowPanes, kaPlate, KA_WORDS, POST_BASE, LIN, scaleRGB, lin, EYE, type Pov, type V3, type Box,
 } from './_kit';
 import { logText } from './_motifs';
 import { Figure, STRANGER, faceTo } from './_people';
@@ -31,7 +31,7 @@ const SIT_Z = 1.3, SIT_Y = 0.8;
 const BUS_Z = -6.5;
 
 interface Shard { m: THREE.Mesh; c: THREE.Vector3; v: THREE.Vector3; spin: THREE.Vector3 }
-interface Glyph { shards?: Shard[]; ts?: number; m: THREE.Mesh; mat: THREE.MeshBasicMaterial; tex0?: THREE.Texture; tex1?: THREE.Texture; tb: number; slot: THREE.Vector3; tf: number; vx: number; vz: number; spin: THREE.Vector3; land: number; seed: number }
+interface Glyph { shards?: Shard[]; ts?: number; m: THREE.Mesh; mat: THREE.MeshBasicMaterial; tex0?: THREE.Texture; tex1?: THREE.Texture; tb: number; word?: number; slot: THREE.Vector3; tf: number; vx: number; vz: number; spin: THREE.Vector3; land: number; seed: number }
 
 export default class Words extends LitScene {
   chapter = 'words';
@@ -40,6 +40,7 @@ export default class Words extends LitScene {
   heart: Glyph[] = [];
   screenBox!: THREE.Mesh;
   scrLight!: THREE.SpotLight; scrSide: THREE.SpotLight[] = []; scrW = 10; scrH = 3;
+  kaSigns: [THREE.Mesh, string][] = [];
   table!: THREE.Mesh; tableCv!: HTMLCanvasElement; tableTex!: THREE.CanvasTexture; tableText = '';
   bus!: THREE.Group; busSign = ''; busSignMesh!: THREE.Mesh; busLights: THREE.Light[] = [];
   panes!: WindowPanes;
@@ -99,6 +100,10 @@ export default class Words extends LitScene {
     // keep the screen's area of the facade clear of lit windows
     const clear = wins.filter((w) => !(w.p[2] > FZ - 1 && Math.abs(w.p[0]) < 17 && Math.abs(w.p[1] - SY) < 4.5));
     this.panes = new WindowPanes(S, clear);
+    // r9 note 2: two ground-floor shop signs across the prospekt in Georgian (bread, pharmacy): background only, the
+    // screen above stays the beat's sign and the district's other signs stay CP1251 glyph soup
+    this.kaSigns.push([kaPlate(S, KA_WORDS.bread, 2.2, [5.0, 3.3, FZ + 0.08], { bg: '#5b3418', glow: 0.9 }), KA_WORDS.bread]);
+    this.kaSigns.push([kaPlate(S, KA_WORDS.pharmacy, 3.0, [11.6, 3.3, FZ + 0.08], { bg: '#1f5a3a', glow: 0.9 }), KA_WORDS.pharmacy]);
     // ---- the bus-stop shelter: steel frame, a roof, a back glass wall, a side panel with the timetable, a bench
     const steel = lit([0.3, 0.32, 0.33], { rough: 0.5, metal: 0.3 });
     for (const x of [-1.8, 1.8]) for (const z of [0.2, 2.0]) cyl(S, [x, 0, z], [x, 2.5, z], 0.04, steel, { seg: 8 });
@@ -206,7 +211,7 @@ export default class Words extends LitScene {
     const wordOf = (i: number) => chars.slice(0, i).join('').split(' ').length - 1;
     const wtb = new Map<number, number>();
     for (const g of this.glyphs) { const w = wordOf(g.seed); wtb.set(w, Math.min(wtb.get(w) ?? Infinity, g.tb)); }
-    for (const g of this.glyphs) g.tb = wtb.get(wordOf(g.seed))!;
+    for (const g of this.glyphs) { g.word = wordOf(g.seed); g.tb = wtb.get(g.word)!; }
     this.wordTb = this.plain.split(' ').map((_, w) => wtb.get(w) ?? Infinity);
     // the heart (two halves) to the left of the text
     for (const side of [-1, 1]) {
@@ -264,7 +269,7 @@ export default class Words extends LitScene {
     if (g.tex0 && g.tex1) {
       // plain until tb, a stutter between the two, then mojibake
       const e = t - g.tb;
-      const want = e < 0 ? g.tex0 : e < 0.35 ? (hash(Math.floor(t * 24), g.seed + 40) < 0.5 ? g.tex0 : g.tex1) : g.tex1;
+      const want = e < 0 ? g.tex0 : e < 0.35 ? (hash(Math.floor(t * 24), (g.word ?? g.seed) + 40) < 0.5 ? g.tex0 : g.tex1) : g.tex1; // the stutter flips a whole word at once
       if (g.mat.map !== want) { g.mat.map = want; g.mat.needsUpdate = true; }
     }
     const off = (dark: boolean) => { const want = dark ? this.offMat : g.mat; if (g.m.material !== want) g.m.material = want; };
@@ -441,12 +446,13 @@ export default class Words extends LitScene {
       const inFrame = sb.x >= 0 && sb.y >= 0 && sb.x + sb.w <= W && sb.y + sb.h <= H;
       if (t >= lastOn && t < firstBreak) logText('sign', this.plain, inFrame && sb.h > 14, sb, { id: 'sign:words-screen' });
       else if (t >= firstBreak) { // what the screen shows now: each word plain or garbled whole
-        const now = this.plain.split(' ').map((w, k) => (t >= this.wordTb[k]! + 0.35 ? transcode(w, 'cp1251>cp1252') : w)).join(' ');
+        const now = this.plain.split(' ').map((w, k) => { const e = t - this.wordTb[k]!; return e >= 0.35 || (e >= 0 && hash(Math.floor(t * 24), k + 40) >= 0.5) ? transcode(w, 'cp1251>cp1252') : w; }).join(' ');
         if (now === this.plain) logText('sign', now, inFrame && sb.h > 14, sb, { id: 'scenery:words-screen-plain' });
         else logText('garble', now, inFrame && sb.h > 14, sb, { id: 'scenery:words-screen', moji: [{ src: this.plain, codec: 'cp1251>cp1252', level: 0.5 }] });
       }
     }
     const tb0 = t >= this.firstBreak();
+    for (const [m, txt] of this.kaSigns) this.logPlane(m, txt, 'sign', { frac: [0.05, 0.1, 0.95, 0.9], minPx: 10, scenery: true });
     this.logPlane(this.table, tb0 ? this.tableText : 'РАСПИСАНИЕ', tb0 ? 'garble' : 'sign', { frac: [0.05, 0.0, 0.95, 0.14], minPx: 10, id: 'scenery:words-table', scenery: true });
     if (this.bus.visible) this.logPlane(this.busSignMesh, this.busSign, 'garble', { minPx: 10, id: 'scenery:words-bus', scenery: true });
     // ---- hands and UI

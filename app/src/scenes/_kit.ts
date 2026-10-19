@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import type { Frame } from '../engine/scene';
 import { W, H, PORTRAIT } from '../engine/gl';
 import { clamp, lerp, hash, mulberry32, frameIdx } from '../engine/util';
-import { F, font, measure } from '../engine/type';
+import { F, font, measure, assertGlyphs } from '../engine/type';
 import { CityScene, LIN, POST_BASE, SAFE, scaleRGB, mixRGB, project, drawCallout, makeLamp, logText, rgba } from './_motifs';
 import { drawHeading } from './_ru';
 import { torchPose, drawTorchHand, type Light, type TorchPose } from './_hands';
@@ -186,6 +186,27 @@ export function planeSign(parent: THREE.Object3D, cv: HTMLCanvasElement, wM: num
   m.position.set(...pos); m.rotation.set(o.rx ?? 0, o.ry ?? 0, o.rz ?? 0);
   m.receiveShadow = !o.glow;
   parent.add(m); return m;
+}
+
+/**
+ * A painted tin plate lettered in Georgian (TREATMENT r9 note 2: a few background shop signs or wall lettering in the
+ * late unfamiliar district; real words, never a beat's main sign, never instead of the CP1251 glyph soup). Every
+ * character is checked against the font before it is drawn (no tofu). Log it with `logPlane(..., 'sign', { scenery })`.
+ */
+export const KA_WORDS = { bread: 'პური', pharmacy: 'აფთიაქი', workshop: 'სახელოსნო' } as const;
+export function kaPlate(parent: THREE.Object3D, text: string, wM: number, pos: V3, o: { ry?: number; bg?: string; ink?: string; glow?: number } = {}) {
+  assertGlyphs(F.georgian(), text);
+  const cv = document.createElement('canvas');
+  const c0 = cv.getContext('2d')!; c0.font = font(F.georgian(), 96);
+  const tw = c0.measureText(text).width;
+  cv.width = Math.ceil(tw + 96); cv.height = 150;
+  const c = cv.getContext('2d')!;
+  c.fillStyle = o.bg ?? '#7a2e22'; c.fillRect(0, 0, cv.width, cv.height);
+  speckle(c, cv.width, cv.height, 900, 0.18, 77);
+  c.strokeStyle = 'rgba(235,225,205,0.7)'; c.lineWidth = 6; c.strokeRect(10, 10, cv.width - 20, cv.height - 20);
+  c.fillStyle = o.ink ?? '#ece3cf'; c.font = font(F.georgian(), 96); c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(text, cv.width / 2, cv.height / 2 + 4);
+  return planeSign(parent, cv, wM, pos, { ry: o.ry ?? 0, glow: o.glow, rough: 0.7 });
 }
 
 // ---------------------------------------------------------------- the lit scene

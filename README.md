@@ -36,6 +36,9 @@ it mentions were removed in this fork, see below).
   goes word by word). Every string drawn is registered with its source and codec so QA can re-derive it (TESTPLAN A13).
 - `app/public/fonts/ru/`: Soviet-signage faces (metro grotesque, stencil, typewriter) with their licences
   in `LICENSES.md`; `engine/type.ts` exposes them as `F.metro`, `F.stencil`, `F.typewriter`.
+- `app/public/fonts/ka/`: Noto Sans Georgian for a few background signs in Mkhedruli (TREATMENT r9 note 2: `words`
+  «პური», «აფთიაქი» across the prospekt, the far garage plate «სახელოსნო» in `tease`), drawn by `kaPlate` in `_kit.ts`,
+  which checks every character against the font before drawing (no tofu). Never a beat's main sign, never soup.
 - `app/src/contents.ts`: the contents table (lyric line → chapter → the handbook's Russian heading).
 - `app/src/timeline.ts`: one entry per chapter; boundaries come from `data/audio.json` sections. There is
   no book card (TREATMENT r6): the video opens in the carriage. A chapter without its own scene module
